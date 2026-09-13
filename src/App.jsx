@@ -115,6 +115,11 @@ export default function App() {
   async function conectarGoogle() {
     const { data, error } = await supabase.functions.invoke('google-auth', { body: {} })
     if (error || !data?.url) { setErrorGeneral('No se pudo conectar Google. Probá nuevamente.'); return }
+    // Al volver de autorizar en Google (otra ventana en Electron, o la misma pestaña en el
+    // navegador) nada le avisaba a la app que ya estaba conectada — quedaba mostrando "Conectar
+    // Google" hasta que entrabas a Mail o Calendario y tocabas Sincronizar ahí a mano.
+    const revisarAlVolver = () => { window.removeEventListener('focus', revisarAlVolver); sincronizarGoogle() }
+    window.addEventListener('focus', revisarAlVolver)
     abrirEnlaceGoogle(data.url)
   }
 
