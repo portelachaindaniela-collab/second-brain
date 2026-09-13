@@ -65,20 +65,21 @@ Deno.serve(async (req: Request) => {
     const desde = new Date(); desde.setHours(0, 0, 0, 0);
     const hasta = new Date(); hasta.setDate(hasta.getDate() + 7); hasta.setHours(23, 59, 59, 999);
 
-    // Antes solo se sincronizaba el calendario "primary" — si la usuaria tiene eventos en
-    // calendarios secundarios (Salud, Trabajo, Organización, etc.) nunca aparecían en la app.
-    // Ahora se recorren todos los calendarios que tiene tildados/visibles en Google Calendar.
+    // Antes solo se sincronizaba el calendario "primary" — cualquier evento en un calendario
+    // secundario (Salud, Trabajo, Organización, etc.) nunca aparecía en Second Brain aunque
+    // estuviera en el rango de fechas. Ahora se recorren todos los calendarios que la usuaria
+    // tiene tildados/visibles en Google Calendar (igual que ve ella en su propia UI).
     let calendarios: { id: string }[] = [{ id: "primary" }];
     try {
-      const listResp = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250", { headers: { Authorization: `Bearer ${token}` } });
-      if (listResp.ok) {
-        const listData = await listResp.json();
-        const propios = (listData.items ?? []).filter((c: any) => c.selected !== false && !c.deleted && c.id);
-        if (propios.length) calendarios = propios.map((c: any) => ({ id: c.id }));
+      const calListResp = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250", { headers: { Authorization: `Bearer ${token}` } });
+      const calListData = await calListResp.json();
+      if (calListResp.ok && Array.isArray(calListData.items) && calListData.items.length) {
+        calendarios = calListData.items.filter((c: any) => c.selected !== false && !c.deleted);
       }
-    } catch (_) { /* si falla la lista, igual sincronizamos al menos el principal */ }
+    } catch (_) { /* si falla la lista, seguimos con al menos "primary" */ }
 
     let totalEventos = 0;
+    let errorCalendario: string | null = null;
     for (const calendario of calendarios) {
       const cal = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendario.id)}/events`);
       cal.searchParams.set("timeMin", desde.toISOString());
@@ -88,8 +89,13 @@ Deno.serve(async (req: Request) => {
       cal.searchParams.set("maxResults", "60");
 
       const calResp = await fetch(cal.toString(), { headers: { Authorization: `Bearer ${token}` } });
-      if (!calResp.ok) continue; // un calendario puntual sin permiso no debe frenar a los demás
       const calData = await calResp.json();
+      if (!calResp.ok) {
+        // Un calendario puntual puede fallar (por ej. uno compartido sin permiso de lectura de
+        // eventos) sin que eso tire abajo la sincronización de los demás.
+        if (calendario.id === "primary") errorCalendario = calData?.error?.message ?? "Calendar rechazó la consulta";
+        continue;
+      }
       const eventos = (calData.items ?? []).filter((e: any) => e.status !== "cancelled");
 
       for (const e of eventos) {
@@ -110,6 +116,9 @@ Deno.serve(async (req: Request) => {
         }, { onConflict: "owner_id,calendar_id,google_event_id" });
         totalEventos++;
       }
+    }
+    if (totalEventos === 0 && errorCalendario) {
+      return new Response(JSON.stringify({ conectado: true, error: errorCalendario }), { headers: json });
     }
 
     let mails = 0;
@@ -167,7 +176,6 @@ Deno.serve(async (req: Request) => {
       conectado: true,
       cuenta: cuenta.handle,
       eventos: totalEventos,
-      calendarios: calendarios.length,
       mails
     }), { headers: json });
   } catch (e) {
