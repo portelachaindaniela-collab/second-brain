@@ -15,7 +15,7 @@ function finDia() {
 const NIVEL_BADGE = { ok: 'badge-green', aviso: 'badge-amber', error: 'badge-red' }
 const NOMBRE_AGENTE = { monitor_sitios: 'Sitios', tareas_estancadas: 'Tareas estancadas', sync_estado: 'Sincronización' }
 
-export default function Hoy({ proyectos, abrirProyecto, abrirMail, abrirMaria, abrirBandeja, abrirCalendario }) {
+export default function Hoy({ proyectos, revision, abrirProyecto, abrirMail, abrirMaria, abrirBandeja, abrirCalendario }) {
   const [eventos, setEventos] = useState([])
   const [tareas, setTareas] = useState([])
   const [mails, setMails] = useState([])
@@ -48,7 +48,7 @@ export default function Hoy({ proyectos, abrirProyecto, abrirMail, abrirMaria, a
     }
     cargar()
     return () => { vivo = false }
-  }, [])
+  }, [revision])
 
   function colorDe(projectId) {
     return proyectos.find(p => p.id === projectId)?.color || '#71717a'

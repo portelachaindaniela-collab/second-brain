@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { supabase, abrirEnlaceOAuth } from './supabase.js'
 import Hoy from './screens/Hoy.jsx'
 import Flujo from './screens/Flujo.jsx'
@@ -7,11 +7,13 @@ import Pantalla from './screens/Pantalla.jsx'
 import Mail from './screens/Mail.jsx'
 import Maria from './screens/Maria.jsx'
 import Metricas from './screens/Metricas.jsx'
+import Cursos from './screens/Cursos.jsx'
 import Login from './Login.jsx'
 import BotFlotante from './BotFlotante.jsx'
 import MailCalendario from './screens/MailCalendario.jsx'
 import VisorArchivo from './screens/VisorArchivo.jsx'
 
+const Escritor = lazy(() => import('./screens/Escritor.jsx'))
 const GRUPOS = []
 
 export default function App() {
@@ -40,10 +42,12 @@ export default function App() {
   const [pantallasWeb, setPantallasWeb] = useState([])
   const [gruposAbiertos, setGruposAbiertos] = useState({ proyectos: true })
   const [google, setGoogle] = useState(null)
-  const [sincronizando, setSincronizando] = useState(false)
   const [nuevoProyectoAbierto, setNuevoProyectoAbierto] = useState(false)
   const [nuevoProyectoNombre, setNuevoProyectoNombre] = useState('')
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [pantallasVisitadas, setPantallasVisitadas] = useState(() => new Set(['hoy']))
+
+  useEffect(() => { setPantallasVisitadas(prev => prev.has(pantalla) ? prev : new Set(prev).add(pantalla)) }, [pantalla])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -70,15 +74,19 @@ export default function App() {
 
   const sincronizarGoogle = useCallback(async () => {
     if (!session) return
-    setSincronizando(true)
     const { data, error } = await supabase.functions.invoke('google-sync', { body: {} })
-    setSincronizando(false)
     if (error || data?.error) { setErrorGeneral('No se pudo sincronizar Google. Probá nuevamente.'); return }
     setGoogle(data)
     setRevisionGoogle(r => r + 1)
   }, [session])
 
   useEffect(() => { cargarProyectos(); cargarPantallas(); sincronizarGoogle() }, [cargarProyectos, cargarPantallas, sincronizarGoogle])
+
+  useEffect(() => {
+    if (!google?.conectado) return
+    const intervalo = setInterval(sincronizarGoogle, 5 * 60 * 1000)
+    return () => clearInterval(intervalo)
+  }, [google?.conectado, sincronizarGoogle])
 
   if (session === undefined) return null
   if (!session) return <Login />
@@ -145,9 +153,10 @@ export default function App() {
           <li><button className={`nav-item${pantalla === 'hoy' ? ' active' : ''}`} onClick={() => setPantalla('hoy')}>Hoy</button></li>
           <li><button className={`nav-item${pantalla === 'flujo' ? ' active' : ''}`} onClick={() => setPantalla('flujo')}>Flujo</button></li>
           <li><button className={`nav-item${pantalla === 'mailcal' ? ' active' : ''}`} onClick={() => setPantalla('mailcal')}>Mail y Calendario</button></li>
-          <li><button className="nav-item" onClick={() => htmlInput.current?.click()}>Abrir HTML</button></li>
+          <li><button className="nav-item" onClick={() => setPantalla('escribir')}>Escribir</button></li>
           <li><button className={`nav-item${pantalla === 'maria' ? ' active' : ''}`} onClick={() => setPantalla('maria')}>María</button></li>
           <li><button className={`nav-item${pantalla === 'metricas' ? ' active' : ''}`} onClick={() => setPantalla('metricas')}>Métricas</button></li>
+          <li><button className={`nav-item${pantalla === 'cursos' ? ' active' : ''}`} onClick={() => setPantalla('cursos')}>Cursos</button></li>
         </ul>
 
         <div className="nav-group-label">Proyectos</div>
@@ -188,12 +197,7 @@ export default function App() {
 
         <div className="sidebar-footer">
           {google?.conectado ? (
-            <>
-              <div>Google conectado{google.cuenta ? ` · ${google.cuenta}` : ''}</div>
-              <button className="nav-item" onClick={sincronizarGoogle} style={{ textDecoration: 'underline', padding: '4px 0' }}>
-                {sincronizando ? 'Actualizando…' : 'Actualizar ahora'}
-              </button>
-            </>
+            <div>Google conectado{google.cuenta ? ` · ${google.cuenta}` : ''}</div>
           ) : (
             <>
               <button className="nav-item" onClick={conectarGoogle} style={{ padding: '4px 0' }}>Conectar Google</button>
@@ -213,6 +217,8 @@ export default function App() {
             {pantalla === 'mailcal' && 'Mail y Calendario'}
             {pantalla === 'maria' && 'María'}
             {pantalla === 'metricas' && 'Métricas'}
+            {pantalla === 'cursos' && 'Cursos'}
+            {pantalla === 'escribir' && 'Escribir'}
             {pantalla === 'proyecto' && (proyectoActual?.name || 'Proyecto')}
             {pantalla === 'pantalla' && (pantallaWebActual?.nombre || 'Pantalla')}
             {pantalla === 'mail' && 'Mail'}
@@ -221,11 +227,13 @@ export default function App() {
         </header>
         <main className="content" style={pantalla === 'pantalla' ? { maxWidth: 'none', display: 'flex', flexDirection: 'column' } : undefined}>
           {errorGeneral && <p role="alert" className="feedback-error">{errorGeneral} <button className="btn btn-sm" onClick={() => setErrorGeneral('')}>Cerrar</button></p>}
-          {pantalla === 'hoy' && <Hoy key={revisionGoogle} abrirBandeja={() => { setMailCalTab('mail'); setPantalla('mailcal') }} abrirCalendario={() => { setMailCalTab('calendario'); setPantalla('mailcal') }} proyectos={proyectos} abrirProyecto={abrirProyecto} abrirMail={abrirMail} abrirMaria={() => setPantalla('maria')} />}
-          {pantalla === 'mailcal' && <MailCalendario tab={mailCalTab} setTab={setMailCalTab} revision={revisionGoogle} proyectos={proyectos} sincronizar={sincronizarGoogle} sincronizando={sincronizando} google={google} conectarGoogle={conectarGoogle} abrirMail={abrirMail} />}
-          {pantalla === 'flujo' && <Flujo proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} />}
-          {pantalla === 'maria' && <Maria />}
-          {pantalla === 'metricas' && <Metricas />}
+          {pantallasVisitadas.has('hoy') && <div hidden={pantalla !== 'hoy'}><Hoy revision={revisionGoogle} abrirBandeja={() => { setMailCalTab('mail'); setPantalla('mailcal') }} abrirCalendario={() => { setMailCalTab('calendario'); setPantalla('mailcal') }} proyectos={proyectos} abrirProyecto={abrirProyecto} abrirMail={abrirMail} abrirMaria={() => setPantalla('maria')} /></div>}
+          {pantallasVisitadas.has('mailcal') && <div hidden={pantalla !== 'mailcal'}><MailCalendario tab={mailCalTab} setTab={setMailCalTab} revision={revisionGoogle} proyectos={proyectos} google={google} conectarGoogle={conectarGoogle} abrirMail={abrirMail} /></div>}
+          {pantallasVisitadas.has('flujo') && <div hidden={pantalla !== 'flujo'}><Flujo proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} abrirHtml={() => htmlInput.current?.click()} /></div>}
+          {pantallasVisitadas.has('maria') && <div hidden={pantalla !== 'maria'}><Maria /></div>}
+          {pantallasVisitadas.has('metricas') && <div hidden={pantalla !== 'metricas'}><Metricas key={session.user.id} ownerId={session.user.id} /></div>}
+          {pantallasVisitadas.has('cursos') && <div hidden={pantalla !== 'cursos'}><Cursos /></div>}
+          {pantallasVisitadas.has('escribir') && <div hidden={pantalla !== 'escribir'}><Suspense fallback={<p className="empty-state">Abriendo el editor…</p>}><Escritor key={session.user.id} ownerId={session.user.id} /></Suspense></div>}
           {pantalla === 'proyecto' && proyectoActual && <ProyectoShell hoja={hojaProyecto} setHoja={setHojaProyecto} key={proyectoActual.id} abrirMail={abrirMail} proyecto={proyectoActual} recargarProyectos={cargarProyectos} />}
           {pantalla === 'pantalla' && pantallaWebActual && <Pantalla pantalla={pantallaWebActual} volver={() => setPantalla(pantallaOrigen)} />}
           {pantalla === 'mail' && mailId && <Mail gmailId={mailId} volver={() => setPantalla(mailOrigen)} />}

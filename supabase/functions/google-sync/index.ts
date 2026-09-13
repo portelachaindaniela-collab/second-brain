@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { quitarEliminados } from "./eliminados.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -121,6 +122,14 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ conectado: true, error: errorCalendario }), { headers: json });
     }
 
+    let eliminados = 0;
+    let errorEliminados: string | null = null;
+    try {
+      eliminados = await quitarEliminados({ admin, ownerId: user.id, token });
+    } catch (e) {
+      errorEliminados = `No se pudieron comprobar todos los eventos eliminados: ${e instanceof Error ? e.message : String(e)}`;
+    }
+
     let mails = 0;
     const leidos: string[] = [];
     try {
@@ -176,6 +185,8 @@ Deno.serve(async (req: Request) => {
       conectado: true,
       cuenta: cuenta.handle,
       eventos: totalEventos,
+      eliminados,
+      ...(errorEliminados ? { error: errorEliminados } : {}),
       mails
     }), { headers: json });
   } catch (e) {

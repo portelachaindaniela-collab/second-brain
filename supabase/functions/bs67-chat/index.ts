@@ -92,12 +92,17 @@ Deno.serve(async (req: Request) => {
       signal: AbortSignal.timeout(30000),
     });
     const data = await r.json();
-    if (!r.ok) throw new Error(data?.error?.message || 'El proveedor de IA rechazó la consulta.');
+    if (!r.ok) {
+      console.error('bs67-chat: OpenAI respondió', r.status, JSON.stringify(data));
+      throw new Error(data?.error?.message || `El proveedor de IA rechazó la consulta (HTTP ${r.status}).`);
+    }
     respuestaTexto = data?.choices?.[0]?.message?.content?.trim() || 'No obtuve una respuesta. Probá reformular la consulta.';
     usage = data?.usage || null;
-  } catch {
+  } catch (e) {
+    console.error('bs67-chat: fallo la llamada a OpenAI', e instanceof Error ? e.message : String(e));
     await admin.rpc('bs67_liberar_reserva', { p_owner: ownerId, p_year_month: yearMonth, p_amount_micros: reservaMicros });
-    return json({ error: 'No se pudo consultar a BS67 en este momento. Probá de nuevo en un rato.' }, 502);
+    const detalle = e instanceof Error ? e.message : 'Error desconocido';
+    return json({ error: `No se pudo consultar a BS67 en este momento (${detalle}).` }, 502);
   }
 
   const costoRealMicros = calcularCostoRealMicros(usage, { precioEntrada, precioSalida }) ?? reservaMicros;

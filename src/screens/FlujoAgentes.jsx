@@ -14,8 +14,8 @@ export const AGENTES_INFO = [
     color: '#c97a4a', tamaño: 9, radio: 190, dur: 54,
   },
   {
-    key: 'sync_estado', nombre: 'Enlace', tarea: 'Estado de sincronización',
-    detalle: 'Revisa hace cuánto no se sincroniza Google.',
+    key: 'sync_estado', nombre: 'Enlace', tarea: 'Vinculación con Google',
+    detalle: 'Revisa si Google sigue vinculado y hace cuánto se sincronizó.',
     cadencia: 'Cada vez que entrás a María o tocás Recargar.',
     color: '#7fd88f', tamaño: 7.5, radio: 270, dur: 78,
   },

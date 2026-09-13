@@ -1,7 +1,7 @@
 import Agenda from './Agenda.jsx'
 import Bandeja from './Bandeja.jsx'
 
-export default function MailCalendario({ tab, setTab, revision, proyectos, sincronizar, sincronizando, google, conectarGoogle, abrirMail }) {
+export default function MailCalendario({ tab, setTab, revision, proyectos, google, conectarGoogle, abrirMail }) {
   return (
     <div>
       <div className="page-head">
@@ -17,8 +17,8 @@ export default function MailCalendario({ tab, setTab, revision, proyectos, sincr
       </div>
 
       {tab === 'calendario'
-        ? <Agenda revision={revision} proyectos={proyectos} sincronizar={sincronizar} sincronizando={sincronizando} />
-        : <Bandeja revision={revision} abrirMail={abrirMail} sincronizar={sincronizar} sincronizando={sincronizando} />}
+        ? <Agenda revision={revision} proyectos={proyectos} />
+        : <Bandeja revision={revision} abrirMail={abrirMail} />}
     </div>
   )
 }

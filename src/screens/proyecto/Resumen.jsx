@@ -41,7 +41,7 @@ export default function Resumen({ proyecto, irA }) {
           {(archivos.data || []).map(a => (
             <div className="list-item" key={a.id}><span className="list-main">{a.name}</span><span className="list-side">{fechaCorta(a.created_at)}</span></div>
           ))}
-          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => irA('archivos')}>Ver todos</button>
+          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => irA('archivosydocs')}>Ver todos</button>
         </div>
 
         <div className="card card-pad">
@@ -50,7 +50,7 @@ export default function Resumen({ proyecto, irA }) {
           {(docs.data || []).map(d => (
             <div className="list-item" key={d.id}><span className="list-main">{d.title}</span><span className="list-side">{fechaCorta(d.updated_at)}</span></div>
           ))}
-          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => irA('docs')}>Ver todas</button>
+          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => irA('archivosydocs')}>Ver todas</button>
         </div>
 
         <div className="card card-pad">
@@ -67,7 +67,7 @@ export default function Resumen({ proyecto, irA }) {
           {(eventos.data || []).map(e => (
             <div className="list-item" key={e.id}><span className="list-main">{e.title}</span><span className="list-side">{fechaHora(e.starts_at)}</span></div>
           ))}
-          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => irA('calendario')}>Ver calendario</button>
+          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => irA('mailcal')}>Ver calendario</button>
         </div>
       </div>
     </div>

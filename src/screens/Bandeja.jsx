@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, fechaCorta } from '../supabase.js'
 
-export default function Bandeja({ abrirMail, sincronizar, sincronizando, revision, proyectoId }) {
+export default function Bandeja({ abrirMail, revision, proyectoId }) {
   const [mails, setMails] = useState([])
   const [busqueda, setBusqueda] = useState('')
   const [sinLeer, setSinLeer] = useState(false)
@@ -20,7 +20,7 @@ export default function Bandeja({ abrirMail, sincronizar, sincronizando, revisio
     return () => { vivo = false }
   }, [revision, proyectoId, pagina, sinLeer, busqueda])
   return <div>
-    <div className="page-head"><div><h1>Mail</h1><p className="page-sub">Mensajes sincronizados de Google · {total}</p></div>{sincronizar && <button className="btn" disabled={sincronizando} onClick={sincronizar}>{sincronizando ? 'Sincronizando…' : 'Sincronizar'}</button>}</div>
+    <div className="page-head"><div><h1>Mail</h1><p className="page-sub">Mensajes sincronizados de Google · {total}</p></div></div>
     <div className="action-row"><input aria-label="Buscar por asunto" placeholder="Buscar por asunto" value={busqueda} onChange={e => { setBusqueda(e.target.value); setPagina(0) }} /><label className="check-label"><input type="checkbox" checked={sinLeer} onChange={e => { setSinLeer(e.target.checked); setPagina(0) }} />Sin leer</label></div>
     {error && <p role="alert" className="feedback-error">{error}</p>}
     <div className="card">{cargando ? <p className="empty-state">Cargando…</p> : mails.length === 0 ? <p className="empty-state">No hay mensajes para mostrar.</p> : mails.map(m => <button className="list-item mail-row" key={m.id} disabled={!m.gmail_id} onClick={() => abrirMail(m.gmail_id)}><span className="list-main"><strong>{m.is_unread ? '● ' : ''}{m.from_name || m.from_addr || '(sin remitente)'}</strong><span className="mail-subject">{m.subject || '(sin asunto)'}</span></span><span className="list-side">{fechaCorta(m.received_at)}</span></button>)}</div>

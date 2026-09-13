@@ -3,6 +3,7 @@ import { supabase, tipoDe, fechaCorta } from '../../supabase.js'
 import VisorArchivo from '../VisorArchivo.jsx'
 
 const VISTA_STORAGE_KEY = 'second-brain:archivos:vista'
+const ASSET_MIME = 'application/x-second-brain-asset'
 
 function vistaGuardada() {
   try {
@@ -30,6 +31,11 @@ function agrupar(archivos) {
   return { carpetas, sueltos }
 }
 
+function nombreBase(nombre) {
+  const idx = nombre.indexOf('/')
+  return idx === -1 ? nombre : nombre.slice(idx + 1)
+}
+
 export default function Archivos({ proyecto }) {
   const [archivos, setArchivos] = useState([])
   const [progreso, setProgreso] = useState(null)
@@ -37,8 +43,9 @@ export default function Archivos({ proyecto }) {
   const [viendo, setViendo] = useState(null)
   const [vista, setVista] = useState(vistaGuardada)
   const [abiertas, setAbiertas] = useState({})
-  const [pidiendoCarpeta, setPidiendoCarpeta] = useState(null) // archivo File en espera de carpeta
+  const [pidiendoCarpeta, setPidiendoCarpeta] = useState(null) // File[] en espera de carpeta
   const [carpetaInput, setCarpetaInput] = useState('')
+  const [arrastreSobre, setArrastreSobre] = useState(null) // nombre de carpeta ('' = sueltos) resaltada al arrastrar encima
   const inputRef = useRef(null)
   const carpetaRef = useRef(null)
   const cancelarRef = useRef(false)
@@ -66,34 +73,36 @@ export default function Archivos({ proyecto }) {
     return true
   }
 
+  async function subirVarios(files, carpetaDestino) {
+    if (!files.length) return
+    setError('')
+    setProgreso({ hecho: 0, total: files.length })
+    for (const file of files) {
+      await subirUno(file, carpetaDestino ? `${carpetaDestino}/${file.name}` : file.name)
+      setProgreso(p => ({ hecho: (p?.hecho ?? 0) + 1, total: files.length }))
+    }
+    setProgreso(null)
+    cargar()
+  }
+
   function subirArchivo(e) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
     setError('')
     if (tipoDe(file.name) === 'pdf' || /\.html?$/i.test(file.name)) {
-      confirmarSubidaSuelta(file)
+      subirVarios([file], null)
       return
     }
-    setPidiendoCarpeta(file)
+    setPidiendoCarpeta([file])
     setCarpetaInput(nombresCarpetas[0] || '')
   }
 
-  async function confirmarSubidaSuelta(file) {
-    setProgreso({ hecho: 0, total: 1 })
-    await subirUno(file, file.name)
-    setProgreso(null)
-    cargar()
-  }
-
   async function confirmarSubidaConCarpeta() {
-    const file = pidiendoCarpeta
-    if (!file || !carpetaInput.trim()) return
+    const files = pidiendoCarpeta
+    if (!files?.length || !carpetaInput.trim()) return
     setPidiendoCarpeta(null)
-    setProgreso({ hecho: 0, total: 1 })
-    await subirUno(file, `${carpetaInput.trim()}/${file.name}`)
-    setProgreso(null)
-    cargar()
+    await subirVarios(files, carpetaInput.trim())
   }
 
   async function subirCarpeta(e) {
@@ -124,11 +133,42 @@ export default function Archivos({ proyecto }) {
     cargar()
   }
 
+  async function mover(assetId, nombreActual, carpetaDestino) {
+    const base = nombreBase(nombreActual)
+    const nuevoNombre = carpetaDestino ? `${carpetaDestino}/${base}` : base
+    if (nuevoNombre === nombreActual) return
+    setArchivos(prev => prev.map(a => a.id === assetId ? { ...a, name: nuevoNombre } : a))
+    const { error } = await supabase.from('assets').update({ name: nuevoNombre }).eq('id', assetId)
+    if (error) { setError('No se pudo mover el archivo: ' + error.message); cargar(); return }
+  }
+
+  function alArrastrarArchivo(e, a) {
+    e.dataTransfer.setData(ASSET_MIME, a.id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function alSoltar(e, carpetaDestino) {
+    e.preventDefault(); e.stopPropagation(); setArrastreSobre(null)
+    const assetId = e.dataTransfer.getData(ASSET_MIME)
+    if (assetId) { const a = archivos.find(x => x.id === assetId); if (a) mover(a.id, a.name, carpetaDestino); return }
+    const files = [...(e.dataTransfer.files || [])]
+    if (!files.length) return
+    if (carpetaDestino != null) { subirVarios(files, carpetaDestino); return }
+    if (files.length === 1 && (tipoDe(files[0].name) === 'pdf' || /\.html?$/i.test(files[0].name))) { subirVarios(files, null); return }
+    setPidiendoCarpeta(files); setCarpetaInput(nombresCarpetas[0] || '')
+  }
+
+  function alPasarPorEncima(e, carpeta) {
+    e.preventDefault(); e.stopPropagation()
+    e.dataTransfer.dropEffect = e.dataTransfer.types.includes(ASSET_MIME) ? 'move' : 'copy'
+    if (arrastreSobre !== carpeta) setArrastreSobre(carpeta)
+  }
+
   const subiendo = progreso !== null
 
   function fila(a, nombreMostrado) {
     return (
-      <div className="list-item clickable" key={a.id} onClick={() => setViendo(a)}>
+      <div className="list-item clickable" key={a.id} draggable onDragStart={e => alArrastrarArchivo(e, a)} onClick={() => setViendo(a)}>
         <span className="list-main">{nombreMostrado}</span>
         <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           <span className="badge badge-gray">{a.kind}</span>
@@ -142,7 +182,7 @@ export default function Archivos({ proyecto }) {
 
   function icono(a, nombreMostrado) {
     return (
-      <div className="archivo-icono-card" key={a.id} onClick={() => setViendo(a)} title={nombreMostrado}>
+      <div className="archivo-icono-card" key={a.id} draggable onDragStart={e => alArrastrarArchivo(e, a)} onClick={() => setViendo(a)} title={nombreMostrado}>
         <span className="ic">{ICONOS[a.kind] || ICONOS.otro}</span>
         <span className="nombre">{nombreMostrado}</span>
       </div>
@@ -150,7 +190,7 @@ export default function Archivos({ proyecto }) {
   }
 
   return (
-    <div>
+    <div onDragOver={e => alPasarPorEncima(e, '')} onDrop={e => alSoltar(e, null)}>
       <div className="page-head">
         <h1 style={{ fontSize: 15 }}>Archivos</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -165,6 +205,8 @@ export default function Archivos({ proyecto }) {
         <input ref={carpetaRef} type="file" webkitdirectory="" directory="" multiple style={{ display: 'none' }} onChange={subirCarpeta} />
       </div>
 
+      <p className="hint" style={{ marginBottom: 12 }}>Arrastrá archivos desde Windows para subirlos, o arrastrá un archivo de acá a otra carpeta para moverlo.</p>
+
       {error && <p className="feedback-error" role="alert">{error}</p>}
       {progreso && (
         <p className="hint" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -173,13 +215,14 @@ export default function Archivos({ proyecto }) {
         </p>
       )}
 
-      {archivos.length === 0 && <div className="card card-pad empty-state">Sin archivos. Agregá una carpeta o subí un archivo.</div>}
+      {archivos.length === 0 && <div className="card card-pad empty-state">Sin archivos. Agregá una carpeta, subí un archivo o arrastralo acá.</div>}
 
       {nombresCarpetas.map(carpeta => {
         const items = carpetas.get(carpeta)
         const abierta = abiertas[carpeta] !== false
         return (
-          <div className="card" key={carpeta} style={{ marginBottom: 12 }}>
+          <div className={`card${arrastreSobre === carpeta ? ' carpeta-dragover' : ''}`} key={carpeta} style={{ marginBottom: 12 }}
+            onDragOver={e => alPasarPorEncima(e, carpeta)} onDragLeave={() => setArrastreSobre(s => s === carpeta ? null : s)} onDrop={e => alSoltar(e, carpeta)}>
             <div className="carpeta-header" onClick={() => setAbiertas(s => ({ ...s, [carpeta]: !abierta }))}>
               <span>{abierta ? '▾' : '▸'} 📁 {carpeta}</span>
               <span style={{ marginLeft: 'auto', color: 'var(--gray-500)', fontWeight: 500 }}>{items.length}</span>
@@ -192,7 +235,8 @@ export default function Archivos({ proyecto }) {
       })}
 
       {sueltos.length > 0 && (
-        <div className="card" style={{ marginBottom: 12 }}>
+        <div className={`card${arrastreSobre === '' ? ' carpeta-dragover' : ''}`} style={{ marginBottom: 12 }}
+          onDragOver={e => alPasarPorEncima(e, '')} onDragLeave={() => setArrastreSobre(s => s === '' ? null : s)} onDrop={e => alSoltar(e, null)}>
           <div className="carpeta-header" style={{ cursor: 'default' }}>
             <span>📎 Archivos sueltos</span>
           </div>
@@ -208,12 +252,14 @@ export default function Archivos({ proyecto }) {
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setPidiendoCarpeta(null)}>
           <div className="modal" style={{ maxWidth: 420 }}>
             <div className="modal-head">
-              <h3 style={{ fontSize: 15 }}>¿En qué carpeta va?</h3>
+              <h3 style={{ fontSize: 15 }}>¿En qué carpeta va{pidiendoCarpeta.length > 1 ? 'n' : ''}?</h3>
               <button className="close-x" onClick={() => setPidiendoCarpeta(null)}>✕</button>
             </div>
             <div className="modal-body">
               <p className="hint" style={{ marginBottom: 10 }}>
-                Los archivos (salvo PDF y HTML) tienen que estar dentro de una carpeta. "{pidiendoCarpeta.name}"
+                {pidiendoCarpeta.length > 1
+                  ? `Los archivos (salvo PDF y HTML) tienen que estar dentro de una carpeta. ${pidiendoCarpeta.length} archivos.`
+                  : `Los archivos (salvo PDF y HTML) tienen que estar dentro de una carpeta. "${pidiendoCarpeta[0].name}"`}
               </p>
               <div className="field">
                 <label>Carpeta</label>

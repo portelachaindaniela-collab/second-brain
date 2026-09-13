@@ -1,0 +1,48 @@
+.metricas-publicas { max-width: 1220px; margin: 0 auto; }
+.metricas-publicas .page-head { gap: 16px; flex-wrap: wrap; }
+.metricas-insignia { padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: 30px; font-size: 11px; color: var(--teal-600); }
+.metricas-form { margin-bottom: 8px; }
+.metricas-entrada { display: flex; gap: 10px; margin: 8px 0; }
+.metricas-entrada input { min-width: 0; flex: 1; }
+.metricas-entrada button { white-space: nowrap; }
+.metricas-aviso { min-height: 24px; color: var(--teal-600); font-size: 12px; }
+.metricas-lista-titulo { display: flex; align-items: baseline; gap: 12px; justify-content: space-between; margin: 16px 0; flex-wrap: wrap; }
+.metricas-lista-titulo h2 { font-size: 14px; }
+.metricas-lista-titulo h2 span { color: var(--gray-500); margin-left: 8px; }
+.metricas-tarjetas { display: grid; gap: 16px; }
+.metricas-tarjeta { overflow: hidden; min-width: 0; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 330px; border-radius: 14px; }
+.metricas-contenido { min-width: 0; display: grid; grid-template-columns: 128px minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px; }
+.metricas-contenido:not(:has(.metricas-imagen)) { grid-template-columns: 1fr; }
+.metricas-contenido > .card-pad { min-width: 0; padding: 0; }
+.metricas-panel { background: var(--surface-inset); border-left: 1px solid var(--gray-200); display: flex; flex-direction: column; justify-content: center; }
+.metricas-tarjeta .card-pad { padding: 14px; }
+.metricas-autor { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.metricas-autor img { width: 32px; height: 32px; border-radius: 50%; }
+.metricas-autor strong { font-size: 13px; }
+.metricas-x { margin-left: auto; font-size: 24px; }
+.metricas-texto { white-space: pre-line; overflow-wrap: anywhere; font-size: 12.5px; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.metricas-imagen { order: -1; margin: 0; width: 128px; aspect-ratio: 1; border: 1px solid var(--gray-300); border-radius: 8px; overflow: hidden; background: var(--surface-inset); }
+.metricas-imagen img { display: block; width: 100%; height: 100%; aspect-ratio: 1; object-fit: cover; background: var(--surface-inset); }
+.metricas-imagen figcaption { display: none; }
+.metricas-numeros { margin: 0; padding: 6px; display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--gray-200); }
+.metricas-numeros div { padding: 6px 10px; min-width: 0; }
+.metricas-numeros dt { color: var(--gray-700); font-size: 11px; margin-bottom: 5px; }
+.metricas-numeros dd { margin: 0; font-family: var(--font-mono); font-size: 19px; color: var(--accent); }
+.metricas-numeros dd small { font-family: var(--font); font-size: 11px; color: var(--gray-500); }
+.metricas-acciones { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.metricas-fuente { margin: 22px 0; line-height: 1.6; }
+.metricas-vacio { text-align: center; padding: 42px 20px; }
+.metricas-vacio h2 { font-size: 18px; margin: 12px 0; }
+.metricas-vacio p { color: var(--gray-700); margin-bottom: 22px; }
+.metricas-marca { font-size: 34px; color: var(--accent); }
+@media (max-width: 560px) { .metricas-entrada { flex-direction: column; } .metricas-entrada button { width: 100%; } .metricas-numeros dd { font-size: 20px; } }
+@media (max-width: 760px) { .metricas-tarjeta { grid-template-columns: 1fr; } .metricas-panel { border-left: 0; border-top: 1px solid var(--gray-200); } }
+
+@media (max-width: 460px) { .metricas-contenido { grid-template-columns: 92px minmax(0, 1fr); gap: 10px; padding: 10px; } .metricas-imagen { width: 92px; } .metricas-autor img, .metricas-x { display: none; } .metricas-autor strong { font-size: 12px; } .metricas-texto { -webkit-line-clamp: 4; } }
+.metricas-panel .metricas-pie { padding: 8px 12px; }
+.metricas-numeros { padding: 4px 6px; }
+.metricas-numeros div { padding: 3px 8px; }
+.metricas-numeros dt { font-size: 10px; line-height: 1.2; margin-bottom: 3px; }
+.metricas-numeros dd { font-size: 17px; line-height: 1.2; }
+.metricas-acciones { margin-top: 6px; gap: 6px; }
+.metricas-acciones .btn { padding: 4px 7px; font-size: 11px; }
