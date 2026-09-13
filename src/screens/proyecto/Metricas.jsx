@@ -6,6 +6,8 @@ export default function Metricas({ proyecto }) {
   const [key, setKey] = useState('')
   const [valor, setValor] = useState('')
   const [unidad, setUnidad] = useState('')
+  const [error, setError] = useState('')
+  const [guardando, setGuardando] = useState(false)
 
   async function cargar() {
     const { data } = await supabase.from('metrics').select('id,key,value,unit,captured_at').eq('project_id', proyecto.id).order('captured_at', { ascending: false }).limit(50)
@@ -14,10 +16,16 @@ export default function Metricas({ proyecto }) {
   useEffect(() => { cargar() }, [proyecto.id])
 
   async function agregar() {
-    if (!key.trim() || valor === '') return
-    await supabase.from('metrics').insert({ project_id: proyecto.id, key: key.trim(), value: Number(valor), unit: unidad.trim() || null })
+    if (!key.trim() || valor === '' || guardando) return
+    if (!Number.isFinite(Number(valor))) { setError('Ingresá un número válido.'); return }
+    setGuardando(true); setError('')
+    try {
+    const { error } = await supabase.from('metrics').insert({ project_id: proyecto.id, key: key.trim(), value: Number(valor), unit: unidad.trim() || null })
+    if (error) throw error
     setKey(''); setValor(''); setUnidad('')
     cargar()
+    } catch (error) { setError('No se pudo guardar: ' + error.message) }
+    finally { setGuardando(false) }
   }
 
   const porClave = {}
@@ -33,10 +41,11 @@ export default function Metricas({ proyecto }) {
           <input placeholder="Nombre (ej: seguidores)" value={key} onChange={e => setKey(e.target.value)} />
           <input placeholder="Valor" type="number" value={valor} onChange={e => setValor(e.target.value)} style={{ maxWidth: 120 }} />
           <input placeholder="Unidad (opcional)" value={unidad} onChange={e => setUnidad(e.target.value)} style={{ maxWidth: 120 }} />
-          <button className="btn btn-primary" onClick={agregar}>Guardar</button>
+          <button className="btn btn-primary" disabled={guardando || !key.trim() || valor === ''} onClick={agregar}>{guardando ? 'Guardando…' : 'Guardar'}</button>
         </div>
       </div>
 
+      {error && <p className="feedback-error" role="alert">{error}</p>}
       {Object.keys(porClave).length === 0 && <p className="empty-state">Todavía no cargaste métricas para este proyecto.</p>}
       {Object.entries(porClave).map(([k, serie]) => {
         const max = Math.max(...serie.map(s => Number(s.value)), 1)

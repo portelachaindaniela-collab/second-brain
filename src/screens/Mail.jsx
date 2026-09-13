@@ -18,7 +18,7 @@ export default function Mail({ gmailId, volver }) {
 
   return (
     <div>
-      <button className="btn btn-sm" style={{ marginBottom: 16 }} onClick={volver}>← Volver a Hoy</button>
+      <button className="btn btn-sm" style={{ marginBottom: 16 }} onClick={volver}>← Volver</button>
       {error && <p className="empty-state">{error}</p>}
       {!mail && !error && <p className="empty-state">Cargando…</p>}
       {mail && (
@@ -28,7 +28,7 @@ export default function Mail({ gmailId, volver }) {
           {mail.texto ? (
             <p style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6 }}>{mail.texto}</p>
           ) : mail.html ? (
-            <iframe title="mail" srcDoc={mail.html} style={{ width: '100%', height: '60vh', border: '1px solid var(--gray-200)', borderRadius: 8 }} />
+            <iframe title="mail" sandbox="" referrerPolicy="no-referrer" srcDoc={mail.html} style={{ width: '100%', height: '60vh', border: '1px solid var(--gray-200)', borderRadius: 8 }} />
           ) : (
             <p style={{ fontSize: 13.5, color: 'var(--gray-500)' }}>{mail.snippet}</p>
           )}

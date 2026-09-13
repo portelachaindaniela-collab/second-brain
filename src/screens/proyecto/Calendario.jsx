@@ -1,23 +1,26 @@
 import { useEffect, useState } from 'react'
 import { supabase, fechaHora } from '../../supabase.js'
+import EditorEvento from '../EditorEvento.jsx'
 
 export default function Calendario({ proyecto }) {
   const [proximos, setProximos] = useState([])
   const [pasados, setPasados] = useState([])
+  const [editando, setEditando] = useState(null)
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
     let vivo = true
     const nowIso = new Date().toISOString()
     Promise.all([
-      supabase.from('calendar_events').select('id,title,starts_at,location').eq('project_id', proyecto.id).gte('starts_at', nowIso).order('starts_at', { ascending: true }).limit(30),
-      supabase.from('calendar_events').select('id,title,starts_at,location').eq('project_id', proyecto.id).lt('starts_at', nowIso).order('starts_at', { ascending: false }).limit(10),
+      supabase.from('calendar_events').select('id,title,description,starts_at,ends_at,location,all_day,google_event_id,calendar_id,project_id').eq('project_id', proyecto.id).gte('starts_at', nowIso).order('starts_at', { ascending: true }).limit(30),
+      supabase.from('calendar_events').select('id,title,description,starts_at,ends_at,location,all_day,google_event_id,calendar_id,project_id').eq('project_id', proyecto.id).lt('starts_at', nowIso).order('starts_at', { ascending: false }).limit(10),
     ]).then(([p, a]) => {
       if (!vivo) return
       setProximos(p.data || [])
       setPasados(a.data || [])
     })
     return () => { vivo = false }
-  }, [proyecto.id])
+  }, [proyecto.id, revision])
 
   return (
     <div>
@@ -29,7 +32,7 @@ export default function Calendario({ proyecto }) {
         {proximos.map(e => (
           <div className="list-item" key={e.id}>
             <span className="list-main">{e.title}{e.location ? ` · ${e.location}` : ''}</span>
-            <span className="list-side">{fechaHora(e.starts_at)}</span>
+            <span className="list-side">{fechaHora(e.starts_at)}</span><button className="btn btn-sm" onClick={() => setEditando(e)}>Editar evento</button>
           </div>
         ))}
       </div>
@@ -40,10 +43,11 @@ export default function Calendario({ proyecto }) {
         {pasados.map(e => (
           <div className="list-item" key={e.id}>
             <span className="list-main">{e.title}</span>
-            <span className="list-side">{fechaHora(e.starts_at)}</span>
+            <span className="list-side">{fechaHora(e.starts_at)}</span><button className="btn btn-sm" onClick={() => setEditando(e)}>Editar evento</button>
           </div>
         ))}
       </div>
+      {editando && <EditorEvento evento={editando} cerrar={() => setEditando(null)} guardado={() => setRevision(v => v+1)} />}
     </div>
   )
 }

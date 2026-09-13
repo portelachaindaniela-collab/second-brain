@@ -8,6 +8,7 @@ export default function Docs({ proyecto }) {
   const [cuerpo, setCuerpo] = useState('')
   const [mensaje, setMensaje] = useState('')
   const [confirmando, setConfirmando] = useState(false)
+  const [guardando, setGuardando] = useState(false)
 
   async function cargar() {
     const { data } = await supabase.from('docs').select('id,title,body,updated_at').eq('project_id', proyecto.id).order('updated_at', { ascending: false })
@@ -24,21 +25,27 @@ export default function Docs({ proyecto }) {
   }
 
   async function guardar() {
+    if (guardando) return
+    setGuardando(true)
+    try {
     setMensaje('Guardando…')
     if (abierto?.id) {
       const { error } = await supabase.from('docs').update({ title: titulo.trim() || 'Sin título', body: cuerpo, updated_at: new Date().toISOString() }).eq('id', abierto.id)
-      if (error) { setMensaje('No se pudo guardar.'); return }
+      if (error) { setMensaje('No se pudo guardar: ' + error.message); return }
     } else {
       const { error } = await supabase.from('docs').insert({ project_id: proyecto.id, title: titulo.trim() || 'Sin título', body: cuerpo })
-      if (error) { setMensaje('No se pudo crear.'); return }
+      if (error) { setMensaje('No se pudo crear: ' + error.message); return }
     }
     setAbierto(null)
     cargar()
+    } catch (error) { setMensaje('No se pudo guardar: ' + error.message) }
+    finally { setGuardando(false) }
   }
 
   async function eliminar() {
     if (!abierto?.id) return
-    await supabase.from('docs').delete().eq('id', abierto.id)
+    const { error } = await supabase.from('docs').delete().eq('id', abierto.id)
+    if (error) { setMensaje('No se pudo eliminar: ' + error.message); return }
     setAbierto(null)
     cargar()
   }
@@ -89,7 +96,7 @@ export default function Docs({ proyecto }) {
             </div>
             <div className="modal-foot">
               {abierto.id && <button className="btn btn-danger" onClick={() => setConfirmando(true)}>Eliminar</button>}
-              <button className="btn btn-primary" onClick={guardar}>Guardar</button>
+              <button className="btn btn-primary" disabled={guardando} onClick={guardar}>{guardando ? 'Guardando…' : 'Guardar'}</button>
             </div>
           </div>
         </div>

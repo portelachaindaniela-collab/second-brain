@@ -41,7 +41,7 @@ export default function Login() {
             <div className="field">
               <input type="password" value={password} placeholder="Contraseña" autoComplete="current-password" onChange={e => { setPassword(e.target.value); setError('') }} />
             </div>
-            {error && <p style={{ color: '#b3261e', fontSize: 12.5, marginBottom: 10 }}>{error}</p>}
+            {error && <p style={{ color: 'var(--red-600)', fontSize: 12.5, marginBottom: 10 }}>{error}</p>}
             <button className="login-mock-btn" type="submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
             <button type="button" className="login-alt" onClick={mandarEnlace}>No entro: mandame un enlace por mail</button>
           </form>

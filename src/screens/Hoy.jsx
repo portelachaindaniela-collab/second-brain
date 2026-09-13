@@ -15,12 +15,13 @@ function finDia() {
 const NIVEL_BADGE = { ok: 'badge-green', aviso: 'badge-amber', error: 'badge-red' }
 const NOMBRE_AGENTE = { monitor_sitios: 'Sitios', tareas_estancadas: 'Tareas estancadas', sync_estado: 'Sincronización' }
 
-export default function Hoy({ proyectos, abrirProyecto, abrirMail, abrirMaria }) {
+export default function Hoy({ proyectos, abrirProyecto, abrirMail, abrirMaria, abrirBandeja, abrirCalendario }) {
   const [eventos, setEventos] = useState([])
   const [tareas, setTareas] = useState([])
   const [mails, setMails] = useState([])
   const [agentes, setAgentes] = useState([])
   const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     let vivo = true
@@ -35,6 +36,8 @@ export default function Hoy({ proyectos, abrirProyecto, abrirMail, abrirMaria })
         supabase.from('process_reports').select('id,agente,estado,resumen,iniciado_at').order('iniciado_at', { ascending: false }).limit(15),
       ])
       if (!vivo) return
+      const fallos = [ev, ta, ma, ag].filter(r => r.error)
+      if (fallos.length) setError('No se pudo cargar parte del resumen. Entrá a Mail o Calendario para reintentar.')
       setEventos(ev.data || [])
       setTareas(ta.data || [])
       setMails(ma.data || [])
@@ -65,24 +68,25 @@ export default function Hoy({ proyectos, abrirProyecto, abrirMail, abrirMaria })
         </div>
       </div>
 
+      {error && <p className="feedback-error" role="alert">{error}</p>}
       <div className="grid grid-2" style={{ marginBottom: 20 }}>
         <div className="card card-pad">
-          <h3 style={{ fontSize: 13, marginBottom: 12 }}>Agenda</h3>
-          {eventos.length === 0 && <p className="empty-state">Sin eventos para hoy.</p>}
-          {eventos.map(e => (
-            <div className="task-item" key={e.id}>
+          <div className="section-heading"><h3>Calendario · Hoy</h3><button className="btn btn-sm" onClick={abrirCalendario}>Ver calendario</button></div>
+          {!cargando && eventos.length === 0 && <p className="empty-state">Sin eventos para hoy.</p>}
+          {eventos.slice(0, 3).map(e => (
+            <button className="task-item mail-row" key={e.id} onClick={abrirCalendario}>
               <span className="task-dot" style={{ background: colorDe(e.project_id) }} />
               <div className="task-main">
                 <div className="task-title">{e.title}</div>
                 <div className="task-sub">{hora(e.starts_at)}{e.ends_at ? ` – ${hora(e.ends_at)}` : ''} · {nombreDe(e.project_id)}</div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
 
         <div className="card card-pad">
           <h3 style={{ fontSize: 13, marginBottom: 12 }}>Tareas pendientes</h3>
-          {tareas.length === 0 && <p className="empty-state">No hay tareas abiertas.</p>}
+          {!cargando && tareas.length === 0 && <p className="empty-state">No hay tareas abiertas.</p>}
           {tareas.slice(0, 8).map(t => (
             <div className="task-item clickable" key={t.id} onClick={() => t.project_id && abrirProyecto(t.project_id)} style={{ cursor: t.project_id ? 'pointer' : 'default' }}>
               <span className="task-dot" style={{ background: colorDe(t.project_id) }} />
@@ -110,13 +114,13 @@ export default function Hoy({ proyectos, abrirProyecto, abrirMail, abrirMaria })
       )}
 
       <div className="card card-pad">
-        <h3 style={{ fontSize: 13, marginBottom: 12 }}>Sin leer · {mails.length}</h3>
-        {mails.length === 0 && <p className="empty-state">Todo leído.</p>}
-        {mails.map(m => (
-          <div className="list-item clickable" key={m.id} onClick={() => abrirMail(m.gmail_id)}>
+        <div className="section-heading"><h3>Mail · Sin leer</h3><button className="btn btn-sm" onClick={abrirBandeja}>Ver todos los mails</button></div>
+        {!cargando && mails.length === 0 && <p className="empty-state">Todo leído.</p>}
+        {mails.slice(0, 4).map(m => (
+          <button className="list-item mail-row" key={m.id} disabled={!m.gmail_id} onClick={() => abrirMail(m.gmail_id)}>
             <span className="list-main">{m.from_name || '(desconocido)'} — {m.subject || '(sin asunto)'}</span>
             <span className="list-side">{fechaCorta(m.received_at)}</span>
-          </div>
+          </button>
         ))}
       </div>
     </div>

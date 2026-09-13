@@ -1,8 +1,6 @@
-import { useState } from 'react'
 import Resumen from './Resumen.jsx'
 import Docs from './Docs.jsx'
 import Archivos from './Archivos.jsx'
-import Metricas from './Metricas.jsx'
 import Mails from './Mails.jsx'
 import Calendario from './Calendario.jsx'
 
@@ -10,13 +8,11 @@ const HOJAS = [
   { key: 'resumen', label: 'Resumen' },
   { key: 'docs', label: 'Docs' },
   { key: 'archivos', label: 'Archivos' },
-  { key: 'metricas', label: 'Métricas' },
   { key: 'mails', label: 'Mails' },
   { key: 'calendario', label: 'Calendario' },
 ]
 
-export default function ProyectoShell({ proyecto, recargarProyectos }) {
-  const [hoja, setHoja] = useState('resumen')
+export default function ProyectoShell({ proyecto, abrirMail, hoja, setHoja }) {
 
   return (
     <div className="proyecto-layout">
@@ -32,8 +28,7 @@ export default function ProyectoShell({ proyecto, recargarProyectos }) {
         {hoja === 'resumen' && <Resumen proyecto={proyecto} irA={setHoja} />}
         {hoja === 'docs' && <Docs proyecto={proyecto} />}
         {hoja === 'archivos' && <Archivos proyecto={proyecto} />}
-        {hoja === 'metricas' && <Metricas proyecto={proyecto} />}
-        {hoja === 'mails' && <Mails proyecto={proyecto} />}
+        {hoja === 'mails' && <Mails proyecto={proyecto} abrirMail={abrirMail} />}
         {hoja === 'calendario' && <Calendario proyecto={proyecto} />}
       </div>
     </div>

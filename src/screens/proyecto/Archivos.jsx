@@ -2,6 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, tipoDe, fechaCorta } from '../../supabase.js'
 import VisorArchivo from '../VisorArchivo.jsx'
 
+const VISTA_STORAGE_KEY = 'second-brain:archivos:vista'
+
+function vistaGuardada() {
+  try {
+    const guardada = localStorage.getItem(VISTA_STORAGE_KEY)
+    return guardada === 'lista' || guardada === 'iconos' ? guardada : 'iconos'
+  } catch { return 'iconos' }
+}
+
 const ICONOS = { pdf: '📕', imagen: '🖼️', documento: '📄', planilla: '📊', presentacion: '📈', video: '🎬', otro: '📁' }
 
 function agrupar(archivos) {
@@ -22,13 +31,19 @@ function agrupar(archivos) {
 export default function Archivos({ proyecto }) {
   const [archivos, setArchivos] = useState([])
   const [progreso, setProgreso] = useState(null)
+  const [error, setError] = useState('')
   const [viendo, setViendo] = useState(null)
-  const [vista, setVista] = useState('lista')
+  const [vista, setVista] = useState(vistaGuardada)
   const [abiertas, setAbiertas] = useState({})
   const [pidiendoCarpeta, setPidiendoCarpeta] = useState(null) // archivo File en espera de carpeta
   const [carpetaInput, setCarpetaInput] = useState('')
   const inputRef = useRef(null)
   const carpetaRef = useRef(null)
+
+  function cambiarVista(nuevaVista) {
+    setVista(nuevaVista)
+    try { localStorage.setItem(VISTA_STORAGE_KEY, nuevaVista) } catch { /* La vista actual sigue disponible si el almacenamiento local está bloqueado. */ }
+  }
 
   async function cargar() {
     const { data } = await supabase.from('assets').select('id,name,kind,created_at,storage_path').eq('project_id', proyecto.id).order('created_at', { ascending: false })
@@ -42,8 +57,9 @@ export default function Archivos({ proyecto }) {
   async function subirUno(file, nombre) {
     const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name.replace(/[^\w.-]/g, '_')}`
     const { error: upErr } = await supabase.storage.from('archivos').upload(path, file)
-    if (upErr) return false
-    await supabase.from('assets').insert({ storage_path: path, name: nombre, kind: tipoDe(file.name), size_bytes: file.size, source: 'subido', project_id: proyecto.id })
+    if (upErr) { setError('No se pudo subir: ' + upErr.message); return false }
+    const { error } = await supabase.from('assets').insert({ storage_path: path, name: nombre, kind: tipoDe(file.name), size_bytes: file.size, source: 'subido', project_id: proyecto.id })
+    if (error) { setError('El archivo se subió pero no se pudo registrar: ' + error.message); return false }
     return true
   }
 
@@ -51,7 +67,8 @@ export default function Archivos({ proyecto }) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    if (tipoDe(file.name) === 'pdf') {
+    setError('')
+    if (tipoDe(file.name) === 'pdf' || /\.html?$/i.test(file.name)) {
       confirmarSubidaSuelta(file)
       return
     }
@@ -91,8 +108,10 @@ export default function Archivos({ proyecto }) {
   }
 
   async function borrar(a) {
-    await supabase.storage.from('archivos').remove([a.storage_path])
-    await supabase.from('assets').delete().eq('id', a.id)
+    const { error: storageError } = await supabase.storage.from('archivos').remove([a.storage_path])
+    if (storageError) { setError('No se pudo borrar el archivo: ' + storageError.message); return }
+    const { error } = await supabase.from('assets').delete().eq('id', a.id)
+    if (error) { setError('No se pudo borrar el registro: ' + error.message); return }
     cargar()
   }
 
@@ -127,8 +146,8 @@ export default function Archivos({ proyecto }) {
         <h1 style={{ fontSize: 15 }}>Archivos</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div className="vista-toggle">
-            <button className={vista === 'lista' ? 'active' : ''} onClick={() => setVista('lista')}>Lista</button>
-            <button className={vista === 'iconos' ? 'active' : ''} onClick={() => setVista('iconos')}>Iconos</button>
+            <button className={vista === 'lista' ? 'active' : ''} aria-pressed={vista === 'lista'} onClick={() => cambiarVista('lista')}>Lista</button>
+            <button className={vista === 'iconos' ? 'active' : ''} aria-pressed={vista === 'iconos'} onClick={() => cambiarVista('iconos')}>Iconos</button>
           </div>
           <button className="btn" onClick={() => carpetaRef.current?.click()} disabled={subiendo}>Agregar carpeta</button>
           <button className="btn btn-primary" onClick={() => inputRef.current?.click()} disabled={subiendo}>Subir archivo</button>
@@ -137,9 +156,10 @@ export default function Archivos({ proyecto }) {
         <input ref={carpetaRef} type="file" webkitdirectory="" directory="" multiple style={{ display: 'none' }} onChange={subirCarpeta} />
       </div>
 
+      {error && <p className="feedback-error" role="alert">{error}</p>}
       {progreso && <p className="hint" style={{ marginBottom: 12 }}>Subiendo {progreso.hecho} de {progreso.total}…</p>}
 
-      {archivos.length === 0 && <div className="card card-pad empty-state">Sin archivos. Agregá una carpeta o subí un PDF suelto.</div>}
+      {archivos.length === 0 && <div className="card card-pad empty-state">Sin archivos. Agregá una carpeta o subí un archivo.</div>}
 
       {nombresCarpetas.map(carpeta => {
         const items = carpetas.get(carpeta)
@@ -160,7 +180,7 @@ export default function Archivos({ proyecto }) {
       {sueltos.length > 0 && (
         <div className="card" style={{ marginBottom: 12 }}>
           <div className="carpeta-header" style={{ cursor: 'default' }}>
-            <span>📎 Sueltos (PDF)</span>
+            <span>📎 Archivos sueltos</span>
           </div>
           {vista === 'lista'
             ? sueltos.map(a => fila(a, a.name))
@@ -179,7 +199,7 @@ export default function Archivos({ proyecto }) {
             </div>
             <div className="modal-body">
               <p className="hint" style={{ marginBottom: 10 }}>
-                Los archivos (salvo PDF) tienen que estar dentro de una carpeta. "{pidiendoCarpeta.name}"
+                Los archivos (salvo PDF y HTML) tienen que estar dentro de una carpeta. "{pidiendoCarpeta.name}"
               </p>
               <div className="field">
                 <label>Carpeta</label>

@@ -1,11 +1,12 @@
 {
   "name": "source",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:pages": "vite build --base=/second-brain/ --outDir dist-pages",
     "lint": "oxlint",
     "preview": "vite preview"
   },
