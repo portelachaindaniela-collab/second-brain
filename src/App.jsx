@@ -12,9 +12,7 @@ import Bandeja from './screens/Bandeja.jsx'
 import Agenda from './screens/Agenda.jsx'
 import VisorArchivo from './screens/VisorArchivo.jsx'
 
-const GRUPOS = [
-  { key: 'proyectos', label: 'Mis páginas' },
-]
+const GRUPOS = []
 
 export default function App() {
   const [session, setSession] = useState(undefined)
