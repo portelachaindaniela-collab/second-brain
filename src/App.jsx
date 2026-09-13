@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { supabase, abrirEnlaceGoogle } from './supabase.js'
+import { supabase, abrirEnlaceOAuth } from './supabase.js'
 import Hoy from './screens/Hoy.jsx'
 import Flujo from './screens/Flujo.jsx'
 import ProyectoShell from './screens/proyecto/ProyectoShell.jsx'
 import Pantalla from './screens/Pantalla.jsx'
 import Mail from './screens/Mail.jsx'
 import Maria from './screens/Maria.jsx'
+import Metricas from './screens/Metricas.jsx'
 import Login from './Login.jsx'
 import BotFlotante from './BotFlotante.jsx'
 import Bandeja from './screens/Bandeja.jsx'
@@ -120,7 +121,7 @@ export default function App() {
     // Google" hasta que entrabas a Mail o Calendario y tocabas Sincronizar ahí a mano.
     const revisarAlVolver = () => { window.removeEventListener('focus', revisarAlVolver); sincronizarGoogle() }
     window.addEventListener('focus', revisarAlVolver)
-    abrirEnlaceGoogle(data.url)
+    abrirEnlaceOAuth(data.url)
   }
 
   const proyectoActual = proyectos.find(p => p.id === proyectoId) || null
@@ -145,6 +146,7 @@ export default function App() {
           <li><button className={`nav-item${pantalla === 'agenda' ? ' active' : ''}`} onClick={() => setPantalla('agenda')}>Calendario</button></li>
           <li><button className="nav-item" onClick={() => htmlInput.current?.click()}>Abrir HTML</button></li>
           <li><button className={`nav-item${pantalla === 'maria' ? ' active' : ''}`} onClick={() => setPantalla('maria')}>María</button></li>
+          <li><button className={`nav-item${pantalla === 'metricas' ? ' active' : ''}`} onClick={() => setPantalla('metricas')}>Métricas</button></li>
         </ul>
 
         <div className="nav-group-label">Proyectos</div>
@@ -210,6 +212,7 @@ export default function App() {
             {pantalla === 'bandeja' && 'Mail'}
             {pantalla === 'agenda' && 'Calendario'}
             {pantalla === 'maria' && 'María'}
+            {pantalla === 'metricas' && 'Métricas'}
             {pantalla === 'proyecto' && (proyectoActual?.name || 'Proyecto')}
             {pantalla === 'pantalla' && (pantallaWebActual?.nombre || 'Pantalla')}
             {pantalla === 'mail' && 'Mail'}
@@ -223,6 +226,7 @@ export default function App() {
           {pantalla === 'agenda' && <Agenda revision={revisionGoogle} proyectos={proyectos} sincronizar={sincronizarGoogle} sincronizando={sincronizando} />}
           {pantalla === 'flujo' && <Flujo proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} />}
           {pantalla === 'maria' && <Maria />}
+          {pantalla === 'metricas' && <Metricas />}
           {pantalla === 'proyecto' && proyectoActual && <ProyectoShell hoja={hojaProyecto} setHoja={setHojaProyecto} key={proyectoActual.id} abrirMail={abrirMail} proyecto={proyectoActual} recargarProyectos={cargarProyectos} />}
           {pantalla === 'pantalla' && pantallaWebActual && <Pantalla pantalla={pantallaWebActual} volver={() => setPantalla(pantallaOrigen)} />}
           {pantalla === 'mail' && mailId && <Mail gmailId={mailId} volver={() => setPantalla(mailOrigen)} />}

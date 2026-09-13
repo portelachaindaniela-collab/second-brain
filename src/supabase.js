@@ -51,7 +51,7 @@ export function fechaHora(iso) {
 // aunque se llame después de un await. En un navegador de verdad (celular incluido) un window.open()
 // que no ocurre en el mismo tick del click casi siempre lo bloquea el navegador, sin avisar nada: por
 // eso ahí navegamos la misma pestaña en vez de abrir una nueva.
-export function abrirEnlaceGoogle(url) {
+export function abrirEnlaceOAuth(url) {
   const esElectron = typeof navigator !== 'undefined' && navigator.userAgent.includes('Electron')
   if (esElectron) window.open(url, '_blank')
   else window.location.href = url
