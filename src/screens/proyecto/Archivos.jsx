@@ -17,7 +17,9 @@ function agrupar(archivos) {
   const carpetas = new Map()
   const sueltos = []
   for (const a of archivos) {
-    const idx = a.name.lastIndexOf('/')
+    // Se agrupa por el primer segmento de la ruta (la carpeta raíz que subiste), no por el
+    // último: así una carpeta con subcarpetas adentro entra como una sola tarjeta, no dividida.
+    const idx = a.name.indexOf('/')
     if (idx === -1) { sueltos.push(a); continue }
     const carpeta = a.name.slice(0, idx)
     const base = a.name.slice(idx + 1)
@@ -39,6 +41,7 @@ export default function Archivos({ proyecto }) {
   const [carpetaInput, setCarpetaInput] = useState('')
   const inputRef = useRef(null)
   const carpetaRef = useRef(null)
+  const cancelarRef = useRef(false)
 
   function cambiarVista(nuevaVista) {
     setVista(nuevaVista)
@@ -97,14 +100,20 @@ export default function Archivos({ proyecto }) {
     const files = [...(e.target.files || [])]
     e.target.value = ''
     if (!files.length) return
+    cancelarRef.current = false
     setProgreso({ hecho: 0, total: files.length })
     for (const file of files) {
+      if (cancelarRef.current) break
       const nombre = file.webkitRelativePath || file.name
       await subirUno(file, nombre)
       setProgreso(p => ({ hecho: (p?.hecho ?? 0) + 1, total: files.length }))
     }
     setProgreso(null)
     cargar()
+  }
+
+  function cancelarSubida() {
+    cancelarRef.current = true
   }
 
   async function borrar(a) {
@@ -157,7 +166,12 @@ export default function Archivos({ proyecto }) {
       </div>
 
       {error && <p className="feedback-error" role="alert">{error}</p>}
-      {progreso && <p className="hint" style={{ marginBottom: 12 }}>Subiendo {progreso.hecho} de {progreso.total}…</p>}
+      {progreso && (
+        <p className="hint" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+          Subiendo {progreso.hecho} de {progreso.total}…
+          {progreso.total > 1 && <button className="btn btn-sm btn-danger" type="button" onClick={cancelarSubida}>Cancelar</button>}
+        </p>
+      )}
 
       {archivos.length === 0 && <div className="card card-pad empty-state">Sin archivos. Agregá una carpeta o subí un archivo.</div>}
 

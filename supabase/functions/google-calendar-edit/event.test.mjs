@@ -47,3 +47,22 @@ test('cambiosGoogle arma el payload correcto para evento de todo el día', () =>
   assert.equal(cambios.start.date, '2026-09-15')
   assert.equal(cambios.start.dateTime, null)
 })
+
+test('modo creación (requiereId: false) no exige id', () => {
+  const evento = validarEvento({ title: 'Nueva reunión', all_day: false, starts_at: '2026-09-15T10:00:00Z', ends_at: '2026-09-15T11:00:00Z' }, { requiereId: false })
+  assert.equal(evento.id, undefined)
+  assert.equal(evento.title, 'Nueva reunión')
+})
+
+test('modo creación igual rechaza título vacío o fechas inválidas', () => {
+  assert.throws(() => validarEvento({ title: '', all_day: false, starts_at: '2026-09-15T10:00:00Z', ends_at: '2026-09-15T11:00:00Z' }, { requiereId: false }))
+  assert.throws(() => validarEvento({ title: 'x', all_day: false, starts_at: '2026-09-15T11:00:00Z', ends_at: '2026-09-15T10:00:00Z' }, { requiereId: false }))
+})
+
+test('project_id se acepta si es un uuid válido y se descarta si no lo es', () => {
+  const proyectoId = '22222222-3333-4444-5555-666666666666'
+  const conProyecto = validarEvento({ title: 'x', all_day: false, starts_at: '2026-09-15T10:00:00Z', ends_at: '2026-09-15T11:00:00Z', project_id: proyectoId }, { requiereId: false })
+  assert.equal(conProyecto.project_id, proyectoId)
+  const sinProyectoValido = validarEvento({ title: 'x', all_day: false, starts_at: '2026-09-15T10:00:00Z', ends_at: '2026-09-15T11:00:00Z', project_id: 'no-es-uuid' }, { requiereId: false })
+  assert.equal(sinProyectoValido.project_id, null)
+})

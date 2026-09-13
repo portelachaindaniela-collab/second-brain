@@ -22,7 +22,7 @@ export default function Agenda({ proyectos, sincronizar, sincronizando, revision
   function mover(n) { setMes(new Date(mes.getFullYear(), mes.getMonth() + n, 1)); setSeleccion(null) }
   const visibles = seleccion ? eventos.filter(e => fechaEvento(e).getDate() === seleccion) : eventos
   return <div>
-    <div className="page-head"><h1>Calendario</h1><button className="btn" disabled={sincronizando} onClick={sincronizar}>{sincronizando ? 'Sincronizando…' : 'Sincronizar'}</button></div>
+    <div className="page-head"><h1>Calendario</h1><div style={{ display:'flex', gap:8 }}><button className="btn btn-primary" onClick={() => setEditando({})}>+ Nuevo evento</button><button className="btn" disabled={sincronizando} onClick={sincronizar}>{sincronizando ? 'Sincronizando…' : 'Sincronizar'}</button></div></div>
     <div className="calendar-toolbar"><button className="btn btn-sm" onClick={() => mover(-1)} aria-label="Mes anterior">←</button><strong>{mes.toLocaleDateString('es-AR', { month:'long', year:'numeric' })}</strong><button className="btn btn-sm" onClick={() => mover(1)} aria-label="Mes siguiente">→</button><button className="btn btn-sm" onClick={() => { setMes(new Date(new Date().getFullYear(), new Date().getMonth(), 1)); setSeleccion(new Date().getDate()) }}>Hoy</button></div>
     {error && <p role="alert" className="feedback-error">{error}</p>}
     <div className="card calendar-grid">
@@ -32,6 +32,8 @@ export default function Agenda({ proyectos, sincronizar, sincronizando, revision
     </div>
     <div className="page-head" style={{ marginTop:18 }}><h2 style={{ fontSize:14 }}>{seleccion ? `Eventos del día ${seleccion}` : 'Eventos del mes'}</h2>{seleccion && <button className="btn btn-sm" onClick={() => setSeleccion(null)}>Ver todo el mes</button>}</div>
     <div className="card">{cargando ? <p className="empty-state">Cargando…</p> : !visibles.length ? <p className="empty-state">Sin eventos en este período.</p> : visibles.map(e => <details className="calendar-event" key={e.id}><summary>{e.title || '(sin título)'} <span>{e.all_day ? fechaEvento(e).toLocaleDateString('es-AR')+' · Todo el día' : fechaHora(e.starts_at)}</span></summary><p>{fechaHora(e.starts_at)}{e.ends_at ? ' — ' + fechaHora(e.ends_at) : ''}</p>{e.location && <p>{e.location}</p>}<p>{proyectos.find(p => p.id === e.project_id)?.name || 'Sin proyecto'}</p><button className="btn btn-sm" style={{ marginTop:10 }} onClick={() => setEditando(e)}>Editar evento</button></details>)}</div>
-    {editando && <EditorEvento evento={editando} cerrar={() => setEditando(null)} guardado={e => { setEventos(prev => prev.map(item => item.id === e.id ? e : item)); const fecha = fechaEvento(e); setMes(new Date(fecha.getFullYear(), fecha.getMonth(),1)); setSeleccion(fecha.getDate()); setVersion(v => v+1) }} />}
+    {editando && <EditorEvento evento={editando} cerrar={() => setEditando(null)}
+      guardado={e => { const fecha = fechaEvento(e); setMes(new Date(fecha.getFullYear(), fecha.getMonth(), 1)); setSeleccion(fecha.getDate()); setVersion(v => v + 1) }}
+      eliminado={id => { setEventos(prev => prev.filter(item => item.id !== id)); setVersion(v => v + 1) }} />}
   </div>
 }

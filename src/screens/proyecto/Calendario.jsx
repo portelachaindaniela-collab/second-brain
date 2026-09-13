@@ -24,7 +24,7 @@ export default function Calendario({ proyecto }) {
 
   return (
     <div>
-      <h1 style={{ fontSize: 15, marginBottom: 16 }}>Calendario</h1>
+      <div className="page-head" style={{ marginBottom: 16 }}><h1 style={{ fontSize: 15 }}>Calendario</h1><button className="btn btn-primary btn-sm" onClick={() => setEditando({})}>+ Nuevo evento</button></div>
 
       <div className="card card-pad" style={{ marginBottom: 16 }}>
         <h3 style={{ fontSize: 13, marginBottom: 10 }}>Próximos eventos</h3>
@@ -47,7 +47,7 @@ export default function Calendario({ proyecto }) {
           </div>
         ))}
       </div>
-      {editando && <EditorEvento evento={editando} cerrar={() => setEditando(null)} guardado={() => setRevision(v => v+1)} />}
+      {editando && <EditorEvento evento={editando} proyectoId={proyecto.id} cerrar={() => setEditando(null)} guardado={() => setRevision(v => v+1)} eliminado={() => setRevision(v => v+1)} />}
     </div>
   )
 }
