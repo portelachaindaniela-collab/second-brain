@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { supabase } from '../supabase.js'
+import { supabase, abrirEnlaceGoogle } from '../supabase.js'
 import { inputFecha, sumarDia } from '../eventoFecha.js'
 
 function defaultInicio() {
@@ -74,7 +74,7 @@ export default function EditorEvento({ evento, cerrar, guardado, eliminado, proy
     try {
       const { data, error } = await supabase.functions.invoke('google-auth', { body: {} })
       if (error || !data?.url) throw new Error('No se pudo abrir la autorización de Google.')
-      window.open(data.url, '_blank')
+      abrirEnlaceGoogle(data.url)
       setError('Completá la autorización en Google. Después volvé acá y tocá Guardar cambios.')
     } catch (error) { setError(error.message) }
     finally { setOcupado(false) }

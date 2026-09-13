@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { supabase } from './supabase.js'
+import { supabase, abrirEnlaceGoogle } from './supabase.js'
 import Hoy from './screens/Hoy.jsx'
 import Flujo from './screens/Flujo.jsx'
 import ProyectoShell from './screens/proyecto/ProyectoShell.jsx'
@@ -117,7 +117,7 @@ export default function App() {
   async function conectarGoogle() {
     const { data, error } = await supabase.functions.invoke('google-auth', { body: {} })
     if (error || !data?.url) { setErrorGeneral('No se pudo conectar Google. Probá nuevamente.'); return }
-    window.open(data.url, '_blank')
+    abrirEnlaceGoogle(data.url)
   }
 
   const proyectoActual = proyectos.find(p => p.id === proyectoId) || null
