@@ -13,9 +13,7 @@ import Agenda from './screens/Agenda.jsx'
 import VisorArchivo from './screens/VisorArchivo.jsx'
 
 const GRUPOS = [
-  { key: 'redes', label: 'Redes' },
   { key: 'proyectos', label: 'Mis páginas' },
-  { key: 'herramientas', label: 'Herramientas' },
 ]
 
 export default function App() {
@@ -40,7 +38,7 @@ export default function App() {
   const [proyectos, setProyectos] = useState([])
   const [cargandoProyectos, setCargandoProyectos] = useState(true)
   const [pantallasWeb, setPantallasWeb] = useState([])
-  const [gruposAbiertos, setGruposAbiertos] = useState({ redes: true, proyectos: true, herramientas: false })
+  const [gruposAbiertos, setGruposAbiertos] = useState({ proyectos: true })
   const [google, setGoogle] = useState(null)
   const [sincronizando, setSincronizando] = useState(false)
   const [nuevoProyectoAbierto, setNuevoProyectoAbierto] = useState(false)
@@ -218,7 +216,7 @@ export default function App() {
           {pantalla === 'hoy' && <Hoy key={revisionGoogle} abrirBandeja={() => setPantalla('bandeja')} abrirCalendario={() => setPantalla('agenda')} proyectos={proyectos} abrirProyecto={abrirProyecto} abrirMail={abrirMail} abrirMaria={() => setPantalla('maria')} />}
           {pantalla === 'bandeja' && <Bandeja revision={revisionGoogle} abrirMail={abrirMail} sincronizar={sincronizarGoogle} sincronizando={sincronizando} />}
           {pantalla === 'agenda' && <Agenda revision={revisionGoogle} proyectos={proyectos} sincronizar={sincronizarGoogle} sincronizando={sincronizando} />}
-          {pantalla === 'flujo' && <Flujo proyectos={proyectos} />}
+          {pantalla === 'flujo' && <Flujo proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} />}
           {pantalla === 'maria' && <Maria />}
           {pantalla === 'proyecto' && proyectoActual && <ProyectoShell hoja={hojaProyecto} setHoja={setHojaProyecto} key={proyectoActual.id} abrirMail={abrirMail} proyecto={proyectoActual} recargarProyectos={cargarProyectos} />}
           {pantalla === 'pantalla' && pantallaWebActual && <Pantalla pantalla={pantallaWebActual} />}
