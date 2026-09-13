@@ -9,8 +9,7 @@ import Maria from './screens/Maria.jsx'
 import Metricas from './screens/Metricas.jsx'
 import Login from './Login.jsx'
 import BotFlotante from './BotFlotante.jsx'
-import Bandeja from './screens/Bandeja.jsx'
-import Agenda from './screens/Agenda.jsx'
+import MailCalendario from './screens/MailCalendario.jsx'
 import VisorArchivo from './screens/VisorArchivo.jsx'
 
 const GRUPOS = []
@@ -28,6 +27,7 @@ export default function App() {
   const [pantallaOrigen, setPantallaOrigen] = useState('hoy')
   const [mailId, setMailId] = useState(null)
   const [mailOrigen, setMailOrigen] = useState('hoy')
+  const [mailCalTab, setMailCalTab] = useState('calendario')
   const [htmlLocal, setHtmlLocal] = useState(null)
   const htmlInput = useRef(null)
   const creandoRef = useRef(false)
@@ -115,13 +115,15 @@ export default function App() {
 
   async function conectarGoogle() {
     const { data, error } = await supabase.functions.invoke('google-auth', { body: {} })
-    if (error || !data?.url) { setErrorGeneral('No se pudo conectar Google. Probá nuevamente.'); return }
+    let respuesta = data
+    if (error?.context) { try { respuesta = await error.context.json() } catch { /* se muestra el error de conexión */ } }
+    if (error || !respuesta?.url) { setErrorGeneral(respuesta?.error || 'No se pudo conectar Google. Probá nuevamente.'); return }
     // Al volver de autorizar en Google (otra ventana en Electron, o la misma pestaña en el
     // navegador) nada le avisaba a la app que ya estaba conectada — quedaba mostrando "Conectar
     // Google" hasta que entrabas a Mail o Calendario y tocabas Sincronizar ahí a mano.
     const revisarAlVolver = () => { window.removeEventListener('focus', revisarAlVolver); sincronizarGoogle() }
     window.addEventListener('focus', revisarAlVolver)
-    abrirEnlaceOAuth(data.url)
+    abrirEnlaceOAuth(respuesta.url)
   }
 
   const proyectoActual = proyectos.find(p => p.id === proyectoId) || null
@@ -142,8 +144,7 @@ export default function App() {
         <ul className="nav-list">
           <li><button className={`nav-item${pantalla === 'hoy' ? ' active' : ''}`} onClick={() => setPantalla('hoy')}>Hoy</button></li>
           <li><button className={`nav-item${pantalla === 'flujo' ? ' active' : ''}`} onClick={() => setPantalla('flujo')}>Flujo</button></li>
-          <li><button className={`nav-item${pantalla === 'bandeja' ? ' active' : ''}`} onClick={() => setPantalla('bandeja')}>Mail</button></li>
-          <li><button className={`nav-item${pantalla === 'agenda' ? ' active' : ''}`} onClick={() => setPantalla('agenda')}>Calendario</button></li>
+          <li><button className={`nav-item${pantalla === 'mailcal' ? ' active' : ''}`} onClick={() => setPantalla('mailcal')}>Mail y Calendario</button></li>
           <li><button className="nav-item" onClick={() => htmlInput.current?.click()}>Abrir HTML</button></li>
           <li><button className={`nav-item${pantalla === 'maria' ? ' active' : ''}`} onClick={() => setPantalla('maria')}>María</button></li>
           <li><button className={`nav-item${pantalla === 'metricas' ? ' active' : ''}`} onClick={() => setPantalla('metricas')}>Métricas</button></li>
@@ -209,8 +210,7 @@ export default function App() {
           <div className="topbar-title">
             {pantalla === 'hoy' && 'Hoy'}
             {pantalla === 'flujo' && 'Flujo'}
-            {pantalla === 'bandeja' && 'Mail'}
-            {pantalla === 'agenda' && 'Calendario'}
+            {pantalla === 'mailcal' && 'Mail y Calendario'}
             {pantalla === 'maria' && 'María'}
             {pantalla === 'metricas' && 'Métricas'}
             {pantalla === 'proyecto' && (proyectoActual?.name || 'Proyecto')}
@@ -221,9 +221,8 @@ export default function App() {
         </header>
         <main className="content" style={pantalla === 'pantalla' ? { maxWidth: 'none', display: 'flex', flexDirection: 'column' } : undefined}>
           {errorGeneral && <p role="alert" className="feedback-error">{errorGeneral} <button className="btn btn-sm" onClick={() => setErrorGeneral('')}>Cerrar</button></p>}
-          {pantalla === 'hoy' && <Hoy key={revisionGoogle} abrirBandeja={() => setPantalla('bandeja')} abrirCalendario={() => setPantalla('agenda')} proyectos={proyectos} abrirProyecto={abrirProyecto} abrirMail={abrirMail} abrirMaria={() => setPantalla('maria')} />}
-          {pantalla === 'bandeja' && <Bandeja revision={revisionGoogle} abrirMail={abrirMail} sincronizar={sincronizarGoogle} sincronizando={sincronizando} />}
-          {pantalla === 'agenda' && <Agenda revision={revisionGoogle} proyectos={proyectos} sincronizar={sincronizarGoogle} sincronizando={sincronizando} />}
+          {pantalla === 'hoy' && <Hoy key={revisionGoogle} abrirBandeja={() => { setMailCalTab('mail'); setPantalla('mailcal') }} abrirCalendario={() => { setMailCalTab('calendario'); setPantalla('mailcal') }} proyectos={proyectos} abrirProyecto={abrirProyecto} abrirMail={abrirMail} abrirMaria={() => setPantalla('maria')} />}
+          {pantalla === 'mailcal' && <MailCalendario tab={mailCalTab} setTab={setMailCalTab} revision={revisionGoogle} proyectos={proyectos} sincronizar={sincronizarGoogle} sincronizando={sincronizando} google={google} conectarGoogle={conectarGoogle} abrirMail={abrirMail} />}
           {pantalla === 'flujo' && <Flujo proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} />}
           {pantalla === 'maria' && <Maria />}
           {pantalla === 'metricas' && <Metricas />}

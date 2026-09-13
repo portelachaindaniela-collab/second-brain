@@ -32,10 +32,12 @@ export default function Metricas() {
     setError('')
     try {
       const { data, error } = await supabase.functions.invoke('meta-auth', { body: {} })
-      if (error || !data?.url) throw new Error('No se pudo abrir la autorización de Instagram.')
+      let respuesta = data
+      if (error?.context) { try { respuesta = await error.context.json() } catch { /* se muestra el error de conexión */ } }
+      if (error || !respuesta?.url) throw new Error(respuesta?.error || 'No se pudo abrir la autorización de Instagram.')
       const revisarAlVolver = () => { window.removeEventListener('focus', revisarAlVolver); cargar() }
       window.addEventListener('focus', revisarAlVolver)
-      abrirEnlaceOAuth(data.url)
+      abrirEnlaceOAuth(respuesta.url)
     } catch (e) { setError(e.message) }
   }
 
