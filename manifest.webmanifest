@@ -1,0 +1,15 @@
+{
+  "name": "Second brain",
+  "short_name": "Second brain",
+  "description": "Tus proyectos, tu agenda y tus archivos en un solo lugar.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#10161d",
+  "theme_color": "#10161d",
+  "lang": "es-AR",
+  "icons": [
+    { "src": "pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
