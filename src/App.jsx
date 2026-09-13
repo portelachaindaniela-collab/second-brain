@@ -26,6 +26,7 @@ export default function App() {
   const [proyectoId, setProyectoId] = useState(null)
   const [hojaProyecto, setHojaProyecto] = useState('resumen')
   const [pantallaWebId, setPantallaWebId] = useState(null)
+  const [pantallaOrigen, setPantallaOrigen] = useState('hoy')
   const [mailId, setMailId] = useState(null)
   const [mailOrigen, setMailOrigen] = useState('hoy')
   const [htmlLocal, setHtmlLocal] = useState(null)
@@ -89,6 +90,7 @@ export default function App() {
     setPantalla('proyecto')
   }
   function abrirPantalla(id) {
+    setPantallaOrigen(pantalla)
     setPantallaWebId(id)
     setPantalla('pantalla')
   }
@@ -219,7 +221,7 @@ export default function App() {
           {pantalla === 'flujo' && <Flujo proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} />}
           {pantalla === 'maria' && <Maria />}
           {pantalla === 'proyecto' && proyectoActual && <ProyectoShell hoja={hojaProyecto} setHoja={setHojaProyecto} key={proyectoActual.id} abrirMail={abrirMail} proyecto={proyectoActual} recargarProyectos={cargarProyectos} />}
-          {pantalla === 'pantalla' && pantallaWebActual && <Pantalla pantalla={pantallaWebActual} />}
+          {pantalla === 'pantalla' && pantallaWebActual && <Pantalla pantalla={pantallaWebActual} volver={() => setPantalla(pantallaOrigen)} />}
           {pantalla === 'mail' && mailId && <Mail gmailId={mailId} volver={() => setPantalla(mailOrigen)} />}
         </main>
       </div>
