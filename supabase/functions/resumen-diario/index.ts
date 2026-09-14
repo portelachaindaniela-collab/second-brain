@@ -16,21 +16,53 @@ function dentroDeVentana(horaObjetivo: string, horaActual: string, minutos = 5) 
   return actual >= objetivo && actual < objetivo + minutos;
 }
 
+function coincideAlguno(mail: any, patrones: string[]) {
+  if (!patrones.length) return false;
+  const texto = `${mail.subject || ''} ${mail.from_name || ''} ${mail.from_addr || ''}`.toLowerCase();
+  return patrones.some((p) => texto.includes(p));
+}
+
+async function chequearScraperEmpleo() {
+  try {
+    const r = await fetch('https://portelachaindaniela-collab.github.io/scraper-busquedas-laborales/ultima_corrida.json', { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
 async function construirResumen(admin: any, ownerId: string) {
   const inicioDia = new Date(); inicioDia.setUTCHours(0, 0, 0, 0);
   const finDia = new Date(inicioDia.getTime() + 24 * 3600_000);
-  const [eventos, tareas, mails] = await Promise.all([
+  const [eventos, tareas, mailsRaw, reglasRes, scraper] = await Promise.all([
     admin.from('calendar_events').select('title,starts_at').eq('owner_id', ownerId).gte('starts_at', inicioDia.toISOString()).lt('starts_at', finDia.toISOString()).order('starts_at').limit(8),
     admin.from('tasks').select('title').eq('owner_id', ownerId).eq('done', false).order('touched_at', { ascending: true }).limit(5),
-    admin.from('emails').select('id', { count: 'exact', head: true }).eq('owner_id', ownerId).eq('is_unread', true),
+    admin.from('emails').select('subject,from_name,from_addr').eq('owner_id', ownerId).eq('is_unread', true).order('received_at', { ascending: false }).limit(200),
+    admin.from('mail_reglas').select('tipo,patron').eq('owner_id', ownerId),
+    chequearScraperEmpleo(),
   ]);
   const evs = eventos.data || [];
   const tas = tareas.data || [];
-  const sinLeer = mails.count || 0;
+  const reglas = reglasRes.data || [];
+  const excluir = reglas.filter((r: any) => r.tipo === 'excluir').map((r: any) => String(r.patron).toLowerCase());
+  const incluir = reglas.filter((r: any) => r.tipo === 'incluir').map((r: any) => String(r.patron).toLowerCase());
+  const relevantes = (mailsRaw.data || []).filter((m: any) => !coincideAlguno(m, excluir));
+  const importantes = relevantes.filter((m: any) => coincideAlguno(m, incluir));
+
   const partes: string[] = [];
   partes.push(evs.length ? `Tenés ${evs.length} evento${evs.length === 1 ? '' : 's'} hoy: ${evs.map((e: any) => e.title).join(', ')}.` : 'No tenés eventos agendados para hoy.');
   partes.push(tas.length ? `Tareas pendientes: ${tas.map((t: any) => t.title).join(', ')}.` : 'No tenés tareas pendientes.');
-  partes.push(sinLeer ? `Tenés ${sinLeer} mail${sinLeer === 1 ? '' : 's'} sin leer.` : 'No tenés mails sin leer.');
+  if (!relevantes.length) partes.push('No tenés mails sin leer que te importen.');
+  else if (importantes.length) partes.push(`Tenés ${relevantes.length} mail${relevantes.length === 1 ? '' : 's'} sin leer, ${importantes.length} importante${importantes.length === 1 ? '' : 's'}: ${importantes.map((m: any) => m.subject || '(sin asunto)').join(', ')}.`);
+  else partes.push(`Tenés ${relevantes.length} mail${relevantes.length === 1 ? '' : 's'} sin leer.`);
+
+  if (scraper?.fin) {
+    const finMs = Date.parse(/[zZ]$|[+-]\d\d:\d\d$/.test(scraper.fin) ? scraper.fin : scraper.fin + 'Z');
+    const horas = Number.isFinite(finMs) ? (Date.now() - finMs) / 3600_000 : Infinity;
+    if (horas <= 30) {
+      const nuevas = scraper.publicados ?? scraper.nuevos_totales ?? 0;
+      partes.push(nuevas ? `El buscador de empleo encontró ${nuevas} oferta${nuevas === 1 ? '' : 's'} nueva${nuevas === 1 ? '' : 's'}.` : 'El buscador de empleo no encontró ofertas nuevas.');
+    }
+  }
   return partes.join(' ');
 }
 
