@@ -14,7 +14,9 @@ const guardarRemoto = serializarGuardados(async registro => {
 })
 const mostrarFecha = valor => new Date(valor).toLocaleDateString('es-AR', { day:'numeric', month:'short' })
 
-function Documento({ inicial, cambiar }) {
+const ESTADOS_GUARDADO = new Set(['Guardado', 'Guardado en tu cuenta'])
+
+function Documento({ inicial, cambiar, borrar }) {
   const actual = useRef(inicial)
   const [titulo, setTitulo] = useState(inicial.title)
   const [estado, setEstado] = useState(inicial.pendiente ? 'Borrador en este dispositivo' : 'Guardado')
@@ -23,6 +25,7 @@ function Documento({ inicial, cambiar }) {
   const [fuente, setFuente] = useState('serif')
   const [tamano, setTamano] = useState(18)
   const [enfoque, setEnfoque] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
   const montado = useRef(true)
   const editor = useEditor({
     extensions: [StarterKit.configure({ link: false }), TextAlign.configure({ types: ['heading','paragraph'] })],
@@ -82,9 +85,20 @@ function Documento({ inicial, cambiar }) {
     const a = document.createElement('a'); a.href = url; a.download = `${nombre}.${tipo}`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   function boton(nombre, texto, accion, activo = false) { return <button type="button" title={nombre} aria-label={nombre} aria-pressed={activo} disabled={!editor} onMouseDown={e => e.preventDefault()} onClick={accion}>{texto}</button> }
+  const guardando = estado === 'Guardando…'
+  const textoGuardar = guardando ? 'Guardando…' : ESTADOS_GUARDADO.has(estado) ? 'Guardado' : 'Guardar'
 
   return <section className={`escritor-documento${enfoque ? ' escritor-enfoque' : ''}`}>
-    <div className="escritor-documento-cabecera"><input aria-label="Título del documento" maxLength={250} value={titulo} placeholder="Sin título" onChange={e => { setTitulo(e.target.value); modificar({title:e.target.value}) }} /><button className="btn btn-sm" onClick={guardar}>Guardar</button><button className="btn btn-sm" aria-pressed={enfoque} onClick={() => setEnfoque(!enfoque)}>{enfoque ? 'Salir de enfoque' : 'Enfoque'}</button></div>
+    <div className="escritor-documento-cabecera"><input aria-label="Título del documento" maxLength={250} value={titulo} placeholder="Sin título" onChange={e => { setTitulo(e.target.value); modificar({title:e.target.value}) }} /><button className="btn btn-sm" disabled={guardando} onClick={guardar}>{textoGuardar}</button><button className="btn btn-sm" aria-pressed={enfoque} onClick={() => setEnfoque(!enfoque)}>{enfoque ? 'Salir de enfoque' : 'Enfoque'}</button><button className="btn btn-sm btn-danger" onClick={() => setConfirmando(true)}>Eliminar</button></div>
+    {confirmando && (
+      <div className="confirm-box">
+        ¿Eliminar "{titulo.trim() || 'Sin título'}"? No se puede deshacer.
+        <div className="actions">
+          <button type="button" className="btn btn-sm btn-danger" onClick={() => borrar(inicial.id)}>Sí, eliminar</button>
+          <button type="button" className="btn btn-sm" onClick={() => setConfirmando(false)}>Cancelar</button>
+        </div>
+      </div>
+    )}
     <div className="escritor-barra" role="toolbar" aria-label="Formato del texto">
       {boton('Deshacer','↶',() => editor.chain().focus().undo().run())}{boton('Rehacer','↷',() => editor.chain().focus().redo().run())}
       <select aria-label="Estilo de párrafo" value={editor?.isActive('heading',{level:1}) ? '1' : editor?.isActive('heading',{level:2}) ? '2' : '0'} onChange={e => Number(e.target.value) ? editor.chain().focus().setHeading({level:Number(e.target.value)}).run() : editor.chain().focus().setParagraph().run()}><option value="0">Texto normal</option><option value="1">Título</option><option value="2">Subtítulo</option></select>
@@ -134,10 +148,18 @@ export default function Escritor({ ownerId }) {
     try { localStorage.setItem(claveEscrito(ownerId,doc.id),JSON.stringify(doc)) } catch { setError('El almacenamiento local no está disponible. Recordá guardar en tu cuenta o descargar una copia.') }
     cambiar(doc); setSeleccion(doc.id)
   }
+  async function borrar(id) {
+    try { localStorage.removeItem(claveEscrito(ownerId, id)) } catch { /* la copia local puede quedar huérfana, no bloquea el borrado */ }
+    const { error } = await supabase.from('docs').delete().eq('id', id)
+    if (error) { setError('No se pudo eliminar: ' + error.message); return }
+    const resto = docs.filter(d => d.id !== id)
+    setDocs(resto)
+    if (seleccion === id) setSeleccion(resto[0]?.id || null)
+  }
   const actual = docs.find(d => d.id === seleccion)
   return <div className="escritor"><div className="page-head"><div><h1>Escribir</h1><p className="hint">Un espacio para tus textos privados.</p></div><button className="btn btn-primary" disabled={cargando} onClick={nuevo}>+ Nuevo texto</button></div>
     {error && <p className="feedback-error" role="alert">{error}</p>}
     <div className="escritor-layout"><aside className="escritor-biblioteca"><label htmlFor="buscar-escritos">Mis textos</label><input id="buscar-escritos" type="search" placeholder="Buscar por título…" value={busqueda} onChange={e => setBusqueda(e.target.value)} />{docs.filter(d => d.title.toLocaleLowerCase().includes(busqueda.toLocaleLowerCase())).map(d => <button className={d.id === seleccion ? 'seleccionado' : ''} key={d.id} onClick={() => setSeleccion(d.id)} aria-current={d.id === seleccion ? 'true' : undefined}><strong>{d.title || 'Sin título'}</strong><small>{mostrarFecha(d.updated_at)}{d.pendiente ? ' · Borrador' : ''}</small></button>)}</aside>
-      {cargando ? <p className="empty-state">Abriendo tus textos…</p> : actual ? <Documento key={actual.id} inicial={actual} cambiar={cambiar} /> : <div className="card card-pad escritor-vacio"><h2>La página está en blanco.</h2><p>Una idea, un relato, algo que quieras guardar. Empezá por donde quieras.</p><button className="btn" onClick={nuevo}>Escribir mi primer texto</button></div>}
+      {cargando ? <p className="empty-state">Abriendo tus textos…</p> : actual ? <Documento key={actual.id} inicial={actual} cambiar={cambiar} borrar={borrar} /> : <div className="card card-pad escritor-vacio"><h2>La página está en blanco.</h2><p>Una idea, un relato, algo que quieras guardar. Empezá por donde quieras.</p><button className="btn" onClick={nuevo}>Escribir mi primer texto</button></div>}
     </div><p className="hint escritor-creditos">Sonidos CC0 de SFX Producer, recopilados por <a href="https://github.com/mateusfg7/Noisekun#sounds" target="_blank" rel="noreferrer">Noisekun</a>. Se reproducen desde la app.</p></div>
 }

@@ -6,7 +6,7 @@ import {
   LIMITE_MENSUAL_MICROS_DEFAULT,
   mesActual, mensajeLimiteAlcanzado, mensajeFaltaConfiguracion,
   estimarReservaMicros, calcularCostoRealMicros,
-  construirContexto, construirMensajes,
+  construirContexto, construirContenidoGemini,
 } from './logic.mjs';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Cache-Control': 'no-store' };
@@ -31,10 +31,10 @@ Deno.serve(async (req: Request) => {
   if (!jwt) return json({ error: 'Iniciá sesión.' }, 401);
 
   // Si falta cualquier configuración necesaria, se informa el error sin llamar al proveedor de IA.
-  const openaiKey = Deno.env.get('OPENAI_API_KEY');
+  const geminiKey = Deno.env.get('GEMINI_API_KEY');
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!openaiKey || !supabaseUrl || !serviceKey) {
+  if (!geminiKey || !supabaseUrl || !serviceKey) {
     return json({ error: mensajeFaltaConfiguracion() }, 503);
   }
 
@@ -52,12 +52,14 @@ Deno.serve(async (req: Request) => {
   const precioSalida = Number(Deno.env.get('BS67_PRECIO_SALIDA_POR_1K_MICROS')) || PRECIO_SALIDA_POR_1K_MICROS_DEFAULT;
   const limiteMensual = Number(Deno.env.get('BS67_LIMITE_MENSUAL_MICROS')) || LIMITE_MENSUAL_MICROS_DEFAULT;
 
-  const [proyectosRes, tareasRes, eventosRes, mailsRes, docsRes] = await Promise.all([
+  const [proyectosRes, tareasRes, eventosRes, mailsRes, docsRes, cursosRes, archivosRes] = await Promise.all([
     admin.from('projects').select('id,name,status').eq('owner_id', ownerId).order('created_at').limit(30),
     admin.from('tasks').select('id,title,project_id,due_at').eq('owner_id', ownerId).eq('done', false).order('touched_at', { ascending: true }).limit(15),
     admin.from('calendar_events').select('id,title,starts_at,project_id').eq('owner_id', ownerId).gte('starts_at', new Date(Date.now() - 3600_000).toISOString()).order('starts_at').limit(15),
     admin.from('emails').select('id,from_name,from_addr,subject').eq('owner_id', ownerId).eq('is_unread', true).order('received_at', { ascending: false }).limit(8),
     admin.from('docs').select('id,title,project_id').eq('owner_id', ownerId).order('updated_at', { ascending: false }).limit(8),
+    admin.from('cursos').select('id,title,plataforma,progreso,estado').eq('owner_id', ownerId).neq('estado', 'terminado').order('updated_at', { ascending: false }).limit(15),
+    admin.from('assets').select('id,name,kind').eq('owner_id', ownerId).order('created_at', { ascending: false }).limit(10),
   ]);
 
   const proyectoActual = entrada.proyectoId ? (proyectosRes.data || []).find((p: any) => p.id === entrada.proyectoId) || null : null;
@@ -69,6 +71,8 @@ Deno.serve(async (req: Request) => {
     eventos: eventosRes.data || [],
     mails: mailsRes.data || [],
     docs: docsRes.data || [],
+    cursos: cursosRes.data || [],
+    archivos: archivosRes.data || [],
   });
 
   const yearMonth = mesActual();
@@ -80,28 +84,36 @@ Deno.serve(async (req: Request) => {
   if (reservaError) return json({ error: 'No se pudo verificar el presupuesto de BS67. Probá de nuevo en un momento.' }, 500);
   if (!reservado) return json({ error: mensajeLimiteAlcanzado() }, 402);
 
-  const mensajes = construirMensajes({ contexto, historial: entrada.historial, mensaje: entrada.mensaje });
+  const { systemInstruction, contents } = construirContenidoGemini({ contexto, historial: entrada.historial, mensaje: entrada.mensaje });
 
   let respuestaTexto = '';
   let usage: any = null;
+  let diagnostico: any = null;
   try {
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent?key=${geminiKey}`;
+    const r = await fetch(url, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: modelo, messages: mensajes, max_tokens: maxTokensSalida, temperature: 0.4 }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ systemInstruction, contents, generationConfig: { maxOutputTokens: maxTokensSalida, temperature: 0.4 } }),
       signal: AbortSignal.timeout(30000),
     });
     const data = await r.json();
+    diagnostico = { modelo, status: r.status, respuesta: data };
     if (!r.ok) {
-      console.error('bs67-chat: OpenAI respondió', r.status, JSON.stringify(data));
+      console.error('bs67-chat: Gemini respondió', r.status, JSON.stringify(data));
       throw new Error(data?.error?.message || `El proveedor de IA rechazó la consulta (HTTP ${r.status}).`);
     }
-    respuestaTexto = data?.choices?.[0]?.message?.content?.trim() || 'No obtuve una respuesta. Probá reformular la consulta.';
-    usage = data?.usage || null;
+    respuestaTexto = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'No obtuve una respuesta. Probá reformular la consulta.';
+    usage = data?.usageMetadata ? { prompt_tokens: data.usageMetadata.promptTokenCount, completion_tokens: data.usageMetadata.candidatesTokenCount } : null;
   } catch (e) {
-    console.error('bs67-chat: fallo la llamada a OpenAI', e instanceof Error ? e.message : String(e));
+    console.error('bs67-chat: fallo la llamada a Gemini', e instanceof Error ? e.message : String(e));
     await admin.rpc('bs67_liberar_reserva', { p_owner: ownerId, p_year_month: yearMonth, p_amount_micros: reservaMicros });
     const detalle = e instanceof Error ? e.message : 'Error desconocido';
+    await admin.from('process_reports').insert({
+      owner_id: ownerId, agente: 'bs67_chat', estado: 'error', resumen: detalle,
+      detalle: diagnostico ?? { error: detalle },
+      iniciado_at: new Date().toISOString(), finalizado_at: new Date().toISOString(),
+    });
     return json({ error: `No se pudo consultar a BS67 en este momento (${detalle}).` }, 502);
   }
 

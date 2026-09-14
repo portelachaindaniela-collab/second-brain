@@ -50,6 +50,27 @@ export default function App() {
   useEffect(() => { setPantallasVisitadas(prev => prev.has(pantalla) ? prev : new Set(prev).add(pantalla)) }, [pantalla])
 
   useEffect(() => {
+    function leerEnVozAlta(texto) {
+      if (!texto || !('speechSynthesis' in window)) return
+      const u = new SpeechSynthesisUtterance(texto)
+      u.lang = 'es-AR'
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(u)
+    }
+    const params = new URLSearchParams(window.location.search)
+    const desdeUrl = params.get('resumen')
+    if (desdeUrl) {
+      leerEnVozAlta(desdeUrl)
+      params.delete('resumen')
+      const resto = params.toString()
+      window.history.replaceState({}, '', window.location.pathname + (resto ? `?${resto}` : ''))
+    }
+    function alMensaje(e) { if (e.data?.tipo === 'leer-resumen') leerEnVozAlta(e.data.texto) }
+    navigator.serviceWorker?.addEventListener('message', alMensaje)
+    return () => navigator.serviceWorker?.removeEventListener('message', alMensaje)
+  }, [])
+
+  useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s)
@@ -227,7 +248,7 @@ export default function App() {
         </header>
         <main className="content" style={pantalla === 'pantalla' ? { maxWidth: 'none', display: 'flex', flexDirection: 'column' } : undefined}>
           {errorGeneral && <p role="alert" className="feedback-error">{errorGeneral} <button className="btn btn-sm" onClick={() => setErrorGeneral('')}>Cerrar</button></p>}
-          {pantallasVisitadas.has('hoy') && <div hidden={pantalla !== 'hoy'}><Hoy revision={revisionGoogle} abrirBandeja={() => { setMailCalTab('mail'); setPantalla('mailcal') }} abrirCalendario={() => { setMailCalTab('calendario'); setPantalla('mailcal') }} proyectos={proyectos} abrirProyecto={abrirProyecto} abrirMail={abrirMail} abrirMaria={() => setPantalla('maria')} /></div>}
+          {pantallasVisitadas.has('hoy') && <div hidden={pantalla !== 'hoy'}><Hoy revision={revisionGoogle} ownerId={session.user.id} abrirBandeja={() => { setMailCalTab('mail'); setPantalla('mailcal') }} abrirCalendario={() => { setMailCalTab('calendario'); setPantalla('mailcal') }} proyectos={proyectos} abrirProyecto={abrirProyecto} abrirMail={abrirMail} abrirMaria={() => setPantalla('maria')} /></div>}
           {pantallasVisitadas.has('mailcal') && <div hidden={pantalla !== 'mailcal'}><MailCalendario tab={mailCalTab} setTab={setMailCalTab} revision={revisionGoogle} proyectos={proyectos} google={google} conectarGoogle={conectarGoogle} abrirMail={abrirMail} /></div>}
           {pantallasVisitadas.has('flujo') && <div hidden={pantalla !== 'flujo'}><Flujo proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} abrirHtml={() => htmlInput.current?.click()} /></div>}
           {pantallasVisitadas.has('maria') && <div hidden={pantalla !== 'maria'}><Maria /></div>}

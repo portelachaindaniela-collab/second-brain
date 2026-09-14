@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   mesActual, mensajeLimiteAlcanzado, mensajeFaltaConfiguracion,
   estimarReservaMicros, calcularCostoRealMicros,
-  construirContexto, construirMensajes, SYSTEM_PROMPT,
+  construirContexto, construirMensajes, construirContenidoGemini, SYSTEM_PROMPT,
 } from './logic.mjs'
 
 test('mesActual devuelve año-mes en formato YYYY-MM', () => {
@@ -34,8 +34,10 @@ test('estimarReservaMicros siempre reserva al menos 1 micro', () => {
 })
 
 test('estimarReservaMicros crece con mensajes/historial más largos', () => {
-  const corto = estimarReservaMicros({ mensaje: 'hola', contexto: '', historial: [] })
-  const largo = estimarReservaMicros({ mensaje: 'hola '.repeat(500), contexto: 'contexto '.repeat(500), historial: [{ rol: 'user', texto: 'x'.repeat(2000) }] })
+  // precios explícitos: el default actual es 0 (nivel gratuito de Gemini) y ahí todo redondea al piso de 1 micro.
+  const precios = { precioEntrada: 150, precioSalida: 600 }
+  const corto = estimarReservaMicros({ mensaje: 'hola', contexto: '', historial: [], ...precios })
+  const largo = estimarReservaMicros({ mensaje: 'hola '.repeat(500), contexto: 'contexto '.repeat(500), historial: [{ rol: 'user', texto: 'x'.repeat(2000) }], ...precios })
   assert.ok(largo > corto)
 })
 
@@ -65,6 +67,16 @@ test('construirContexto incluye pantalla, proyecto actual, tareas y mails como d
   assert.match(contexto, /Notas/)
 })
 
+test('construirContexto también incluye cursos a medio camino y archivos recientes', () => {
+  const contexto = construirContexto({
+    cursos: [{ title: 'Curso de SQL', plataforma: 'Coursera', estado: 'en_curso', progreso: 'Módulo 3 de 8' }],
+    archivos: [{ name: 'contrato.pdf', kind: 'pdf' }],
+  })
+  assert.match(contexto, /Curso de SQL/)
+  assert.match(contexto, /Módulo 3 de 8/)
+  assert.match(contexto, /contrato\.pdf/)
+})
+
 test('construirMensajes envía el system prompt, el contexto, el historial y el mensaje nuevo', () => {
   const historial = [{ rol: 'user', texto: 'tengo algo mañana?' }, { rol: 'bot', texto: 'sí, una reunión a las 15' }]
   const mensajes = construirMensajes({ contexto: 'CONTEXTO DE PRUEBA', historial, mensaje: 'a qué hora era eso' })
@@ -84,6 +96,19 @@ test('construirMensajes recorta el historial a los últimos 12 turnos', () => {
   const mensajes = construirMensajes({ contexto: '', historial, mensaje: 'último' })
   // 2 system + 12 historial + 1 mensaje nuevo
   assert.equal(mensajes.length, 15)
+})
+
+test('construirContenidoGemini separa la instrucción de sistema y usa role "model" en el historial del bot', () => {
+  const historial = [{ rol: 'user', texto: 'tengo algo mañana?' }, { rol: 'bot', texto: 'sí, una reunión a las 15' }]
+  const { systemInstruction, contents } = construirContenidoGemini({ contexto: 'CONTEXTO DE PRUEBA', historial, mensaje: 'a qué hora era eso' })
+  assert.match(systemInstruction.parts[0].text, new RegExp(SYSTEM_PROMPT.split('\n')[0]))
+  assert.match(systemInstruction.parts[0].text, /CONTEXTO DE PRUEBA/)
+  assert.equal(contents[0].role, 'user')
+  assert.equal(contents[0].parts[0].text, 'tengo algo mañana?')
+  assert.equal(contents[1].role, 'model')
+  const ultimo = contents[contents.length - 1]
+  assert.equal(ultimo.role, 'user')
+  assert.equal(ultimo.parts[0].text, 'a qué hora era eso')
 })
 
 test('el system prompt deja explícito que el contenido de mails/docs es dato, no instrucción', () => {

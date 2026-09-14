@@ -46,6 +46,7 @@ export default function Archivos({ proyecto }) {
   const [pidiendoCarpeta, setPidiendoCarpeta] = useState(null) // File[] en espera de carpeta
   const [carpetaInput, setCarpetaInput] = useState('')
   const [arrastreSobre, setArrastreSobre] = useState(null) // nombre de carpeta ('' = sueltos) resaltada al arrastrar encima
+  const [borrandoCarpeta, setBorrandoCarpeta] = useState(null) // nombre de la carpeta con el borrado en confirmación
   const inputRef = useRef(null)
   const carpetaRef = useRef(null)
   const cancelarRef = useRef(false)
@@ -86,23 +87,19 @@ export default function Archivos({ proyecto }) {
   }
 
   function subirArchivo(e) {
-    const file = e.target.files?.[0]
+    const files = [...(e.target.files || [])]
     e.target.value = ''
-    if (!file) return
+    if (!files.length) return
     setError('')
-    if (tipoDe(file.name) === 'pdf' || /\.html?$/i.test(file.name)) {
-      subirVarios([file], null)
-      return
-    }
-    setPidiendoCarpeta([file])
+    setPidiendoCarpeta(files)
     setCarpetaInput(nombresCarpetas[0] || '')
   }
 
   async function confirmarSubidaConCarpeta() {
     const files = pidiendoCarpeta
-    if (!files?.length || !carpetaInput.trim()) return
+    if (!files?.length) return
     setPidiendoCarpeta(null)
-    await subirVarios(files, carpetaInput.trim())
+    await subirVarios(files, carpetaInput.trim() || null)
   }
 
   async function subirCarpeta(e) {
@@ -133,6 +130,17 @@ export default function Archivos({ proyecto }) {
     cargar()
   }
 
+  async function borrarCarpeta(carpeta) {
+    setBorrandoCarpeta(null)
+    const items = carpetas.get(carpeta) || []
+    if (!items.length) return
+    const { error: storageError } = await supabase.storage.from('archivos').remove(items.map(a => a.storage_path))
+    if (storageError) { setError('No se pudo borrar los archivos de la carpeta: ' + storageError.message); return }
+    const { error } = await supabase.from('assets').delete().in('id', items.map(a => a.id))
+    if (error) { setError('No se pudo borrar el registro de la carpeta: ' + error.message); return }
+    cargar()
+  }
+
   async function mover(assetId, nombreActual, carpetaDestino) {
     const base = nombreBase(nombreActual)
     const nuevoNombre = carpetaDestino ? `${carpetaDestino}/${base}` : base
@@ -154,8 +162,7 @@ export default function Archivos({ proyecto }) {
     const files = [...(e.dataTransfer.files || [])]
     if (!files.length) return
     if (carpetaDestino != null) { subirVarios(files, carpetaDestino); return }
-    if (files.length === 1 && (tipoDe(files[0].name) === 'pdf' || /\.html?$/i.test(files[0].name))) { subirVarios(files, null); return }
-    setPidiendoCarpeta(files); setCarpetaInput(nombresCarpetas[0] || '')
+    setPidiendoCarpeta(files); setCarpetaInput('')
   }
 
   function alPasarPorEncima(e, carpeta) {
@@ -201,7 +208,7 @@ export default function Archivos({ proyecto }) {
           <button className="btn" onClick={() => carpetaRef.current?.click()} disabled={subiendo}>Agregar carpeta</button>
           <button className="btn btn-primary" onClick={() => inputRef.current?.click()} disabled={subiendo}>Subir archivo</button>
         </div>
-        <input ref={inputRef} type="file" style={{ display: 'none' }} onChange={subirArchivo} />
+        <input ref={inputRef} type="file" multiple style={{ display: 'none' }} onChange={subirArchivo} />
         <input ref={carpetaRef} type="file" webkitdirectory="" directory="" multiple style={{ display: 'none' }} onChange={subirCarpeta} />
       </div>
 
@@ -226,7 +233,17 @@ export default function Archivos({ proyecto }) {
             <div className="carpeta-header" onClick={() => setAbiertas(s => ({ ...s, [carpeta]: !abierta }))}>
               <span>{abierta ? '▾' : '▸'} 📁 {carpeta}</span>
               <span style={{ marginLeft: 'auto', color: 'var(--gray-500)', fontWeight: 500 }}>{items.length}</span>
+              <button className="btn btn-sm btn-danger" onClick={e => { e.stopPropagation(); setBorrandoCarpeta(carpeta) }}>Borrar carpeta</button>
             </div>
+            {borrandoCarpeta === carpeta && (
+              <div className="confirm-box" style={{ margin: '0 14px 12px' }}>
+                ¿Borrar la carpeta "{carpeta}" y sus {items.length} archivo{items.length === 1 ? '' : 's'}? No se puede deshacer.
+                <div className="actions">
+                  <button type="button" className="btn btn-sm btn-danger" onClick={() => borrarCarpeta(carpeta)}>Sí, borrar</button>
+                  <button type="button" className="btn btn-sm" onClick={() => setBorrandoCarpeta(null)}>Cancelar</button>
+                </div>
+              </div>
+            )}
             {abierta && (vista === 'lista'
               ? items.map(a => fila(a, a.base))
               : <div className="archivo-iconos">{items.map(a => icono(a, a.base))}</div>)}
@@ -252,20 +269,20 @@ export default function Archivos({ proyecto }) {
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setPidiendoCarpeta(null)}>
           <div className="modal" style={{ maxWidth: 420 }}>
             <div className="modal-head">
-              <h3 style={{ fontSize: 15 }}>¿En qué carpeta va{pidiendoCarpeta.length > 1 ? 'n' : ''}?</h3>
+              <h3 style={{ fontSize: 15 }}>¿A qué carpeta va{pidiendoCarpeta.length > 1 ? 'n' : ''}?</h3>
               <button className="close-x" onClick={() => setPidiendoCarpeta(null)}>✕</button>
             </div>
             <div className="modal-body">
               <p className="hint" style={{ marginBottom: 10 }}>
                 {pidiendoCarpeta.length > 1
-                  ? `Los archivos (salvo PDF y HTML) tienen que estar dentro de una carpeta. ${pidiendoCarpeta.length} archivos.`
-                  : `Los archivos (salvo PDF y HTML) tienen que estar dentro de una carpeta. "${pidiendoCarpeta[0].name}"`}
+                  ? `${pidiendoCarpeta.length} archivos. Dejá la carpeta vacía para subirlos sueltos.`
+                  : `"${pidiendoCarpeta[0].name}". Dejá la carpeta vacía para subirlo suelto.`}
               </p>
               <div className="field">
-                <label>Carpeta</label>
+                <label>Carpeta (opcional)</label>
                 <input value={carpetaInput} autoFocus onChange={e => setCarpetaInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && confirmarSubidaConCarpeta()}
-                  placeholder="Nombre de la carpeta" list="carpetas-existentes" />
+                  placeholder="Nombre de la carpeta, o vacío para sueltos" list="carpetas-existentes" />
                 <datalist id="carpetas-existentes">
                   {nombresCarpetas.map(c => <option key={c} value={c} />)}
                 </datalist>
@@ -273,7 +290,7 @@ export default function Archivos({ proyecto }) {
             </div>
             <div className="modal-foot">
               <button className="btn" onClick={() => setPidiendoCarpeta(null)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={confirmarSubidaConCarpeta} disabled={!carpetaInput.trim()}>Subir</button>
+              <button className="btn btn-primary" onClick={confirmarSubidaConCarpeta}>Subir</button>
             </div>
           </div>
         </div>

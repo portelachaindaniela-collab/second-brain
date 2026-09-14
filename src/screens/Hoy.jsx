@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, hora, fechaCorta } from '../supabase.js'
+import ResumenDiario from './ResumenDiario.jsx'
 
 function inicioDia() {
   const d = new Date()
@@ -15,7 +16,7 @@ function finDia() {
 const NIVEL_BADGE = { ok: 'badge-green', aviso: 'badge-amber', error: 'badge-red' }
 const NOMBRE_AGENTE = { monitor_sitios: 'Sitios', tareas_estancadas: 'Tareas estancadas', sync_estado: 'Sincronización' }
 
-export default function Hoy({ proyectos, revision, abrirProyecto, abrirMail, abrirMaria, abrirBandeja, abrirCalendario }) {
+export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrirMail, abrirMaria, abrirBandeja, abrirCalendario }) {
   const [eventos, setEventos] = useState([])
   const [tareas, setTareas] = useState([])
   const [mails, setMails] = useState([])
@@ -69,6 +70,7 @@ export default function Hoy({ proyectos, revision, abrirProyecto, abrirMail, abr
       </div>
 
       {error && <p className="feedback-error" role="alert">{error}</p>}
+      <ResumenDiario ownerId={ownerId} />
       <div className="grid grid-2" style={{ marginBottom: 20 }}>
         <div className="card card-pad">
           <div className="section-heading"><h3>Calendario · Hoy</h3><button className="btn btn-sm" onClick={abrirCalendario}>Ver calendario</button></div>
