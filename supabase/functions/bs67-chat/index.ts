@@ -73,6 +73,7 @@ Deno.serve(async (req: Request) => {
     docs: docsRes.data || [],
     cursos: cursosRes.data || [],
     archivos: archivosRes.data || [],
+    hoy: new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'full' }).format(new Date()),
   });
 
   const yearMonth = mesActual();

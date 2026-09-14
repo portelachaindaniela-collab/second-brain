@@ -67,6 +67,16 @@ test('construirContexto incluye pantalla, proyecto actual, tareas y mails como d
   assert.match(contexto, /Notas/)
 })
 
+test('construirContexto incluye la fecha de hoy cuando se la pasan, para resolver fechas relativas', () => {
+  const contexto = construirContexto({ hoy: 'martes 15 de septiembre de 2026' })
+  assert.match(contexto, /Hoy es martes 15 de septiembre de 2026/)
+})
+
+test('el system prompt explica cómo proponer eventos sin guardarlos directamente', () => {
+  assert.match(SYSTEM_PROMPT, /bloque de código con el lenguaje "eventos"/)
+  assert.match(SYSTEM_PROMPT, /nunca guardás/)
+})
+
 test('construirContexto también incluye cursos a medio camino y archivos recientes', () => {
   const contexto = construirContexto({
     cursos: [{ title: 'Curso de SQL', plataforma: 'Coursera', estado: 'en_curso', progreso: 'Módulo 3 de 8' }],

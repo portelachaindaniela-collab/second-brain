@@ -26,6 +26,12 @@
 .bot-pending { font-size:11px; color:var(--gray-500); }
 .bot-shortcuts { display:flex; flex-wrap:wrap; gap:5px; padding:0 12px 10px; }
 .bot-shortcuts button { border:1px solid var(--gray-200); border-radius:12px; padding:5px 8px; font-size:10px; background:transparent; color:var(--gray-700); cursor:pointer; }
+.bot-eventos { margin:0 25px 10px 0; padding:8px 10px; background:var(--surface-raised); border:1px dashed var(--gray-300); border-radius:12px; font-size:11.5px; }
+.bot-evento-item { display:flex; flex-direction:column; gap:1px; padding:6px 0; border-bottom:1px solid var(--gray-200); }
+.bot-evento-item:last-of-type { border-bottom:none; }
+.bot-evento-item span { color:var(--gray-500); }
+.bot-eventos-acciones { margin-top:8px; }
+.bot-eventos-estado { margin-top:8px; color:var(--gray-500); }
 .bot-conversation form { display:flex; gap:7px; padding:10px 12px; border-top:1px solid var(--gray-200); }
 .bot-conversation form input { min-width:0; flex:1; font-size:12px; }
 .bot-conversation form button { background:var(--accent); color:var(--accent-text); border:0; border-radius:10px; width:34px; cursor:pointer; }
