@@ -1,0 +1,9 @@
+Sonidos de ambiente para Second Brain
+
+Lluvia (rain.ogg), pájaros (birds-tree.ogg), cafetería (coffee.ogg) y olas (waves.ogg).
+Autor: SFX Producer. Licencia: CC0, según la tabla de créditos de Noisekun.
+Colección y archivos: https://github.com/mateusfg7/Noisekun
+Fuentes y licencias individuales: https://github.com/mateusfg7/Noisekun#sounds
+Licencia CC0: https://creativecommons.org/publicdomain/zero/1.0/
+Archivos obtenidos de .github/assets/sounds/ el 13 de septiembre de 2026.
+Se conserva ORIGEN.md como copia de los créditos originales de la colección.
