@@ -75,7 +75,13 @@ Deno.serve(async (req: Request) => {
       const calListResp = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250", { headers: { Authorization: `Bearer ${token}` } });
       const calListData = await calListResp.json();
       if (calListResp.ok && Array.isArray(calListData.items) && calListData.items.length) {
-        calendarios = calListData.items.filter((c: any) => c.selected !== false && !c.deleted);
+        // El calendario principal aparece en la lista con su email real como id (ademas de
+        // "primary": true) — si lo guardamos con ese id en vez de "primary", cada evento del
+        // calendario principal queda duplicado: una copia vieja bajo "primary" y otra nueva
+        // bajo el email, porque para la restriccion de unicidad son dos calendarios distintos.
+        calendarios = calListData.items
+          .filter((c: any) => c.selected !== false && !c.deleted)
+          .map((c: any) => (c.primary ? { ...c, id: "primary" } : c));
       }
     } catch (_) { /* si falla la lista, seguimos con al menos "primary" */ }
 
