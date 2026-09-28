@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, hora, fechaCorta } from '../supabase.js'
 import ResumenDiario from './ResumenDiario.jsx'
+import { unirRepetidos, diasDelEvento } from '../eventosUnicos.mjs'
 
 function inicioDia() {
   const d = new Date()
@@ -29,8 +30,8 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
     async function cargar() {
       setCargando(true)
       const [ev, ta, ma, ag] = await Promise.all([
-        supabase.from('calendar_events').select('id,title,starts_at,ends_at,project_id')
-          .gte('starts_at', inicioDia().toISOString()).lte('starts_at', finDia().toISOString())
+        supabase.from('calendar_events').select('id,title,starts_at,ends_at,project_id,all_day')
+          .gte('starts_at', new Date(inicioDia().getTime() - 86400000).toISOString()).lte('starts_at', finDia().toISOString())
           .order('starts_at', { ascending: true }),
         supabase.from('tasks').select('id,title,project_id,status').eq('done', false).order('touched_at', { ascending: true }).limit(20),
         supabase.from('emails').select('id,gmail_id,subject,from_name,received_at,is_unread').eq('is_unread', true).order('received_at', { ascending: false }).limit(10),
@@ -39,7 +40,8 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
       if (!vivo) return
       const fallos = [ev, ta, ma, ag].filter(r => r.error)
       if (fallos.length) setError('No se pudo cargar parte del resumen. Entrá a Mail o Calendario para reintentar.')
-      setEventos(ev.data || [])
+      const hoy = inicioDia().toLocaleDateString('sv-SE')
+      setEventos(unirRepetidos(ev.data || []).filter(e => { const [desde, hasta] = diasDelEvento(e); return desde <= hoy && hoy <= hasta }))
       setTareas(ta.data || [])
       setMails(ma.data || [])
       const ultimos = {}

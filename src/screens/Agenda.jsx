@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, fechaHora } from '../supabase.js'
 import EditorEvento from './EditorEvento.jsx'
 import { fechaEvento } from '../eventoFecha.js'
+import { unirRepetidos } from '../eventosUnicos.mjs'
 import { EVENTOS_COMUNIDAD, eventosPendientes } from '../comunidadEventos.mjs'
 
 export default function Agenda({ proyectos, revision }) {
@@ -17,7 +18,7 @@ export default function Agenda({ proyectos, revision }) {
   useEffect(() => {
     let vivo = true
     setCargando(true); setError('')
-    supabase.from('calendar_events').select('id,title,description,starts_at,ends_at,location,project_id,all_day,google_event_id,calendar_id').gte('starts_at', new Date(Date.UTC(mes.getFullYear(), mes.getMonth(), 1)-86400000).toISOString()).lt('starts_at', new Date(Date.UTC(mes.getFullYear(), mes.getMonth()+1, 2)).toISOString()).order('starts_at').then(({ data, error }) => { if (!vivo) return; if (error) setError('No se pudo cargar el calendario: ' + error.message); else setEventos((data || []).filter(e => fechaEvento(e).getMonth() === mes.getMonth() && fechaEvento(e).getFullYear() === mes.getFullYear())); setCargando(false) }).catch(() => { if (vivo) { setError('No se pudo conectar. Probá nuevamente.'); setCargando(false) } })
+    supabase.from('calendar_events').select('id,title,description,starts_at,ends_at,location,project_id,all_day,google_event_id,calendar_id').gte('starts_at', new Date(Date.UTC(mes.getFullYear(), mes.getMonth(), 1)-86400000).toISOString()).lt('starts_at', new Date(Date.UTC(mes.getFullYear(), mes.getMonth()+1, 2)).toISOString()).order('starts_at').then(({ data, error }) => { if (!vivo) return; if (error) setError('No se pudo cargar el calendario: ' + error.message); else setEventos(unirRepetidos(data || []).filter(e => fechaEvento(e).getMonth() === mes.getMonth() && fechaEvento(e).getFullYear() === mes.getFullYear())); setCargando(false) }).catch(() => { if (vivo) { setError('No se pudo conectar. Probá nuevamente.'); setCargando(false) } })
     return () => { vivo = false }
   }, [mes, revision, version])
   async function importarComunidad() {

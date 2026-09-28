@@ -87,6 +87,22 @@ test('construirContexto también incluye cursos a medio camino y archivos recien
   assert.match(contexto, /contrato\.pdf/)
 })
 
+test('construirContexto incluye los últimos chequeos automáticos de María por agente', () => {
+  const contexto = construirContexto({
+    reportesAgentes: [{ agente: 'monitor_sitios', estado: 'aviso', resumen: 'Radar Laboral sin corridas hace 40hs' }],
+  })
+  assert.match(contexto, /chequeos automáticos de María/)
+  assert.match(contexto, /monitor_sitios/)
+  assert.match(contexto, /Radar Laboral sin corridas hace 40hs/)
+})
+
+test('el system prompt deja claro que BS67 es un asistente general, no limitado a tareas/ideas', () => {
+  assert.match(SYSTEM_PROMPT, /gerente y hablante/i)
+  assert.match(SYSTEM_PROMPT, /no estás limitado a un área puntual/i)
+  assert.match(SYSTEM_PROMPT, /cualquier pregunta general/i)
+  assert.match(SYSTEM_PROMPT, /María es la coordinadora/)
+})
+
 test('construirMensajes envía el system prompt, el contexto, el historial y el mensaje nuevo', () => {
   const historial = [{ rol: 'user', texto: 'tengo algo mañana?' }, { rol: 'bot', texto: 'sí, una reunión a las 15' }]
   const mensajes = construirMensajes({ contexto: 'CONTEXTO DE PRUEBA', historial, mensaje: 'a qué hora era eso' })

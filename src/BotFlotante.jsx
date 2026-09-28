@@ -122,7 +122,7 @@ export default function BotFlotante({ abierto, setAbierto, texto, setTexto, mens
     {abierto && <section className="bot-conversation" id="maria-conversation" role="dialog" aria-labelledby="maria-chat-title">
       <header><div><strong id="maria-chat-title">BS67</strong><small>Tu bot de Second brain</small></div><button type="button" onClick={cerrar} aria-label="Cerrar conversación">×</button></header>
       <div className="bot-messages" role="log" aria-label="Conversación con BS67" aria-live="polite" aria-relevant="additions text">
-        <p className="bot-message">¡Hola! Contame qué necesitás — puedo hablarte de tus tareas, tus proyectos, tu agenda o tus mails.</p>
+        <p className="bot-message">¡Hola! Contame qué necesitás — puedo hablarte de cualquier parte de Second Brain (proyectos, tareas, Flujo, agenda, mails, docs, cursos, archivos, lo que chequeó María) o de cualquier otra cosa.</p>
         {mensajes.map((m, i) => (
           <div key={i}>
             <p className={`bot-message ${m.rol === 'user' ? 'bot-message-user' : ''}`}><span className="bot-speaker">{m.rol === 'user' ? 'Vos' : 'BS67'}: </span>{m.texto}</p>

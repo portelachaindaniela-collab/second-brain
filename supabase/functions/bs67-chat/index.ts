@@ -52,7 +52,7 @@ Deno.serve(async (req: Request) => {
   const precioSalida = Number(Deno.env.get('BS67_PRECIO_SALIDA_POR_1K_MICROS')) || PRECIO_SALIDA_POR_1K_MICROS_DEFAULT;
   const limiteMensual = Number(Deno.env.get('BS67_LIMITE_MENSUAL_MICROS')) || LIMITE_MENSUAL_MICROS_DEFAULT;
 
-  const [proyectosRes, tareasRes, eventosRes, mailsRes, docsRes, cursosRes, archivosRes] = await Promise.all([
+  const [proyectosRes, tareasRes, eventosRes, mailsRes, docsRes, cursosRes, archivosRes, reportesRes] = await Promise.all([
     admin.from('projects').select('id,name,status').eq('owner_id', ownerId).order('created_at').limit(30),
     admin.from('tasks').select('id,title,project_id,due_at').eq('owner_id', ownerId).eq('done', false).order('touched_at', { ascending: true }).limit(15),
     admin.from('calendar_events').select('id,title,starts_at,project_id').eq('owner_id', ownerId).gte('starts_at', new Date(Date.now() - 3600_000).toISOString()).order('starts_at').limit(15),
@@ -60,7 +60,16 @@ Deno.serve(async (req: Request) => {
     admin.from('docs').select('id,title,project_id').eq('owner_id', ownerId).order('updated_at', { ascending: false }).limit(8),
     admin.from('cursos').select('id,title,plataforma,progreso,estado').eq('owner_id', ownerId).neq('estado', 'terminado').order('updated_at', { ascending: false }).limit(15),
     admin.from('assets').select('id,name,kind').eq('owner_id', ownerId).order('created_at', { ascending: false }).limit(10),
+    admin.from('process_reports').select('agente,estado,resumen,iniciado_at').eq('owner_id', ownerId).order('iniciado_at', { ascending: false }).limit(20),
   ]);
+
+  // Un chequeo por agente (el más reciente): process_reports guarda una fila por cada corrida.
+  const reportesAgentes = Object.values(
+    (reportesRes.data || []).reduce((acc: Record<string, any>, r: any) => {
+      if (!acc[r.agente]) acc[r.agente] = r;
+      return acc;
+    }, {})
+  );
 
   const proyectoActual = entrada.proyectoId ? (proyectosRes.data || []).find((p: any) => p.id === entrada.proyectoId) || null : null;
   const contexto = construirContexto({
@@ -73,6 +82,7 @@ Deno.serve(async (req: Request) => {
     docs: docsRes.data || [],
     cursos: cursosRes.data || [],
     archivos: archivosRes.data || [],
+    reportesAgentes,
     hoy: new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'full' }).format(new Date()),
   });
 
