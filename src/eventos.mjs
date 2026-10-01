@@ -51,3 +51,13 @@ export function esPasado(evento, ahora = Date.now()) {
 export function reglasMasNuevas(evento, reglasActualizadas) {
   return !!(evento.evaluado_at && reglasActualizadas && Date.parse(reglasActualizadas) > Date.parse(evento.evaluado_at))
 }
+
+// Fecha corta para la tarjeta: "jue 01/10 · 09:00", y cuántos días dura si son varios.
+export function fechaTarjeta(inicio, fin) {
+  const i = partes(inicio)
+  const base = `${i.semana} ${i.dia} · ${i.hora}`
+  if (!fin) return base
+  const f = partes(fin)
+  const dias = Math.round((Date.parse(`${f.fecha}T12:00:00Z`) - Date.parse(`${i.fecha}T12:00:00Z`)) / 86_400_000) + 1
+  return dias > 1 ? `${base} · ${dias} días` : base
+}

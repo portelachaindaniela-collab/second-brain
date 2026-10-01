@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
-import { ESTADOS_EVENTO, VEREDICTO_TEXTO, aInputLocal, desdeInputLocal, fechaEvento, textoCalculo, esPasado, reglasMasNuevas } from '../eventos.mjs'
+import { ESTADOS_EVENTO, VEREDICTO_TEXTO, aInputLocal, desdeInputLocal, fechaEvento, fechaTarjeta, textoCalculo, esPasado, reglasMasNuevas } from '../eventos.mjs'
 import { horaAR } from '../trabajadores.mjs'
 import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
 import './Trabajadores.css'
@@ -149,7 +149,7 @@ function Veredicto({ v, evento, reglas }) {
     </div>}
     {v.calculo_plan && <div className="consola-linea eventos-envuelve">
       <span className="consola-etiqueta" />
-      <span>{textoCalculo(v.calculo_plan)} <span className="tenue">· recortado</span></span>
+      <span>{textoCalculo(v.calculo_plan)} <span className="tenue">· {v.veredicto === 'recortado' ? 'recortado' : 'según el plan'}</span></span>
     </div>}
     {(v.viaje_detalle || v.preparacion_supuesta) && <div className="consola-linea eventos-envuelve">
       <span className="consola-etiqueta" />
@@ -168,7 +168,25 @@ function Veredicto({ v, evento, reglas }) {
   </div>
 }
 
-function FilaEvento({ evento, reglas, editar, actualizado }) {
+// Tarjeta chica: lo justo para decidir si abrirla. Todo el detalle y las acciones van en DetalleEvento.
+function TarjetaEvento({ evento, reglas, abrir }) {
+  const v = evento.veredicto
+  const entrada = evento.tiene_entrada ? (evento.precio || 'con entrada') : 'libre'
+  return <button type="button" className="evento-tarjeta" onClick={abrir} aria-label={`Ver ${evento.nombre}`}>
+    <span className="evento-tarjeta-fecha">{fechaTarjeta(evento.inicio_at, evento.fin_at)}</span>
+    <span className="evento-tarjeta-nombre">{evento.nombre}</span>
+    {v
+      ? <span className="evento-tarjeta-veredicto"><strong className={`eventos-tag eventos-tag-${v.veredicto}`}>{VEREDICTO_TEXTO[v.veredicto]}</strong> {v.motivo}</span>
+      : <span className="evento-tarjeta-veredicto tenue">sin evaluar</span>}
+    <span className="evento-tarjeta-meta">
+      {['fui', 'no_fui', 'descartado'].includes(evento.estado) && <><span className={`eventos-estado eventos-estado-${evento.estado}`}>{etiquetaEstado(evento.estado)}</span>{' '}</>}
+      {[evento.lugar, entrada].filter(Boolean).join(' · ')}
+      {v && reglasMasNuevas(evento, reglas?.updated_at) && <span className="txt-corriendo"> · re-evaluar</span>}
+    </span>
+  </button>
+}
+
+function DetalleEvento({ evento, reglas, editar, actualizado, cerrar }) {
   const [ocupado, setOcupado] = useState('')
   const [aviso, setAviso] = useState('')
 
@@ -188,27 +206,41 @@ function FilaEvento({ evento, reglas, editar, actualizado }) {
     actualizado(data)
   }
 
-  const lugar = [evento.lugar, evento.direccion].filter(Boolean).join(' · ')
-  const entrada = evento.tiene_entrada ? `entrada ${evento.precio || 'sin precio'}` : 'libre'
-  return <section className="consola-fila eventos-fila">
-    <div className="eventos-fecha tenue">{fechaEvento(evento.inicio_at, evento.fin_at)}</div>
-    <div className="consola-fila-cuerpo">
-      <div className="consola-titulo">
-        <strong>{evento.url ? <a href={evento.url} target="_blank" rel="noreferrer">{evento.nombre}</a> : evento.nombre}</strong>
-        <span className={`eventos-estado eventos-estado-${evento.estado}`}>{etiquetaEstado(evento.estado)}</span>
+  const datos = [
+    ['cuándo', fechaEvento(evento.inicio_at, evento.fin_at)],
+    ['lugar', evento.lugar],
+    ['dirección', evento.direccion],
+    ['entrada', evento.tiene_entrada ? (evento.precio || 'con entrada, sin precio cargado') : 'libre'],
+    ['agenda', evento.agenda && 'cargada'],
+    ['de dónde', evento.origen && evento.origen !== 'manual' ? `lo trajo el buscador (${evento.origen})` : 'cargado a mano'],
+  ].filter(([, valor]) => valor)
+
+  return <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && !ocupado && cerrar()}>
+    <div className="modal consola-modal evento-detalle" role="dialog" aria-label={evento.nombre}>
+      <div className="modal-head">
+        <div>
+          <h3 className="evento-detalle-nombre">{evento.nombre}</h3>
+          <span className={`eventos-estado eventos-estado-${evento.estado}`}>{etiquetaEstado(evento.estado)}</span>
+        </div>
+        <button className="close-x" disabled={!!ocupado} onClick={cerrar} aria-label="Cerrar">✕</button>
       </div>
-      <div className="tenue eventos-envuelve">{[lugar, entrada, evento.agenda && 'agenda cargada', evento.origen && evento.origen !== 'manual' && `vía ${evento.origen}`].filter(Boolean).join(' · ')}</div>
-      {evento.veredicto ? <Veredicto v={evento.veredicto} evento={evento} reglas={reglas} /> : <div className="tenue">sin evaluar.</div>}
-      <div className="consola-acciones">
-        <button className="consola-boton" disabled={!!ocupado} onClick={evaluar}>{ocupado === 'evaluar' ? '[evaluando…]' : evento.veredicto ? '[re-evaluar]' : '[evaluar]'}</button>
+      <div className="modal-body">
+        <dl className="evento-detalle-datos">
+          {datos.map(([etiqueta, valor]) => <div key={etiqueta}><dt>{etiqueta}</dt><dd>{valor}</dd></div>)}
+          {evento.url && <div><dt>web</dt><dd><a href={evento.url} target="_blank" rel="noreferrer">abrir la página del evento ↗</a></dd></div>}
+        </dl>
+        {evento.veredicto ? <Veredicto v={evento.veredicto} evento={evento} reglas={reglas} /> : <p className="tenue">sin evaluar todavía.</p>}
+        {aviso && <p className="txt-error" role="status">{aviso}</p>}
+      </div>
+      <div className="modal-foot evento-detalle-acciones">
+        <button className="consola-boton consola-boton-fuerte" disabled={!!ocupado} onClick={evaluar}>{ocupado === 'evaluar' ? '[evaluando…]' : evento.veredicto ? '[re-evaluar]' : '[evaluar]'}</button>
         <button className="consola-boton" disabled={!!ocupado} onClick={editar}>[editar]</button>
         {evento.estado !== 'fui' && <button className="consola-boton" disabled={!!ocupado} onClick={() => marcar('fui')}>[fui]</button>}
         {evento.estado !== 'no_fui' && <button className="consola-boton" disabled={!!ocupado} onClick={() => marcar('no_fui')}>[no fui]</button>}
         {evento.estado !== 'descartado' && <button className="consola-boton" disabled={!!ocupado} onClick={() => marcar('descartado')}>[descartar]</button>}
-        {aviso && <span className="txt-error" role="status">{aviso}</span>}
       </div>
     </div>
-  </section>
+  </div>
 }
 
 export default function Eventos() {
@@ -219,6 +251,7 @@ export default function Eventos() {
   const [filtro, setFiltro] = useState('proximos')
   const [editando, setEditando] = useState(null)
   const [viendoReglas, setViendoReglas] = useState(false)
+  const [viendoId, setViendoId] = useState(null)
   const ahora = useReloj()
 
   const cargar = useCallback(async () => {
@@ -247,7 +280,9 @@ export default function Eventos() {
   const porEvaluar = grupo(['anotado']), evaluados = grupo(['evaluado']), decididos = grupo(['fui', 'no_fui', 'descartado'])
   const filas = (lista, vacio) => (cargando ? null : lista.length === 0
     ? <p className="tenue">{vacio}</p>
-    : lista.map(e => <FilaEvento key={e.id} evento={e} reglas={reglas} editar={() => setEditando(e)} actualizado={actualizado} />))
+    : <div className="evento-tarjetas">{lista.map(e => <TarjetaEvento key={e.id} evento={e} reglas={reglas} abrir={() => setViendoId(e.id)} />)}</div>)
+  // Se busca por id para que la ventana muestre siempre la versión actualizada (después de evaluar o marcar).
+  const viendo = viendoId ? eventos.find(e => e.id === viendoId) : null
   const enFiltro = FILTROS.find(f => f.id === filtro)?.label
 
   return <div className="consola">
@@ -284,6 +319,8 @@ export default function Eventos() {
     <Pie titulo="Reglas personales" boton={reglas ? 'Editar' : 'Cargar'} onBoton={() => setViendoReglas(true)}
       resumen={reglas ? `el criterio de cada evaluación · editadas ${new Date(reglas.updated_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}` : 'sin cargar: no se puede evaluar'} />
 
+    {viendo && <DetalleEvento evento={viendo} reglas={reglas} actualizado={actualizado} cerrar={() => setViendoId(null)}
+      editar={() => { setViendoId(null); setEditando(viendo) }} />}
     {editando && <FormEvento evento={editando === 'nuevo' ? null : editando} cerrar={() => setEditando(null)}
       guardado={e => { setEditando(null); actualizado(e) }}
       borrado={id => { setEditando(null); setEventos(prev => prev.filter(x => x.id !== id)) }} />}

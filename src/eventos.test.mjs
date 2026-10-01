@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { aInputLocal, desdeInputLocal, fechaEvento, textoCalculo, esPasado, reglasMasNuevas } from './eventos.mjs'
+import { aInputLocal, desdeInputLocal, fechaEvento, fechaTarjeta, textoCalculo, esPasado, reglasMasNuevas } from './eventos.mjs'
 
 test('el input local va y vuelve en hora argentina', () => {
   assert.equal(desdeInputLocal('2026-10-10T09:00'), '2026-10-10T12:00:00.000Z')
@@ -30,4 +30,10 @@ test('avisa si las reglas cambiaron después de evaluar', () => {
   assert.equal(reglasMasNuevas({ evaluado_at: '2026-10-01T00:00:00Z' }, '2026-10-02T00:00:00Z'), true)
   assert.equal(reglasMasNuevas({ evaluado_at: '2026-10-03T00:00:00Z' }, '2026-10-02T00:00:00Z'), false)
   assert.equal(reglasMasNuevas({ evaluado_at: null }, '2026-10-02T00:00:00Z'), false)
+})
+
+test('fecha corta de la tarjeta, con la duración si son varios días', () => {
+  assert.equal(fechaTarjeta('2026-10-01T12:00:00Z', '2026-10-01T21:00:00Z'), 'jue 01/10 · 09:00')
+  assert.equal(fechaTarjeta('2026-10-01T12:00:00Z', '2026-10-02T21:00:00Z'), 'jue 01/10 · 09:00 · 2 días')
+  assert.equal(fechaTarjeta('2026-10-01T12:00:00Z'), 'jue 01/10 · 09:00')
 })
