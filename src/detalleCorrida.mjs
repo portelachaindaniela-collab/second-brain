@@ -89,8 +89,8 @@ function scraper(p) {
   return {
     resumen: `El scraper publicó ${plural(p.publicados, 'oferta nueva', 'ofertas nuevas')} (${n(p.nuevos_totales)} nuevas antes de filtrar)`
       + (desde && hasta ? `, en su corrida de ${desde} a ${hasta}` : '') + (caidos.length ? `. Fallaron: ${caidos.map(([k]) => k).join(', ')}.` : '.'),
-    secciones: portales.length ? [{ titulo: 'portales', filas: portales.map(([k, v]) => ({
-      etiqueta: k, detalle: v?.errores?.length ? v.errores.join(' · ') : null, valor: `${n(v?.encontrados)} encontradas`, estado: v?.estado === 'ok' ? null : 'error', texto: true,
+    secciones: portales.length ? [{ titulo: 'portales · ofertas encontradas', filas: portales.map(([k, v]) => ({
+      etiqueta: k, detalle: v?.errores?.length ? v.errores.join(' · ') : null, valor: n(v?.encontrados), estado: v?.estado === 'ok' ? null : 'error',
     })) }] : [],
   }
 }

@@ -167,10 +167,17 @@ function SeccionCorrida({ seccion }) {
   return <section className="corrida-seccion">
     <h4>{seccion.titulo}</h4>
     {seccion.filas && <dl className="corrida-filas">
-      {seccion.filas.map((f, i) => <div key={i} className={[f.sangria && 'is-sangria', f.tenue && 'is-tenue', f.fuerte && 'is-fuerte'].filter(Boolean).join(' ')}>
-        <dt>{f.etiqueta}{f.detalle && <span className="corrida-detalle">{f.detalle}</span>}</dt>
-        <dd className={[f.texto && 'is-texto', f.estado && COLOR_ESTADO[f.estado]].filter(Boolean).join(' ')}>{f.valor}</dd>
-      </div>)}
+      {seccion.filas.map((f, i) => {
+        // Valores cortos (números, estados, una cuenta) en un renglón a la derecha; los textos largos, debajo de la etiqueta.
+        const largo = f.texto && String(f.valor).length > 36
+        const pastilla = f.texto && f.estado && COLOR_ESTADO[f.estado]
+        return <div key={i} className={[f.sangria && 'is-sangria', f.tenue && 'is-tenue', f.fuerte && 'is-fuerte', largo && 'is-largo'].filter(Boolean).join(' ')}>
+          <dt>{f.etiqueta}{f.detalle && <span className="corrida-detalle">{f.detalle}</span>}</dt>
+          <dd className={!pastilla && f.estado ? COLOR_ESTADO[f.estado] : undefined}>
+            {pastilla ? <span className={`corrida-pastilla ${pastilla}`}>{f.valor}</span> : f.valor}
+          </dd>
+        </div>
+      })}
     </dl>}
     {seccion.items && <ul className="corrida-items">
       {seccion.items.map((it, i) => <li key={i} className={[!it.dia && 'sin-dia', it.tenue && 'tenue', it.nivel && COLOR_ESTADO[it.nivel]].filter(Boolean).join(' ')}>
