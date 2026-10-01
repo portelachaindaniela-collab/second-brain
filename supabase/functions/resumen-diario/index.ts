@@ -73,7 +73,8 @@ Deno.serve(async () => {
   if (!vapidPublic || !vapidPrivate) {
     return new Response(JSON.stringify({ error: 'Faltan las claves VAPID.' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
   }
-  webpush.setVapidDetails('mailto:portelachaindaniela@gmail.com', vapidPublic, vapidPrivate);
+  // Contacto que piden los servicios de push (mailto: o https:). Va la web, no un mail, porque el repo es público.
+  webpush.setVapidDetails('https://danielaportelachain.vercel.app', vapidPublic, vapidPrivate);
 
   const { data: subs, error } = await admin.from('push_subscriptions').select('*').eq('activo', true);
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });

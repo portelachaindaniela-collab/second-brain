@@ -4,8 +4,7 @@
 // a centavos enteros haría que cualquier consulta chica reserve 1 centavo completo y agote el
 // presupuesto en ~1000 mensajes sin importar su tamaño real.
 export const LIMITE_MENSUAL_MICROS_DEFAULT = 10_000_000 // USD 10.00
-// Daniela no tiene tarjeta que OpenAI acepte (la de Mercado Pago la rechaza) — BS67 pasó a usar
-// la API de Gemini con una clave gratis de Google AI Studio (sin tarjeta, con límite de mensajes
+// BS67 usa la API de Gemini con una clave gratis de Google AI Studio (sin tarjeta, con límite de mensajes
 // por día en vez de por plata). gemini-2.0-flash quedó discontinuado (Google devolvía el error
 // pidiendo pasar a gemini-3.6-flash) — si esto vuelve a pasar, el mensaje de error de Gemini
 // suele decir directamente a qué modelo migrar.
