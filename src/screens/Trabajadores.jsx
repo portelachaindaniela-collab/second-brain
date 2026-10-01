@@ -373,7 +373,7 @@ function DetalleTrabajador({ trabajador, volver, actualizado, ahora }) {
 }
 
 
-const fechaLarga = ms => new Date(ms).toLocaleString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fechaCorta = ms => new Date(ms).toLocaleString('es-AR', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '')
 const ETIQUETA_ESTADO = { ok: 'Activo', corriendo: 'Corriendo', trabado: 'Trabado', error: 'Con error', pausado: 'Pausado', sin_corridas: 'Sin corridas' }
 
 function fraseEstado(estado, corridas, ahora) {
@@ -431,7 +431,7 @@ function PanelTrabajador({ trabajador, corridas, ahora, actualizado, abrirCorrid
         </div>}
       </div>
     </div>
-    {trabajador.descripcion && <p className="panel-descripcion">{trabajador.descripcion}</p>}
+    {trabajador.descripcion && <p className="panel-descripcion" title={trabajador.descripcion}>{trabajador.descripcion}</p>}
 
     <div className="panel-pestanas" role="tablist">
       {PESTANAS.map(([id, etiqueta]) => <button key={id} role="tab" aria-selected={pestana === id} className={pestana === id ? 'is-activa' : undefined} onClick={() => setPestana(id)}>{etiqueta}</button>)}
@@ -440,9 +440,9 @@ function PanelTrabajador({ trabajador, corridas, ahora, actualizado, abrirCorrid
     <div className="panel-contenido" role="tabpanel">
       {pestana === 'resumen' && <>
         <dl className="panel-datos">
-          <div><dt>Última ejecución</dt><dd>{vida.ultimaFin ? <><strong>{haceCuanto(new Date(vida.ultimaFin).toISOString(), ahora)}</strong><span className="tenue">{fechaLarga(vida.ultimaFin)}</span></> : '—'}</dd></div>
-          <div><dt>Próxima ejecución</dt><dd>{vida.proxima ? <><strong>{enCuanto(vida.proxima, ahora)}</strong><span className="tenue">{fechaLarga(vida.proxima)}</span></> : <strong>{trabajador.activo ? '—' : 'pausado'}</strong>}</dd></div>
-          <div><dt>Estado</dt><dd><strong className={`panel-estado-texto estado-${estado}`}>{ETIQUETA_ESTADO[estado]}</strong><span className="tenue">{fraseEstado(estado, corridas, ahora)}</span></dd></div>
+          <div><dt>Última ejecución</dt><dd>{vida.ultimaFin ? <span><strong>{haceCuanto(new Date(vida.ultimaFin).toISOString(), ahora)}</strong><span className="tenue"> · {fechaCorta(vida.ultimaFin)}</span></span> : '—'}</dd></div>
+          <div><dt>Próxima ejecución</dt><dd>{vida.proxima ? <span><strong>{enCuanto(vida.proxima, ahora)}</strong><span className="tenue"> · {fechaCorta(vida.proxima)}</span></span> : <strong>{trabajador.activo ? '—' : 'pausado'}</strong>}</dd></div>
+          <div><dt>Estado</dt><dd><span><strong className={`panel-estado-texto estado-${estado}`}>{ETIQUETA_ESTADO[estado]}</strong><span className="tenue"> · {fraseEstado(estado, corridas, ahora)}</span></span></dd></div>
         </dl>
         <p className="panel-subtitulo">Entradas ({entradas.length})</p>
         <ListaPuntas items={entradas} />
@@ -455,7 +455,7 @@ function PanelTrabajador({ trabajador, corridas, ahora, actualizado, abrirCorrid
         <Franja bloques={bloques} abrirCorrida={abrirCorrida} />
         <div className="consola-eje tenue"><span>-24h</span><span>{textoResumen(resumenFranja(bloques))}</span><span>now</span></div>
         <div className="tail panel-historial">
-          {corridas.slice(0, 12).map(c => <LineaTail key={c.id} corrida={c} nombre={trabajador.nombre} ahora={ahora} abrir={() => abrirCorrida(c)} />)}
+          {corridas.slice(0, 6).map(c => <LineaTail key={c.id} corrida={c} nombre={trabajador.nombre} ahora={ahora} abrir={() => abrirCorrida(c)} />)}
         </div>
         <button className="consola-boton" onClick={verHistorial}>[historial completo]</button>
       </>}

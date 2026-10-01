@@ -218,7 +218,7 @@ button.franja-bloque:hover, button.franja-bloque:focus-visible { outline: 1px so
 .panel-puntas { margin: 0; padding: 0; list-style: none; }
 .panel-puntas li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--gray-200); font-size: 12.5px; }
 .panel-puntas strong { font-weight: 600; }
-.panel-historial { max-height: 280px; margin-top: 10px; overflow: auto; }
+.panel-historial { margin-top: 10px; }
 .panel-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid var(--gray-200); }
 
 /* ---------- Actividad reciente ---------- */
@@ -240,7 +240,21 @@ button.franja-bloque:hover, button.franja-bloque:focus-visible { outline: 1px so
 .filtros-trabajadores { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .filtros-trabajadores input { flex: 1 1 240px; }
 @media (prefers-reduced-motion: reduce) { .actividad-vivo::before { animation: none; } }
-.sistema-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
-.sistema-cuerpo.con-panel { grid-template-columns: minmax(0, 1fr) 320px; }
-.sistema-panel { padding: 14px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); background: var(--surface-inset); }
-@media (max-width: 1000px) { .sistema-cuerpo.con-panel { grid-template-columns: minmax(0, 1fr); } }
+.sistema-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 14px; height: clamp(440px, calc(100vh - 170px), 760px); }
+.sistema-cuerpo > .orbital { min-height: 0; }
+.sistema-cuerpo.con-panel { grid-template-columns: minmax(0, 1fr) 300px; }
+.sistema-panel { min-height: 0; overflow-y: auto; padding: 14px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); background: var(--surface-inset); }
+.sistema-panel .panel-trabajador { gap: 10px; }
+.sistema-panel .panel-datos > div { padding: 5px 0; }
+.sistema-panel .panel-subtitulo { margin-top: 10px; }
+@media (max-width: 1000px) { .sistema-cuerpo, .sistema-cuerpo.con-panel { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; height: auto; } .sistema-cuerpo .orbital { height: auto; } .sistema-panel { overflow: visible; } }
+
+/* Panel dentro del sistema: compacto para entrar en el alto de la sección sin desplazarse. */
+.sistema-panel { padding: 12px 14px; }
+.sistema-panel .panel-trabajador { gap: 8px; font-size: 12.5px; }
+.sistema-panel .panel-descripcion { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; }
+.sistema-panel .panel-pestanas button { padding: 6px 8px; }
+.sistema-panel .panel-datos > div { grid-template-columns: 7.6em minmax(0, 1fr); padding: 4px 0; }
+.sistema-panel .panel-subtitulo { margin: 8px 0 2px; }
+.sistema-panel .panel-puntas li { padding: 4px 0; font-size: 12px; }
+.sistema-panel .panel-pie { padding-top: 10px; }

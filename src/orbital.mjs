@@ -4,7 +4,7 @@
 import { RECORRIDOS, REGISTRO, FUENTES } from './tablero.mjs'
 import { trabada } from './trabajadores.mjs'
 
-export const LIENZO = { ancho: 880, alto: 600, cx: 440, cy: 300, nucleo: 46, nodo: 18, tarjeta: { ancho: 136, alto: 42 } }
+export const LIENZO = { ancho: 880, alto: 600, cx: 440, cy: 300, nucleo: 46, nodo: 18, tarjeta: { ancho: 152, alto: 44 } }
 const ORBITA_BASE = 104, ORBITA_PASO = 32, ACHATADO = 0.62
 const EXTERIOR = { rx: 348, ry: 232 }
 // Vuelta completa en 20 minutos: se nota que se mueve, sin distraer.
@@ -122,4 +122,39 @@ export function focoDe(clave, { enlaces }) {
   if (!clave) return null
   const propios = enlaces.filter(e => e.clave === clave)
   return { nodos: new Set([`t:${clave}`, ...propios.flatMap(e => [e.desde, e.hasta])]), enlaces: new Set(propios.map(e => e.id)) }
+}
+
+// ---------- Etiquetas de los trabajadores sin choques ----------
+// Ancho aproximado de un texto en letra común: alcanza para la pastilla de fondo de cada etiqueta.
+export const anchoTexto = (texto, px) => String(texto).length * px * 0.56
+export const ETIQUETA = { alto: 40, separacion: 10, aire: 4 }
+
+const choca = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+// etiquetas: [{ id, x, y, w, arriba }] con x,y del nodo. Devuelve { [id]: y de la parte de arriba de la pastilla }.
+// Cada etiqueta arranca pegada a su nodo, del lado de afuera de la órbita; si choca con algo, se corre en ese mismo
+// sentido hasta quedar libre. Las primeras de la lista se ubican primero (la del elegido no se mueve nunca).
+export function ubicarEtiquetas(etiquetas, nodos) {
+  const { alto, separacion, aire } = ETIQUETA
+  const { tarjeta, nodo: radio, nucleo, cx, cy } = LIENZO
+  const fijos = [
+    { x: cx - nucleo, y: cy - nucleo, w: nucleo * 2, h: nucleo * 2 },
+    ...nodos.filter(n => n.tipo !== 'trabajador').map(n => ({ x: n.x - tarjeta.ancho / 2, y: n.y - tarjeta.alto / 2, w: tarjeta.ancho, h: tarjeta.alto })),
+    ...nodos.filter(n => n.tipo === 'trabajador').map(n => ({ id: n.id, x: n.x - radio - 6, y: n.y - radio - 6, w: (radio + 6) * 2, h: (radio + 6) * 2 })),
+  ]
+  const puestas = []
+  const salida = {}
+  for (const e of etiquetas) {
+    let y = e.arriba ? e.y - radio - separacion - alto : e.y + radio + separacion
+    for (let i = 0; i < 24; i++) {
+      const caja = { x: e.x - e.w / 2, y, w: e.w, h: alto }
+      const golpe = [...fijos.filter(f => f.id !== e.id), ...puestas].find(o => choca(caja, o))
+      if (!golpe) break
+      y = e.arriba ? golpe.y - alto - aire : golpe.y + golpe.h + aire
+    }
+    y = Math.min(Math.max(y, aire), LIENZO.alto - alto - aire)
+    puestas.push({ x: e.x - e.w / 2, y, w: e.w, h: alto })
+    salida[e.id] = y
+  }
+  return salida
 }

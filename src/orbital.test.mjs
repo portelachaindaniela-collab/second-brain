@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIENZO, disposicion, trazo, estadoTrabajador, pasaFiltro, contarFiltros, coincideBusqueda, focoDe } from './orbital.mjs'
+import { LIENZO, ETIQUETA, disposicion, trazo, estadoTrabajador, pasaFiltro, contarFiltros, coincideBusqueda, focoDe, ubicarEtiquetas, anchoTexto } from './orbital.mjs'
 
 const trabajadores = [
   { clave: 'buscador_eventos', nombre: 'Buscador de eventos', color: 'rosa', activo: true },
@@ -75,4 +75,18 @@ test('foco: el trabajador, sus enlaces y sus puntas', () => {
   assert.deepEqual([...f.nodos].sort(), ['d:calendar_events', 'd:emails', 'd:trabajos_corridas', 'f:google', 't:google_sync'])
   assert.equal(f.enlaces.size, 4)
   assert.equal(focoDe(null, d), null)
+})
+
+test('etiquetas: ninguna se pisa con otra, con una tarjeta ni con el núcleo, en cualquier giro', () => {
+  const choca = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+  for (let giro = 0; giro < 360; giro += 7) {
+    const dd = disposicion(trabajadores, { rotacion: giro })
+    const ws = dd.nodos.filter(n => n.tipo === 'trabajador')
+    const etiquetas = ws.map(n => ({ id: n.id, x: n.x, y: n.y, w: Math.max(anchoTexto(n.etiqueta, 14), anchoTexto('hace 51 min · vuelve en 22 h', 12)) + 18, arriba: n.y < LIENZO.cy - 4 }))
+    const ys = ubicarEtiquetas(etiquetas, dd.nodos)
+    const cajas = etiquetas.map(e => ({ x: e.x - e.w / 2, y: ys[e.id], w: e.w, h: ETIQUETA.alto }))
+    for (let i = 0; i < cajas.length; i++) for (let j = i + 1; j < cajas.length; j++) assert.ok(!choca(cajas[i], cajas[j]), `giro ${giro}: ${etiquetas[i].id} pisa ${etiquetas[j].id}`)
+    const nucleo = { x: LIENZO.cx - LIENZO.nucleo, y: LIENZO.cy - LIENZO.nucleo, w: LIENZO.nucleo * 2, h: LIENZO.nucleo * 2 }
+    assert.ok(cajas.every(c => !choca(c, nucleo)), `giro ${giro}: una etiqueta pisa el núcleo`)
+  }
 })

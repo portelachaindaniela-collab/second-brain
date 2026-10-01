@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { haceCuanto } from '../trabajadores.mjs'
 import { colorIdentidad, vidaDeTrabajador, enCuanto } from '../tablero.mjs'
-import { LIENZO, GRADOS_POR_SEGUNDO, disposicion, trazo, estadoTrabajador, pasaFiltro, coincideBusqueda, focoDe } from '../orbital.mjs'
+import { LIENZO, ETIQUETA, GRADOS_POR_SEGUNDO, disposicion, trazo, estadoTrabajador, pasaFiltro, coincideBusqueda, focoDe, ubicarEtiquetas, anchoTexto } from '../orbital.mjs'
+import { MARCAS } from '../iconosMarcas.mjs'
 import './SistemaOrbital.css'
 
 // Íconos de cada trabajador, en una caja de 14×14 centrada en 0,0.
@@ -12,6 +13,27 @@ const ICONOS = {
   scraper_empleo: <><rect x="-7" y="-3" width="14" height="10" rx="2" /><path d="M-3 -3 V-5.5 H3 V-3 M-7 1.5 H7" /></>,
 }
 const ICONO_GENERICO = <><circle r="5" /><path d="M0 -7.5 V-5 M0 5 V7.5 M-7.5 0 H-5 M5 0 H7.5" /></>
+
+// Fuentes: el logo de cada servicio (Simple Icons, 24×24, llevado a 16×16). Los sitios propios, un globo.
+const MARCA_FUENTE = { github_pages: 'github', google: 'google', eventbrite: 'eventbrite' }
+function IconoFuente({ id }) {
+  const marca = MARCAS[MARCA_FUENTE[id]]
+  if (marca) return <path d={marca} transform="translate(-8 -8) scale(0.6667)" className="orbital-icono-marca" />
+  return <g className="orbital-icono-trazo"><circle r="7" /><path d="M-7 0 H7 M0 -7 C-3.5 -3.5 -3.5 3.5 0 7 M0 -7 C3.5 -3.5 3.5 3.5 0 7" /></g>
+}
+
+// Destinos: qué guarda cada tabla.
+const ICONO_DESTINO = {
+  eventos: <><path d="M-7 -4 H7 V-1 A1.6 1.6 0 0 0 7 2 V5 H-7 V2 A1.6 1.6 0 0 0 -7 -1 Z" /><path d="M-2 -4 V5" strokeDasharray="1.5 1.5" /></>,
+  calendar_events: <><rect x="-7" y="-5.5" width="14" height="12" rx="2" /><path d="M-7 -1.5 H7 M-3.5 -7.5 V-3.5 M3.5 -7.5 V-3.5" /></>,
+  emails: <><rect x="-7.5" y="-5" width="15" height="10" rx="2" /><path d="M-7 -4 L0 1 L7 -4" /></>,
+  process_reports: <><path d="M-5 -7 H2 L5 -4 V7 H-5 Z" /><path d="M-2.5 4 V1 M0 4 V-1 M2.5 4 V2" /></>,
+  trabajos_corridas: <><path d="M-3 -4.5 H7 M-3 0 H7 M-3 4.5 H7" /><circle cx="-6" cy="-4.5" r="0.9" /><circle cx="-6" cy="0" r="0.9" /><circle cx="-6" cy="4.5" r="0.9" /></>,
+}
+const ICONO_DESTINO_GENERICO = <><ellipse cy="-4.5" rx="6.5" ry="2.5" /><path d="M-6.5 -4.5 V4.5 A6.5 2.5 0 0 0 6.5 4.5 V-4.5 M-6.5 0 A6.5 2.5 0 0 0 6.5 0" /></>
+function IconoDestino({ id }) {
+  return <g className="orbital-icono-trazo">{ICONO_DESTINO[id] ?? ICONO_DESTINO_GENERICO}</g>
+}
 
 export function IconoTrabajador({ clave }) {
   return <g className="orbital-icono">{ICONOS[clave] ?? ICONO_GENERICO}</g>
@@ -60,6 +82,18 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
   const elegir = clave => e => { e.stopPropagation(); onElegir(elegido === clave ? null : clave) }
   const teclado = clave => e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); elegir(clave)(e) } }
 
+  const datoDe = n => {
+    const estado = estados[n.clave], vida = vidas[n.clave]
+    if (estado === 'pausado') return 'pausado'
+    if (estado === 'corriendo') return 'corriendo ahora'
+    return [vida.ultimaFin ? haceCuanto(new Date(vida.ultimaFin).toISOString(), ahora) : 'sin corridas', vida.proxima && `vuelve ${enCuanto(vida.proxima, ahora)}`].filter(Boolean).join(' · ')
+  }
+  const etiquetas = d.nodos.filter(n => n.tipo === 'trabajador')
+    .sort((a, b) => (b.clave === elegido) - (a.clave === elegido))
+    .map(n => ({ id: n.id, x: n.x, y: n.y, w: Math.max(anchoTexto(n.etiqueta, 14), anchoTexto(datoDe(n), 12)) + 18, arriba: n.y < LIENZO.cy - 4 }))
+  const lugarEtiqueta = ubicarEtiquetas(etiquetas, d.nodos)
+  const anchoEtiqueta = Object.fromEntries(etiquetas.map(e => [e.id, e.w]))
+
   const señalado = encima && porId[`t:${encima}`]
   const t = señalado && porClave[encima]
   const v = señalado && vidas[encima]
@@ -100,17 +134,15 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
         const { ancho, alto } = LIENZO.tarjeta
         return <g key={n.id} transform={`translate(${n.x} ${n.y})`} className={`orbital-tarjeta orbital-${n.tipo}${n.registro ? ' is-registro' : ''}${tenue(n.id) ? ' is-tenue' : ''}${foco?.nodos.has(n.id) ? ' is-foco' : ''}`}>
           <rect x={-ancho / 2} y={-alto / 2} width={ancho} height={alto} rx="9" />
-          <text x={-ancho / 2 + 12} y="-2" className="orbital-tarjeta-titulo">{n.etiqueta}</text>
-          <text x={-ancho / 2 + 12} y="13" className="orbital-tarjeta-desc">{n.descripcion}</text>
+          <g transform={`translate(${-ancho / 2 + 18} 0)`}>{n.tipo === 'fuente' ? <IconoFuente id={n.id.slice(2)} /> : <IconoDestino id={n.id.slice(2)} />}</g>
+          <text x={-ancho / 2 + 34} y="-2" className="orbital-tarjeta-titulo">{n.etiqueta}</text>
+          <text x={-ancho / 2 + 34} y="13" className="orbital-tarjeta-desc">{n.descripcion}</text>
         </g>
       })}
 
       {d.nodos.filter(n => n.tipo === 'trabajador').map(n => {
         const estado = estados[n.clave]
-        const vida = vidas[n.clave]
-        const arriba = n.y < LIENZO.cy - 4
-        const dato = estado === 'pausado' ? 'pausado' : estado === 'corriendo' ? 'corriendo ahora'
-          : [vida.ultimaFin ? haceCuanto(new Date(vida.ultimaFin).toISOString(), ahora) : 'sin corridas', vida.proxima && `vuelve ${enCuanto(vida.proxima, ahora)}`].filter(Boolean).join(' · ')
+        const dato = datoDe(n)
         return <g key={n.id} className={`orbital-trabajador estado-${estado}${elegido === n.clave ? ' is-elegido' : ''}${tenue(n.id) ? ' is-tenue' : ''}`}
           style={{ ...conColor(n.clave), transform: `translate(${n.x}px, ${n.y}px)` }}
           tabIndex={0} role="button" aria-pressed={elegido === n.clave} aria-label={`${n.etiqueta}: ${TEXTO_ESTADO[estado]}, ${dato}`}
@@ -123,8 +155,19 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
             <IconoTrabajador clave={n.clave} />
             <circle cx="13" cy="-13" r="4" className="orbital-estado" />
           </g>
-          <text y={arriba ? -LIENZO.nodo - 22 : LIENZO.nodo + 18} className="orbital-nombre">{n.etiqueta}</text>
-          <text y={arriba ? -LIENZO.nodo - 9 : LIENZO.nodo + 31} className="orbital-dato">{dato}</text>
+          {/* Pastilla de fondo (ninguna línea pasa por encima) en el lugar libre que le tocó: ver ubicarEtiquetas.
+              Si se corrió lejos de su nodo para no pisar nada, una línea fina la une a él. */}
+          {(() => {
+            const arriba = lugarEtiqueta[n.id] < n.y
+            const borde = arriba ? lugarEtiqueta[n.id] - n.y + ETIQUETA.alto : lugarEtiqueta[n.id] - n.y
+            const separada = Math.abs(borde) > LIENZO.nodo + ETIQUETA.separacion + 2
+            return separada && <line y1={arriba ? -LIENZO.nodo - 4 : LIENZO.nodo + 4} y2={borde} className="orbital-guia" />
+          })()}
+          <g transform={`translate(0 ${lugarEtiqueta[n.id] - n.y})`} className="orbital-etiqueta">
+            <rect x={-anchoEtiqueta[n.id] / 2} width={anchoEtiqueta[n.id]} height={ETIQUETA.alto} rx="8" />
+            <text y="17" className="orbital-nombre">{n.etiqueta}</text>
+            <text y="32" className="orbital-dato">{dato}</text>
+          </g>
         </g>
       })}
     </svg>
