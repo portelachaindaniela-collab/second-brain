@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, fechaHora } from '../../supabase.js'
 import EditorEvento from '../EditorEvento.jsx'
+import { Bloque } from '../../estructura.jsx'
 
 export default function Calendario({ proyecto }) {
   const [proximos, setProximos] = useState([])
@@ -24,29 +25,24 @@ export default function Calendario({ proyecto }) {
 
   return (
     <div>
-      <div className="page-head" style={{ marginBottom: 16 }}><h1 style={{ fontSize: 15 }}>Calendario</h1><button className="btn btn-primary btn-sm" onClick={() => setEditando({})}>+ Nuevo evento</button></div>
-
-      <div className="card card-pad" style={{ marginBottom: 16 }}>
-        <h3 style={{ fontSize: 13, marginBottom: 10 }}>Próximos eventos</h3>
+      <Bloque titulo="Calendario" accion={<button className="btn btn-primary btn-sm" onClick={() => setEditando({})}>+ Nuevo evento</button>}>
+        <h3 className="bloque-subtitulo">Próximos</h3>
         {proximos.length === 0 && <p className="empty-state">Sin eventos próximos.</p>}
         {proximos.map(e => (
           <div className="list-item" key={e.id}>
             <span className="list-main">{e.title}{e.location ? ` · ${e.location}` : ''}</span>
-            <span className="list-side">{fechaHora(e.starts_at)}</span><button className="btn btn-sm" onClick={() => setEditando(e)}>Editar evento</button>
+            <span className="list-side">{fechaHora(e.starts_at)}</span><button className="btn btn-sm" onClick={() => setEditando(e)} aria-label={`Editar ${e.title}`}>Editar</button>
           </div>
         ))}
-      </div>
-
-      <div className="card card-pad">
-        <h3 style={{ fontSize: 13, marginBottom: 10 }}>Eventos pasados recientes</h3>
+        <h3 className="bloque-subtitulo">Pasados recientes</h3>
         {pasados.length === 0 && <p className="empty-state">Sin eventos pasados registrados.</p>}
         {pasados.map(e => (
           <div className="list-item" key={e.id}>
             <span className="list-main">{e.title}</span>
-            <span className="list-side">{fechaHora(e.starts_at)}</span><button className="btn btn-sm" onClick={() => setEditando(e)}>Editar evento</button>
+            <span className="list-side">{fechaHora(e.starts_at)}</span><button className="btn btn-sm" onClick={() => setEditando(e)} aria-label={`Editar ${e.title}`}>Editar</button>
           </div>
         ))}
-      </div>
+      </Bloque>
       {editando && <EditorEvento evento={editando} proyectoId={proyecto.id} cerrar={() => setEditando(null)} guardado={() => setRevision(v => v+1)} eliminado={() => setRevision(v => v+1)} />}
     </div>
   )

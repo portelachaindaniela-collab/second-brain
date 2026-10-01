@@ -3,9 +3,11 @@ import { supabase, fechaHora } from '../supabase.js'
 import EditorEvento from './EditorEvento.jsx'
 import { fechaEvento } from '../eventoFecha.js'
 import { unirRepetidos } from '../eventosUnicos.mjs'
-import { EVENTOS_COMUNIDAD, eventosPendientes } from '../comunidadEventos.mjs'
+import { importarEventosComunidad, textoImportacion } from '../comunidadImportar.js'
 
-export default function Agenda({ proyectos, revision }) {
+// enBloque: va dentro de un Bloque de Mail y Calendario, sin cabecera propia (la importación de Comunidad
+// vive en el pie de esa pantalla).
+export default function Agenda({ proyectos, revision, enBloque = false }) {
   const [mes, setMes] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
   const [eventos, setEventos] = useState([])
   const [seleccion, setSeleccion] = useState(null)
@@ -25,19 +27,9 @@ export default function Agenda({ proyectos, revision }) {
     if (importando) return
     setImportando(true); setResultadoImport(null)
     try {
-      const { data: existentes, error: errorExistentes } = await supabase.from('calendar_events').select('title')
-      if (errorExistentes) throw new Error('No se pudo revisar el calendario actual.')
-      const pendientes = eventosPendientes((existentes || []).map(e => e.title))
-      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-      let creados = 0, fallidos = 0
-      for (const evento of pendientes) {
-        const { data, error } = await supabase.functions.invoke('google-calendar-edit', { body: { accion: 'crear', title: evento.title, location: evento.location, description: evento.description, all_day: true, starts_at: evento.starts_at, ends_at: evento.ends_at, time_zone: timeZone, project_id: null } })
-        let respuesta = data
-        if (error?.context) { try { respuesta = await error.context.json() } catch { /* se cuenta como fallido */ } }
-        if (error || respuesta?.error) fallidos++; else creados++
-      }
-      setResultadoImport({ creados, yaExistian: EVENTOS_COMUNIDAD.length - pendientes.length, fallidos })
-      if (creados) setVersion(v => v + 1)
+      const resultado = await importarEventosComunidad()
+      setResultadoImport(resultado)
+      if (resultado.creados) setVersion(v => v + 1)
     } catch (error) { setResultadoImport({ error: error.message || 'No se pudo importar los eventos de Comunidad.' }) }
     finally { setImportando(false) }
   }
@@ -46,19 +38,17 @@ export default function Agenda({ proyectos, revision }) {
   function mover(n) { setMes(new Date(mes.getFullYear(), mes.getMonth() + n, 1)); setSeleccion(null) }
   const visibles = seleccion ? eventos.filter(e => fechaEvento(e).getDate() === seleccion) : eventos
   return <div>
-    <div className="page-head"><h1>Calendario</h1><div style={{ display:'flex', gap:8 }}><button className="btn btn-primary" onClick={() => setEditando({})}>+ Nuevo evento</button><button className="btn" disabled={importando} onClick={importarComunidad}>{importando ? 'Importando…' : 'Importar de Comunidad'}</button></div></div>
-    <div className="calendar-toolbar"><button className="btn btn-sm" onClick={() => mover(-1)} aria-label="Mes anterior">←</button><strong>{mes.toLocaleDateString('es-AR', { month:'long', year:'numeric' })}</strong><button className="btn btn-sm" onClick={() => mover(1)} aria-label="Mes siguiente">→</button><button className="btn btn-sm" onClick={() => { setMes(new Date(new Date().getFullYear(), new Date().getMonth(), 1)); setSeleccion(new Date().getDate()) }}>Hoy</button></div>
+    {!enBloque && <div className="page-head"><h1>Calendario</h1><div style={{ display:'flex', gap:8 }}><button className="btn btn-primary" onClick={() => setEditando({})}>+ Nuevo evento</button><button className="btn" disabled={importando} onClick={importarComunidad}>{importando ? 'Importando…' : 'Importar de Comunidad'}</button></div></div>}
+    <div className="calendar-toolbar"><button className="btn btn-sm" onClick={() => mover(-1)} aria-label="Mes anterior">←</button><strong>{mes.toLocaleDateString('es-AR', { month:'long', year:'numeric' })}</strong><button className="btn btn-sm" onClick={() => mover(1)} aria-label="Mes siguiente">→</button><button className="btn btn-sm" onClick={() => { setMes(new Date(new Date().getFullYear(), new Date().getMonth(), 1)); setSeleccion(new Date().getDate()) }}>Hoy</button>{enBloque && <button className="btn btn-sm btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setEditando({})}>+ Nuevo evento</button>}</div>
     {error && <p role="alert" className="feedback-error">{error}</p>}
-    {resultadoImport && (resultadoImport.error
-      ? <p role="alert" className="feedback-error">{resultadoImport.error}</p>
-      : <p className="feedback-ok">Comunidad: {resultadoImport.creados} evento(s) agregado(s), {resultadoImport.yaExistian} ya estaban{resultadoImport.fallidos ? `, ${resultadoImport.fallidos} fallaron` : ''}.</p>)}
-    <div className="card calendar-grid">
+    {resultadoImport && <p role={resultadoImport.error ? 'alert' : undefined} className={resultadoImport.error ? 'feedback-error' : 'feedback-ok'}>{textoImportacion(resultadoImport)}</p>}
+    <div className={`${enBloque ? '' : 'card '}calendar-grid`}>
       {['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d => <span className="calendar-weekday" key={d}>{d}</span>)}
       {Array.from({ length:inicio }, (_, i) => <span key={'empty' + i} />)}
       {Array.from({ length:dias }, (_, i) => { const dia = i + 1; const items = eventos.filter(e => fechaEvento(e).getDate() === dia); return <button className={`calendar-day${seleccion === dia ? ' selected' : ''}`} key={dia} onClick={() => setSeleccion(dia)} aria-label={`${dia}, ${items.length} eventos`} aria-pressed={seleccion === dia}><span>{dia}</span>{items.slice(0, 2).map(e => <small key={e.id}>{e.title}</small>)}{items.length > 2 && <small>+{items.length - 2}</small>}</button> })}
     </div>
     <div className="page-head" style={{ marginTop:18 }}><h2 style={{ fontSize:14 }}>{seleccion ? `Eventos del día ${seleccion}` : 'Eventos del mes'}</h2>{seleccion && <button className="btn btn-sm" onClick={() => setSeleccion(null)}>Ver todo el mes</button>}</div>
-    <div className="card">{cargando ? <p className="empty-state">Cargando…</p> : !visibles.length ? <p className="empty-state">Sin eventos en este período.</p> : visibles.map(e => <details className="calendar-event" key={e.id}><summary>{e.title || '(sin título)'} <span>{e.all_day ? fechaEvento(e).toLocaleDateString('es-AR')+' · Todo el día' : fechaHora(e.starts_at)}</span></summary><p>{fechaHora(e.starts_at)}{e.ends_at ? ' — ' + fechaHora(e.ends_at) : ''}</p>{e.location && <p>{e.location}</p>}<p>{proyectos.find(p => p.id === e.project_id)?.name || 'Sin proyecto'}</p><button className="btn btn-sm" style={{ marginTop:10 }} onClick={() => setEditando(e)}>Editar evento</button></details>)}</div>
+    <div className={enBloque ? undefined : 'card'}>{cargando ? <p className="empty-state">Cargando…</p> : !visibles.length ? <p className="empty-state">Sin eventos en este período.</p> : visibles.map(e => <details className="calendar-event" key={e.id}><summary>{e.title || '(sin título)'} <span>{e.all_day ? fechaEvento(e).toLocaleDateString('es-AR')+' · Todo el día' : fechaHora(e.starts_at)}</span></summary><p>{fechaHora(e.starts_at)}{e.ends_at ? ' — ' + fechaHora(e.ends_at) : ''}</p>{e.location && <p>{e.location}</p>}<p>{proyectos.find(p => p.id === e.project_id)?.name || 'Sin proyecto'}</p><button className="btn btn-sm" style={{ marginTop:10 }} onClick={() => setEditando(e)}>Editar evento</button></details>)}</div>
     {editando && <EditorEvento evento={editando} cerrar={() => setEditando(null)}
       guardado={e => { const fecha = fechaEvento(e); setMes(new Date(fecha.getFullYear(), fecha.getMonth(), 1)); setSeleccion(fecha.getDate()); setVersion(v => v + 1) }}
       eliminado={id => { setEventos(prev => prev.filter(item => item.id !== id)); setVersion(v => v + 1) }} />}

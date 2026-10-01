@@ -1,19 +1,17 @@
 import { useEffect, useState } from 'react'
 import { supabase, fechaCorta } from '../supabase.js'
+import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 
 const ESTADOS_CURSO = [
   { id: 'en_curso', label: 'En curso', badge: 'badge-green' },
   { id: 'pausado', label: 'Pausado', badge: 'badge-amber' },
   { id: 'terminado', label: 'Terminado', badge: 'badge-gray' },
 ]
-const ESTADO_LABEL = Object.fromEntries(ESTADOS_CURSO.map(e => [e.id, e.label]))
-const ESTADO_BADGE = Object.fromEntries(ESTADOS_CURSO.map(e => [e.id, e.badge]))
 
 export default function Cursos() {
   const [cursos, setCursos] = useState([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
-  const [filtro, setFiltro] = useState('en_curso')
   const [abierto, setAbierto] = useState(null)
   const [titulo, setTitulo] = useState('')
   const [plataforma, setPlataforma] = useState('')
@@ -67,38 +65,42 @@ export default function Cursos() {
     cargar()
   }
 
-  const visibles = filtro === 'todos' ? cursos : cursos.filter(c => c.estado === filtro)
+  const de = estadoId => cursos.filter(c => c.estado === estadoId)
+  const enCurso = de('en_curso'), pausados = de('pausado'), terminados = de('terminado')
+  const lista = (items, vacio) => (cargando ? null : items.length === 0
+    ? <p className="empty-state">{vacio}</p>
+    : items.map(c => (
+      <div className="list-item clickable" key={c.id} onClick={() => abrir(c)}>
+        <span className="list-main">
+          <strong>{c.title}</strong>{c.plataforma ? ` · ${c.plataforma}` : ''}{c.progreso ? ` · ${c.progreso}` : ''}
+        </span>
+        <span className="list-side">{fechaCorta(c.updated_at)}</span>
+      </div>
+    )))
 
   return (
     <div>
-      <div className="page-head">
-        <h1>Cursos</h1>
-        <button className="btn btn-primary" onClick={() => abrir(null)}>+ Nuevo curso</button>
-      </div>
-      <p className="page-sub" style={{ marginBottom: 16 }}>Los que empezaste y quedaron a mitad de camino, para no tener que volver a buscarlos.</p>
-
-      <div className="vista-toggle" style={{ marginBottom: 16 }}>
-        <button className={filtro === 'en_curso' ? 'active' : ''} onClick={() => setFiltro('en_curso')}>En curso</button>
-        <button className={filtro === 'pausado' ? 'active' : ''} onClick={() => setFiltro('pausado')}>Pausados</button>
-        <button className={filtro === 'terminado' ? 'active' : ''} onClick={() => setFiltro('terminado')}>Terminados</button>
-        <button className={filtro === 'todos' ? 'active' : ''} onClick={() => setFiltro('todos')}>Todos</button>
-      </div>
+      <CabeceraPantalla sobretitulo="Aprendizaje" titulo="Cursos" cargando={cargando}
+        subtitulo="Los que empezaste y quedaron a mitad de camino, para no tener que volver a buscarlos."
+        cifras={[
+          { valor: enCurso.length, etiqueta: 'en curso' },
+          { valor: pausados.length, etiqueta: 'pausados', nivel: pausados.length ? 'aviso' : undefined },
+          { valor: terminados.length, etiqueta: 'terminados' },
+        ]} />
 
       {error && <p role="alert" className="feedback-error">{error}</p>}
       {cargando && <p className="empty-state">Cargando…</p>}
-      {!cargando && visibles.length === 0 && <div className="card card-pad empty-state">Nada acá todavía.</div>}
-
-      <div className="card">
-        {visibles.map(c => (
-          <div className="list-item clickable" key={c.id} onClick={() => abrir(c)}>
-            <span className="list-main">
-              <span className={`badge ${ESTADO_BADGE[c.estado] || 'badge-gray'}`} style={{ marginRight: 8 }}>{ESTADO_LABEL[c.estado] || c.estado}</span>
-              <strong>{c.title}</strong>{c.plataforma ? ` · ${c.plataforma}` : ''}{c.progreso ? ` · ${c.progreso}` : ''}
-            </span>
-            <span className="list-side">{fechaCorta(c.updated_at)}</span>
-          </div>
-        ))}
-      </div>
+      <Bloques>
+        <Bloque titulo="En curso" accion={<button className="btn btn-sm btn-primary" onClick={() => abrir(null)}>+ Nuevo curso</button>}>
+          {lista(enCurso, 'Nada en curso.')}
+        </Bloque>
+        <Bloque titulo="Pausados">
+          {lista(pausados, 'Ninguno quedó pausado.')}
+        </Bloque>
+        <Bloque titulo="Terminados" ancho="completo">
+          {lista(terminados, 'Todavía no terminaste ninguno.')}
+        </Bloque>
+      </Bloques>
 
       {abierto && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && !guardando && setAbierto(null)}>

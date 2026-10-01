@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase, hora, fechaCorta } from '../supabase.js'
 import ResumenDiario from './ResumenDiario.jsx'
 import { unirRepetidos, diasDelEvento } from '../eventosUnicos.mjs'
+import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
+import { mailsImportantes, resumenDiarioLinea } from '../hoyCifras.mjs'
+import { AGENTES_MARIA, avisosDeMaria, tareasEstancadasIds, haceCuantoConsolidado } from '../avisos.mjs'
 
 function inicioDia() {
   const d = new Date()
@@ -14,14 +17,35 @@ function finDia() {
   return d
 }
 
-const NIVEL_BADGE = { ok: 'badge-green', aviso: 'badge-amber', error: 'badge-red' }
-const NOMBRE_AGENTE = { monitor_sitios: 'Sitios', tareas_estancadas: 'Tareas estancadas', sync_estado: 'Sincronización' }
+const PUSH_SOPORTADO = typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
 
-export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrirMail, abrirMaria, abrirBandeja, abrirCalendario }) {
+// Lo que consolida María (sitios, tareas quietas, Google), en texto claro. Lo que está bien va en una sola línea.
+function Avisos({ avisos, enOrden, cargando }) {
+  return <>
+    {!cargando && avisos.length === 0 && enOrden.length === 0 && <p className="empty-state">María todavía no consolidó nada.</p>}
+    {avisos.length > 0 && <ul className="avisos-lista">
+      {avisos.map(a => <li key={a.texto} className={`aviso-${a.nivel}`}>
+        <span className="aviso-punto" aria-hidden="true" />
+        <div>
+          <p className="aviso-texto">{a.texto}</p>
+          {a.detalles.map(d => <p key={d} className="aviso-detalle">{d}</p>)}
+        </div>
+      </li>)}
+    </ul>}
+    {enOrden.length > 0 && <p className="avisos-en-orden">En orden: {enOrden.join(' · ')}</p>}
+  </>
+}
+
+export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrirMail, abrirBandeja, abrirCalendario }) {
   const [eventos, setEventos] = useState([])
   const [tareas, setTareas] = useState([])
+  const [tareasTotal, setTareasTotal] = useState(0)
   const [mails, setMails] = useState([])
-  const [agentes, setAgentes] = useState([])
+  const [reportes, setReportes] = useState([])
+  const [proyectoDeTarea, setProyectoDeTarea] = useState({})
+  const [ahora, setAhora] = useState(() => Date.now())
+  const [reglas, setReglas] = useState([])
+  const [suscripcion, setSuscripcion] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
 
@@ -33,9 +57,9 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
         supabase.from('calendar_events').select('id,title,starts_at,ends_at,project_id,all_day')
           .gte('starts_at', new Date(inicioDia().getTime() - 86400000).toISOString()).lte('starts_at', finDia().toISOString())
           .order('starts_at', { ascending: true }),
-        supabase.from('tasks').select('id,title,project_id,status').eq('done', false).order('touched_at', { ascending: true }).limit(20),
-        supabase.from('emails').select('id,gmail_id,subject,from_name,received_at,is_unread').eq('is_unread', true).order('received_at', { ascending: false }).limit(10),
-        supabase.from('process_reports').select('id,agente,estado,resumen,iniciado_at').order('iniciado_at', { ascending: false }).limit(15),
+        supabase.from('tasks').select('id,title,project_id,status', { count: 'exact' }).eq('done', false).order('touched_at', { ascending: true }).limit(20),
+        supabase.from('emails').select('id,gmail_id,subject,from_name,from_addr,received_at,is_unread').eq('is_unread', true).order('received_at', { ascending: false }).limit(200),
+        supabase.from('process_reports').select('id,agente,estado,resumen,detalle,iniciado_at').in('agente', AGENTES_MARIA).order('iniciado_at', { ascending: false }).limit(15),
       ])
       if (!vivo) return
       const fallos = [ev, ta, ma, ag].filter(r => r.error)
@@ -43,15 +67,39 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
       const hoy = inicioDia().toLocaleDateString('sv-SE')
       setEventos(unirRepetidos(ev.data || []).filter(e => { const [desde, hasta] = diasDelEvento(e); return desde <= hoy && hoy <= hasta }))
       setTareas(ta.data || [])
+      setTareasTotal(ta.count ?? (ta.data || []).length)
       setMails(ma.data || [])
-      const ultimos = {}
-      for (const r of ag.data || []) if (!ultimos[r.agente]) ultimos[r.agente] = r
-      setAgentes(Object.values(ultimos))
+      setReportes(ag.data || [])
+      // María guarda las tareas quietas sin proyecto: se busca de qué proyecto es cada una.
+      const ids = tareasEstancadasIds(ag.data)
+      const { data: deProyecto } = ids.length ? await supabase.from('tasks').select('id,project_id').in('id', ids) : { data: [] }
+      if (!vivo) return
+      setProyectoDeTarea(Object.fromEntries((deProyecto || []).map(t => [t.id, t.project_id])))
+      setAhora(Date.now())
       setCargando(false)
     }
     cargar()
     return () => { vivo = false }
   }, [revision])
+
+  // Lo que muestra la línea del pie (y las reglas que definen qué mail es importante).
+  const cargarConfiguracion = useCallback(async () => {
+    const [re, su] = await Promise.all([
+      supabase.from('mail_reglas').select('tipo,patron').eq('owner_id', ownerId),
+      PUSH_SOPORTADO
+        ? supabase.from('push_subscriptions').select('id,hora_local').eq('owner_id', ownerId).eq('activo', true).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+    setReglas(re.data || [])
+    setSuscripcion(su.data || null)
+  }, [ownerId])
+  useEffect(() => { cargarConfiguracion() }, [cargarConfiguracion])
+
+  // Para que "consolidado hace X min" no quede viejo con la pantalla abierta.
+  useEffect(() => {
+    const reloj = setInterval(() => setAhora(Date.now()), 60_000)
+    return () => clearInterval(reloj)
+  }, [])
 
   function colorDe(projectId) {
     return proyectos.find(p => p.id === projectId)?.color || '#71717a'
@@ -61,21 +109,26 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
   }
 
   const hoyTexto = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
+  const importantes = mailsImportantes(mails, reglas)
+  const { avisos, enOrden, consolidado_at } = avisosDeMaria(reportes, { proyectoDeTarea, proyectos, ahora })
+  const cifras = [
+    { valor: eventos.length, etiqueta: 'eventos hoy' },
+    { valor: tareasTotal, etiqueta: 'tareas pendientes' },
+    { valor: importantes.length, etiqueta: 'mails importantes', nivel: importantes.length ? 'aviso' : undefined },
+    { valor: avisos.length, etiqueta: 'avisos', nivel: avisos.some(a => a.nivel === 'error') ? 'error' : avisos.length ? 'aviso' : undefined },
+  ]
 
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <h1>{hoyTexto[0].toUpperCase() + hoyTexto.slice(1)}</h1>
-          <p className="page-sub">{cargando ? 'Cargando…' : `${eventos.length} eventos · ${tareas.length} tareas pendientes · ${mails.length} mails sin leer`}</p>
-        </div>
-      </div>
+      <CabeceraPantalla sobretitulo="Resumen del día" titulo={hoyTexto[0].toUpperCase() + hoyTexto.slice(1)} cifras={cifras} cargando={cargando} />
 
       {error && <p className="feedback-error" role="alert">{error}</p>}
-      <ResumenDiario ownerId={ownerId} />
-      <div className="grid grid-2" style={{ marginBottom: 20 }}>
-        <div className="card card-pad">
-          <div className="section-heading"><h3>Calendario · Hoy</h3><button className="btn btn-sm" onClick={abrirCalendario}>Ver calendario</button></div>
+      <Bloques>
+        <Bloque titulo="Avisos" ancho="completo" accion={consolidado_at && <span className="bloque-nota">{haceCuantoConsolidado(consolidado_at, ahora)}</span>}>
+          <Avisos avisos={avisos} enOrden={enOrden} cargando={cargando} />
+        </Bloque>
+
+        <Bloque titulo="Calendario · hoy" accion={<button className="btn btn-sm" onClick={abrirCalendario}>Ver calendario</button>}>
           {!cargando && eventos.length === 0 && <p className="empty-state">Sin eventos para hoy.</p>}
           {eventos.slice(0, 3).map(e => (
             <button className="task-item mail-row" key={e.id} onClick={abrirCalendario}>
@@ -86,10 +139,19 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
               </div>
             </button>
           ))}
-        </div>
+        </Bloque>
 
-        <div className="card card-pad">
-          <h3 style={{ fontSize: 13, marginBottom: 12 }}>Tareas pendientes</h3>
+        <Bloque titulo="Mail · sin leer" accion={<button className="btn btn-sm" onClick={abrirBandeja}>Ver todos los mails</button>}>
+          {!cargando && mails.length === 0 && <p className="empty-state">Todo leído.</p>}
+          {mails.slice(0, 4).map(m => (
+            <button className="list-item mail-row" key={m.id} disabled={!m.gmail_id} onClick={() => abrirMail(m.gmail_id)}>
+              <span className="list-main">{m.from_name || '(desconocido)'} — {m.subject || '(sin asunto)'}</span>
+              <span className="list-side">{fechaCorta(m.received_at)}</span>
+            </button>
+          ))}
+        </Bloque>
+
+        <Bloque titulo="Tareas pendientes" ancho="completo">
           {!cargando && tareas.length === 0 && <p className="empty-state">No hay tareas abiertas.</p>}
           {tareas.slice(0, 8).map(t => (
             <div className="task-item clickable" key={t.id} onClick={() => t.project_id && abrirProyecto(t.project_id)} style={{ cursor: t.project_id ? 'pointer' : 'default' }}>
@@ -100,33 +162,13 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
               </div>
             </div>
           ))}
-        </div>
-      </div>
+        </Bloque>
 
-      {agentes.length > 0 && (
-        <div className="card card-pad clickable" onClick={abrirMaria} style={{ marginBottom: 20, cursor: 'pointer' }}>
-          <h3 style={{ fontSize: 13, marginBottom: 12 }}>Estado de agentes (María)</h3>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            {agentes.map(a => (
-              <span key={a.agente} style={{ fontSize: 12.5 }}>
-                <span className={`badge ${NIVEL_BADGE[a.estado] || 'badge-gray'}`} style={{ marginRight: 6 }}>{a.estado}</span>
-                {NOMBRE_AGENTE[a.agente] || a.agente}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      </Bloques>
 
-      <div className="card card-pad">
-        <div className="section-heading"><h3>Mail · Sin leer</h3><button className="btn btn-sm" onClick={abrirBandeja}>Ver todos los mails</button></div>
-        {!cargando && mails.length === 0 && <p className="empty-state">Todo leído.</p>}
-        {mails.slice(0, 4).map(m => (
-          <button className="list-item mail-row" key={m.id} disabled={!m.gmail_id} onClick={() => abrirMail(m.gmail_id)}>
-            <span className="list-main">{m.from_name || '(desconocido)'} — {m.subject || '(sin asunto)'}</span>
-            <span className="list-side">{fechaCorta(m.received_at)}</span>
-          </button>
-        ))}
-      </div>
+      <Pie titulo="Resumen diario" resumen={resumenDiarioLinea({ soportado: PUSH_SOPORTADO, suscripcion, reglas })}>
+        <ResumenDiario ownerId={ownerId} alCambiar={cargarConfiguracion} />
+      </Pie>
     </div>
   )
 }

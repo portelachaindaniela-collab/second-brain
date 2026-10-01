@@ -1,4 +1,4 @@
-export const MARCA_COMUNIDAD = 'Importado automáticamente de la página Comunidad (danielaportelachain.netlify.app/comunidad/).'
+export const MARCA_COMUNIDAD = 'Importado automáticamente de la página Comunidad (danielaportelachain.vercel.app/comunidad/).'
 
 export const EVENTOS_COMUNIDAD = [
   { title: 'OpenAI Codex Community Meetup Buenos Aires', location: 'Facultad de Ingeniería, UBA — Paseo Colón 850', starts_at: '2026-08-13', ends_at: '2026-08-14' },

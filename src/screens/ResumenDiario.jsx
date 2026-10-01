@@ -10,7 +10,7 @@ function clavePublicaComoBytes(base64Url) {
   return Uint8Array.from([...cruda].map(c => c.charCodeAt(0)))
 }
 
-function ReglasMail({ ownerId }) {
+function ReglasMail({ ownerId, alCambiar }) {
   const [reglas, setReglas] = useState([])
   const [cargando, setCargando] = useState(true)
   const [patron, setPatron] = useState('')
@@ -31,13 +31,13 @@ function ReglasMail({ ownerId }) {
     const { error } = await supabase.from('mail_reglas').insert({ owner_id: ownerId, tipo, patron: patron.trim().toLowerCase() })
     setOcupado(false)
     if (error) { setError('No se pudo agregar: ' + error.message); return }
-    setPatron(''); cargar()
+    setPatron(''); cargar(); alCambiar?.()
   }
 
   async function quitar(id) {
     const { error } = await supabase.from('mail_reglas').delete().eq('id', id)
     if (error) { setError('No se pudo quitar: ' + error.message); return }
-    cargar()
+    cargar(); alCambiar?.()
   }
 
   if (cargando) return null
@@ -67,7 +67,9 @@ function ReglasMail({ ownerId }) {
   )
 }
 
-export default function ResumenDiario({ ownerId }) {
+// Configuración del resumen diario y de las reglas de mail. Vive en el pie de Hoy; avisa con alCambiar
+// para que la línea del pie se actualice.
+export default function ResumenDiario({ ownerId, alCambiar }) {
   const [suscripcion, setSuscripcion] = useState(null)
   const [hora, setHora] = useState('08:00')
   const [cargando, setCargando] = useState(true)
@@ -99,7 +101,7 @@ export default function ResumenDiario({ ownerId }) {
         .upsert({ owner_id: ownerId, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth, hora_local: hora, zona_horaria: zona, activo: true }, { onConflict: 'endpoint' })
         .select('id,hora_local').single()
       if (error) throw error
-      setSuscripcion(data)
+      setSuscripcion(data); alCambiar?.()
     } catch (e) { setError('No se pudo activar: ' + (e.message || 'error desconocido')) }
     finally { setOcupado(false) }
   }
@@ -110,7 +112,7 @@ export default function ResumenDiario({ ownerId }) {
     try {
       const { error } = await supabase.from('push_subscriptions').update({ hora_local: hora }).eq('id', suscripcion.id)
       if (error) throw error
-      setSuscripcion(s => ({ ...s, hora_local: hora }))
+      setSuscripcion(s => ({ ...s, hora_local: hora })); alCambiar?.()
     } catch (e) { setError('No se pudo guardar la hora: ' + e.message) }
     finally { setOcupado(false) }
   }
@@ -124,34 +126,35 @@ export default function ResumenDiario({ ownerId }) {
       if (push) await push.unsubscribe()
       const { error } = await supabase.from('push_subscriptions').delete().eq('id', suscripcion.id)
       if (error) throw error
-      setSuscripcion(null)
+      setSuscripcion(null); alCambiar?.()
     } catch (e) { setError('No se pudo desactivar: ' + e.message) }
     finally { setOcupado(false) }
   }
 
-  if (!soportado || cargando) return null
+  if (cargando) return null
 
   return (
-    <div className="card card-pad" style={{ marginBottom: 20 }}>
-      <h3 style={{ fontSize: 13, marginBottom: 10 }}>Resumen diario por notificación</h3>
-      {!suscripcion ? (
+    <div>
+      {!soportado ? (
+        <p className="hint">Este dispositivo no admite notificaciones, así que el resumen no se puede activar acá. Las reglas de mail igual se aplican.</p>
+      ) : !suscripcion ? (
         <>
           <p className="hint" style={{ marginBottom: 10 }}>Te mando una notificación a la hora que elijas con tu resumen del día. Al abrirla, la app te lo lee en voz alta.</p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input type="time" aria-label="Hora del resumen" value={hora} onChange={e => setHora(e.target.value)} />
+            <input type="time" aria-label="Hora del resumen" value={hora} onChange={e => setHora(e.target.value)} style={{ width: 'auto' }} />
             <button className="btn btn-primary btn-sm" disabled={ocupado} onClick={activar}>{ocupado ? 'Activando…' : 'Activar'}</button>
           </div>
         </>
       ) : (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="badge badge-green">Activo</span>
-          <input type="time" aria-label="Hora del resumen" value={hora} onChange={e => setHora(e.target.value)} />
+          <input type="time" aria-label="Hora del resumen" value={hora} onChange={e => setHora(e.target.value)} style={{ width: 'auto' }} />
           <button className="btn btn-sm" disabled={ocupado || hora === suscripcion.hora_local?.slice(0, 5)} onClick={guardarHora}>Guardar hora</button>
           <button className="btn btn-sm btn-danger" disabled={ocupado} onClick={desactivar}>Desactivar</button>
         </div>
       )}
       {error && <p className="feedback-error" role="alert">{error}</p>}
-      <ReglasMail ownerId={ownerId} />
+      <ReglasMail ownerId={ownerId} alCambiar={alCambiar} />
     </div>
   )
 }

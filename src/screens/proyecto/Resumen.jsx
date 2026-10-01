@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, fechaCorta, fechaHora } from '../../supabase.js'
+import { Bloques, Bloque } from '../../estructura.jsx'
 
 export default function Resumen({ proyecto, irA }) {
   const [datos, setDatos] = useState(null)
@@ -25,51 +26,36 @@ export default function Resumen({ proyecto, irA }) {
 
   const { archivos, docs, tareas, eventos } = datos
 
+  // Los totales del proyecto están en la cabecera (ProyectoShell); acá van las listas.
   return (
-    <div>
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="card kpi-card"><div className="kpi-label">Archivos</div><div className="kpi-value">{archivos.count ?? 0}</div></div>
-        <div className="card kpi-card"><div className="kpi-label">Docs</div><div className="kpi-value">{docs.count ?? 0}</div></div>
-        <div className="card kpi-card"><div className="kpi-label">Tareas abiertas</div><div className="kpi-value">{tareas.count ?? 0}</div></div>
-        <div className="card kpi-card"><div className="kpi-label">Próx. eventos</div><div className="kpi-value">{(eventos.data || []).length}</div></div>
-      </div>
+    <Bloques>
+      <Bloque titulo="Archivos recientes" accion={<button className="btn btn-sm" onClick={() => irA('archivosydocs')}>Ver todos</button>}>
+        {(archivos.data || []).length === 0 && <p className="empty-state">Sin archivos todavía.</p>}
+        {(archivos.data || []).map(a => (
+          <div className="list-item" key={a.id}><span className="list-main">{a.name}</span><span className="list-side">{fechaCorta(a.created_at)}</span></div>
+        ))}
+      </Bloque>
 
-      <div className="grid grid-2">
-        <div className="card card-pad">
-          <h3 style={{ fontSize: 13, marginBottom: 10 }}>Archivos recientes</h3>
-          {(archivos.data || []).length === 0 && <p className="empty-state">Sin archivos todavía.</p>}
-          {(archivos.data || []).map(a => (
-            <div className="list-item" key={a.id}><span className="list-main">{a.name}</span><span className="list-side">{fechaCorta(a.created_at)}</span></div>
-          ))}
-          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => irA('archivosydocs')}>Ver todos</button>
-        </div>
+      <Bloque titulo="Notas recientes" accion={<button className="btn btn-sm" onClick={() => irA('archivosydocs')}>Ver todas</button>}>
+        {(docs.data || []).length === 0 && <p className="empty-state">Sin notas todavía.</p>}
+        {(docs.data || []).map(d => (
+          <div className="list-item" key={d.id}><span className="list-main">{d.title}</span><span className="list-side">{fechaCorta(d.updated_at)}</span></div>
+        ))}
+      </Bloque>
 
-        <div className="card card-pad">
-          <h3 style={{ fontSize: 13, marginBottom: 10 }}>Notas recientes</h3>
-          {(docs.data || []).length === 0 && <p className="empty-state">Sin notas todavía.</p>}
-          {(docs.data || []).map(d => (
-            <div className="list-item" key={d.id}><span className="list-main">{d.title}</span><span className="list-side">{fechaCorta(d.updated_at)}</span></div>
-          ))}
-          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => irA('archivosydocs')}>Ver todas</button>
-        </div>
+      <Bloque titulo="Necesitan una mano">
+        {(tareas.data || []).length === 0 && <p className="empty-state">No hay tareas pendientes.</p>}
+        {(tareas.data || []).map(t => (
+          <div className="list-item" key={t.id}><span className="list-main">{t.title}</span></div>
+        ))}
+      </Bloque>
 
-        <div className="card card-pad">
-          <h3 style={{ fontSize: 13, marginBottom: 10 }}>Necesitan una mano</h3>
-          {(tareas.data || []).length === 0 && <p className="empty-state">No hay tareas pendientes.</p>}
-          {(tareas.data || []).map(t => (
-            <div className="list-item" key={t.id}><span className="list-main">{t.title}</span></div>
-          ))}
-        </div>
-
-        <div className="card card-pad">
-          <h3 style={{ fontSize: 13, marginBottom: 10 }}>Próximos eventos</h3>
-          {(eventos.data || []).length === 0 && <p className="empty-state">Sin eventos próximos.</p>}
-          {(eventos.data || []).map(e => (
-            <div className="list-item" key={e.id}><span className="list-main">{e.title}</span><span className="list-side">{fechaHora(e.starts_at)}</span></div>
-          ))}
-          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => irA('mailcal')}>Ver calendario</button>
-        </div>
-      </div>
-    </div>
+      <Bloque titulo="Próximos eventos" accion={<button className="btn btn-sm" onClick={() => irA('mailcal')}>Ver calendario</button>}>
+        {(eventos.data || []).length === 0 && <p className="empty-state">Sin eventos próximos.</p>}
+        {(eventos.data || []).map(e => (
+          <div className="list-item" key={e.id}><span className="list-main">{e.title}</span><span className="list-side">{fechaHora(e.starts_at)}</span></div>
+        ))}
+      </Bloque>
+    </Bloques>
   )
 }

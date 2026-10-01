@@ -22,12 +22,12 @@ function coincideAlguno(mail: any, patrones: string[]) {
   return patrones.some((p) => texto.includes(p));
 }
 
-async function chequearScraperEmpleo() {
-  try {
-    const r = await fetch('https://portelachaindaniela-collab.github.io/scraper-busquedas-laborales/ultima_corrida.json', { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) return null;
-    return await r.json();
-  } catch { return null; }
+// El JSON del scraper lo trae el trabajador `trabajador-scraper-empleo`; acá solo se lee su última corrida buena.
+async function ultimoScraperEmpleo(admin: any) {
+  const { data } = await admin.from('trabajos_corridas').select('payload')
+    .eq('trabajador', 'scraper_empleo').eq('estado', 'ok')
+    .order('iniciado_at', { ascending: false }).limit(1).maybeSingle();
+  return data?.payload ?? null;
 }
 
 async function construirResumen(admin: any, ownerId: string) {
@@ -38,7 +38,7 @@ async function construirResumen(admin: any, ownerId: string) {
     admin.from('tasks').select('title').eq('owner_id', ownerId).eq('done', false).order('touched_at', { ascending: true }).limit(5),
     admin.from('emails').select('subject,from_name,from_addr').eq('owner_id', ownerId).eq('is_unread', true).order('received_at', { ascending: false }).limit(200),
     admin.from('mail_reglas').select('tipo,patron').eq('owner_id', ownerId),
-    chequearScraperEmpleo(),
+    ultimoScraperEmpleo(admin),
   ]);
   const evs = eventos.data || [];
   const tas = tareas.data || [];
@@ -94,7 +94,7 @@ Deno.serve(async () => {
     } catch (e: any) {
       const status = e?.statusCode;
       if (status === 404 || status === 410) await admin.from('push_subscriptions').update({ activo: false }).eq('id', sub.id);
-      console.error('resumen-diario: fallo el envío', sub.id, String(e));
+      console.error('resumen-diario: falló el envío', sub.id, String(e));
     }
   }
   return new Response(JSON.stringify({ enviados }), { headers: { 'Content-Type': 'application/json' } });

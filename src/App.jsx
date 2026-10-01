@@ -5,13 +5,15 @@ import Flujo from './screens/Flujo.jsx'
 import ProyectoShell from './screens/proyecto/ProyectoShell.jsx'
 import Pantalla from './screens/Pantalla.jsx'
 import Mail from './screens/Mail.jsx'
-import Maria from './screens/Maria.jsx'
 import Metricas from './screens/Metricas.jsx'
 import Cursos from './screens/Cursos.jsx'
+import Trabajadores from './screens/Trabajadores.jsx'
+import Eventos from './screens/Eventos.jsx'
 import Login from './Login.jsx'
 import BotFlotante from './BotFlotante.jsx'
 import MailCalendario from './screens/MailCalendario.jsx'
 import VisorArchivo from './screens/VisorArchivo.jsx'
+import { TRABAJADOR_GOOGLE, estadoGoogle, debeSincronizarAlAbrir } from './googleEstado.mjs'
 
 const Escritor = lazy(() => import('./screens/Escritor.jsx'))
 const GRUPOS = []
@@ -42,6 +44,9 @@ export default function App() {
   const [pantallasWeb, setPantallasWeb] = useState([])
   const [gruposAbiertos, setGruposAbiertos] = useState({ proyectos: true })
   const [google, setGoogle] = useState(null)
+  const [sincronizando, setSincronizando] = useState(false)
+  const [errorSync, setErrorSync] = useState('')
+  const corridaGoogleVista = useRef(null)
   const [nuevoProyectoAbierto, setNuevoProyectoAbierto] = useState(false)
   const [nuevoProyectoNombre, setNuevoProyectoNombre] = useState('')
   const [menuAbierto, setMenuAbierto] = useState(false)
@@ -93,21 +98,56 @@ export default function App() {
     setPantallasWeb(data || [])
   }, [session])
 
-  const sincronizarGoogle = useCallback(async () => {
-    if (!session) return
-    const { data, error } = await supabase.functions.invoke('google-sync', { body: {} })
-    if (error || data?.error) { setErrorGeneral('No se pudo sincronizar Google. Probá nuevamente.'); return }
-    setGoogle(data)
-    setRevisionGoogle(r => r + 1)
-  }, [session])
+  // La sincronización periódica la hace el trabajador google_sync en el servidor (cada 15 min). La app no
+  // sincroniza en ciclo: toma el estado de sus corridas y refresca las pantallas cuando termina una.
+  const aplicarCorridaGoogle = useCallback(c => {
+    if (!c || c.estado === 'corriendo') return
+    const clave = `${c.id}:${c.estado}`
+    if (corridaGoogleVista.current === clave) return
+    corridaGoogleVista.current = clave
+    const estado = estadoGoogle([c])
+    if (estado) setGoogle(estado)
+    if (c.estado === 'ok') setRevisionGoogle(r => r + 1)
+  }, [])
 
-  useEffect(() => { cargarProyectos(); cargarPantallas(); sincronizarGoogle() }, [cargarProyectos, cargarPantallas, sincronizarGoogle])
+  const ultimasCorridasGoogle = useCallback(async limite => {
+    const { data } = await supabase.from('trabajos_corridas').select('*').eq('trabajador', TRABAJADOR_GOOGLE)
+      .order('iniciado_at', { ascending: false }).limit(limite)
+    return data || []
+  }, [])
+
+  // Disparo puntual (al abrir si está vieja, "Sincronizar ahora", o al terminar de conectar la cuenta), no un ciclo.
+  const sincronizarGoogle = useCallback(async origen => {
+    setSincronizando(true); setErrorSync('')
+    const { data, error } = await supabase.functions.invoke('google-sync', { body: { origen } })
+    setSincronizando(false)
+    if (error || data?.error) setErrorSync('No se pudo sincronizar Google. Probá nuevamente.')
+    // Por si el aviso en vivo no llegó: se lee la corrida recién terminada.
+    aplicarCorridaGoogle((await ultimasCorridasGoogle(1))[0])
+  }, [aplicarCorridaGoogle, ultimasCorridasGoogle])
+
+  useEffect(() => { cargarProyectos(); cargarPantallas() }, [cargarProyectos, cargarPantallas])
 
   useEffect(() => {
-    if (!google?.conectado) return
-    const intervalo = setInterval(sincronizarGoogle, 5 * 60 * 1000)
-    return () => clearInterval(intervalo)
-  }, [google?.conectado, sincronizarGoogle])
+    if (!session) return
+    let vigente = true
+    ultimasCorridasGoogle(10).then(corridas => {
+      if (!vigente) return
+      setGoogle(estadoGoogle(corridas))
+      const terminada = corridas.find(c => c.estado !== 'corriendo')
+      if (terminada) corridaGoogleVista.current = `${terminada.id}:${terminada.estado}`
+      if (debeSincronizarAlAbrir(corridas[0])) sincronizarGoogle('app_arranque')
+    })
+    return () => { vigente = false }
+  }, [session, ultimasCorridasGoogle, sincronizarGoogle])
+
+  useEffect(() => {
+    if (!session) return
+    const canal = supabase.channel('google-sync-app')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trabajos_corridas', filter: `trabajador=eq.${TRABAJADOR_GOOGLE}` }, p => aplicarCorridaGoogle(p.new))
+      .subscribe()
+    return () => { supabase.removeChannel(canal) }
+  }, [session, aplicarCorridaGoogle])
 
   if (session === undefined) return null
   if (!session) return <Login />
@@ -150,7 +190,7 @@ export default function App() {
     // Al volver de autorizar en Google (otra ventana en Electron, o la misma pestaña en el
     // navegador) nada le avisaba a la app que ya estaba conectada — quedaba mostrando "Conectar
     // Google" hasta que entrabas a Mail o Calendario y tocabas Sincronizar ahí a mano.
-    const revisarAlVolver = () => { window.removeEventListener('focus', revisarAlVolver); sincronizarGoogle() }
+    const revisarAlVolver = () => { window.removeEventListener('focus', revisarAlVolver); sincronizarGoogle('app_manual') }
     window.addEventListener('focus', revisarAlVolver)
     abrirEnlaceOAuth(respuesta.url)
   }
@@ -175,7 +215,8 @@ export default function App() {
           <li><button className={`nav-item${pantalla === 'flujo' ? ' active' : ''}`} onClick={() => setPantalla('flujo')}>Flujo</button></li>
           <li><button className={`nav-item${pantalla === 'mailcal' ? ' active' : ''}`} onClick={() => setPantalla('mailcal')}>Mail y Calendario</button></li>
           <li><button className="nav-item" onClick={() => setPantalla('escribir')}>Escribir</button></li>
-          <li><button className={`nav-item${pantalla === 'maria' ? ' active' : ''}`} onClick={() => setPantalla('maria')}>María</button></li>
+          <li><button className={`nav-item${pantalla === 'trabajadores' ? ' active' : ''}`} onClick={() => setPantalla('trabajadores')}>Trabajadores</button></li>
+          <li><button className={`nav-item${pantalla === 'eventos' ? ' active' : ''}`} onClick={() => setPantalla('eventos')}>Eventos</button></li>
           <li><button className={`nav-item${pantalla === 'metricas' ? ' active' : ''}`} onClick={() => setPantalla('metricas')}>Métricas</button></li>
           <li><button className={`nav-item${pantalla === 'cursos' ? ' active' : ''}`} onClick={() => setPantalla('cursos')}>Cursos</button></li>
         </ul>
@@ -219,7 +260,7 @@ export default function App() {
         <div className="sidebar-footer">
           {google?.conectado ? (
             <div>Google conectado{google.cuenta ? ` · ${google.cuenta}` : ''}</div>
-          ) : (
+          ) : google && (
             <>
               <button className="nav-item" onClick={conectarGoogle} style={{ padding: '4px 0' }}>Conectar Google</button>
               {google?.reconectar && <div style={{ marginTop: 4 }}>Hace falta reconectar.</div>}
@@ -236,7 +277,8 @@ export default function App() {
             {pantalla === 'hoy' && 'Hoy'}
             {pantalla === 'flujo' && 'Flujo'}
             {pantalla === 'mailcal' && 'Mail y Calendario'}
-            {pantalla === 'maria' && 'María'}
+            {pantalla === 'trabajadores' && 'Trabajadores'}
+            {pantalla === 'eventos' && 'Eventos'}
             {pantalla === 'metricas' && 'Métricas'}
             {pantalla === 'cursos' && 'Cursos'}
             {pantalla === 'escribir' && 'Escribir'}
@@ -248,10 +290,12 @@ export default function App() {
         </header>
         <main className="content" style={pantalla === 'pantalla' ? { maxWidth: 'none', display: 'flex', flexDirection: 'column' } : undefined}>
           {errorGeneral && <p role="alert" className="feedback-error">{errorGeneral} <button className="btn btn-sm" onClick={() => setErrorGeneral('')}>Cerrar</button></p>}
-          {pantallasVisitadas.has('hoy') && <div hidden={pantalla !== 'hoy'}><Hoy revision={revisionGoogle} ownerId={session.user.id} abrirBandeja={() => { setMailCalTab('mail'); setPantalla('mailcal') }} abrirCalendario={() => { setMailCalTab('calendario'); setPantalla('mailcal') }} proyectos={proyectos} abrirProyecto={abrirProyecto} abrirMail={abrirMail} abrirMaria={() => setPantalla('maria')} /></div>}
-          {pantallasVisitadas.has('mailcal') && <div hidden={pantalla !== 'mailcal'}><MailCalendario tab={mailCalTab} setTab={setMailCalTab} revision={revisionGoogle} proyectos={proyectos} google={google} conectarGoogle={conectarGoogle} abrirMail={abrirMail} /></div>}
+          {pantallasVisitadas.has('hoy') && <div hidden={pantalla !== 'hoy'}><Hoy revision={revisionGoogle} ownerId={session.user.id} abrirBandeja={() => { setMailCalTab('mail'); setPantalla('mailcal') }} abrirCalendario={() => { setMailCalTab('calendario'); setPantalla('mailcal') }} proyectos={proyectos} abrirProyecto={abrirProyecto} abrirMail={abrirMail} /></div>}
+          {pantallasVisitadas.has('mailcal') && <div hidden={pantalla !== 'mailcal'}><MailCalendario tab={mailCalTab} setTab={setMailCalTab} revision={revisionGoogle} proyectos={proyectos} google={google} conectarGoogle={conectarGoogle} abrirMail={abrirMail}
+            sincronizar={() => sincronizarGoogle('app_manual')} sincronizando={sincronizando} errorSync={errorSync} /></div>}
           {pantallasVisitadas.has('flujo') && <div hidden={pantalla !== 'flujo'}><Flujo proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} abrirHtml={() => htmlInput.current?.click()} /></div>}
-          {pantallasVisitadas.has('maria') && <div hidden={pantalla !== 'maria'}><Maria /></div>}
+          {pantallasVisitadas.has('trabajadores') && <div hidden={pantalla !== 'trabajadores'}><Trabajadores /></div>}
+          {pantallasVisitadas.has('eventos') && <div hidden={pantalla !== 'eventos'}><Eventos /></div>}
           {pantallasVisitadas.has('metricas') && <div hidden={pantalla !== 'metricas'}><Metricas key={session.user.id} ownerId={session.user.id} /></div>}
           {pantallasVisitadas.has('cursos') && <div hidden={pantalla !== 'cursos'}><Cursos /></div>}
           {pantallasVisitadas.has('escribir') && <div hidden={pantalla !== 'escribir'}><Suspense fallback={<p className="empty-state">Abriendo el editor…</p>}><Escritor key={session.user.id} ownerId={session.user.id} /></Suspense></div>}

@@ -1,0 +1,33 @@
+/* Pantalla Eventos: se apoya en las clases .consola-* de Trabajadores.css y solo agrega lo propio. */
+.eventos-fila { grid-template-columns: 9.5em minmax(0, 1fr); }
+.eventos-fecha { font-variant-numeric: tabular-nums; padding-top: 1px; }
+.eventos-envuelve { white-space: normal; overflow-wrap: anywhere; }
+.eventos-sin-margen { margin-top: 0; }
+
+.eventos-estado { color: var(--c-tenue); }
+.eventos-estado::before { content: '['; }
+.eventos-estado::after { content: ']'; }
+.eventos-estado-fui { color: var(--c-ok); }
+.eventos-estado-no_fui { color: var(--c-error); }
+.eventos-estado-evaluado { color: var(--gray-900); }
+
+.eventos-veredicto { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; padding: 6px 0 6px 10px; border-left: 2px solid var(--c-linea); }
+/* Sin semáforo: el veredicto es texto, solo cambia el peso. */
+.eventos-tag { width: auto; min-width: 3.2em; color: var(--gray-900); white-space: nowrap; }
+.eventos-tag::before { content: '['; }
+.eventos-tag::after { content: ']'; }
+.eventos-tag-no_viable { text-decoration: line-through; text-decoration-color: var(--c-tenue); }
+.eventos-razon { margin: 0; white-space: normal; }
+.eventos-agenda { margin-top: 2px; }
+.eventos-pie { font-size: 11.5px; margin-top: 2px; }
+
+.eventos-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+.eventos-check { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; }
+.eventos-borrar { margin-right: auto; }
+.eventos-modal-ancho { width: min(820px, 100%); }
+.eventos-reglas { min-height: 55vh; line-height: 1.5; }
+
+@media (max-width: 560px) {
+  .eventos-fila { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .eventos-dos { grid-template-columns: 1fr; }
+}

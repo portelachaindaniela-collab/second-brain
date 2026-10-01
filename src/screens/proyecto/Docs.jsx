@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, fechaCorta } from '../../supabase.js'
+import { Bloque } from '../../estructura.jsx'
 
 export default function Docs({ proyecto }) {
   const [docs, setDocs] = useState([])
@@ -52,12 +53,7 @@ export default function Docs({ proyecto }) {
 
   return (
     <div>
-      <div className="page-head">
-        <h1 style={{ fontSize: 15 }}>Docs</h1>
-        <button className="btn btn-primary" onClick={() => abrir(null)}>Nuevo doc</button>
-      </div>
-
-      <div className="card">
+      <Bloque titulo="Docs" accion={<button className="btn btn-sm btn-primary" onClick={() => abrir(null)}>Nuevo doc</button>}>
         {docs.length === 0 && <p className="empty-state">Sin docs. Creá el primero.</p>}
         {docs.map(d => (
           <div className="list-item clickable" key={d.id} onClick={() => abrir(d)}>
@@ -65,7 +61,7 @@ export default function Docs({ proyecto }) {
             <span className="list-side">editado el {fechaCorta(d.updated_at)}</span>
           </div>
         ))}
-      </div>
+      </Bloque>
 
       {abierto && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setAbierto(null)}>

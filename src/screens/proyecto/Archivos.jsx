@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, tipoDe, fechaCorta } from '../../supabase.js'
 import VisorArchivo from '../VisorArchivo.jsx'
+import { Bloque } from '../../estructura.jsx'
 
 const VISTA_STORAGE_KEY = 'second-brain:archivos:vista'
 const ASSET_MIME = 'application/x-second-brain-asset'
@@ -198,19 +199,12 @@ export default function Archivos({ proyecto }) {
 
   return (
     <div onDragOver={e => alPasarPorEncima(e, '')} onDrop={e => alSoltar(e, null)}>
-      <div className="page-head">
-        <h1 style={{ fontSize: 15 }}>Archivos</h1>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div className="vista-toggle">
-            <button className={vista === 'lista' ? 'active' : ''} aria-pressed={vista === 'lista'} onClick={() => cambiarVista('lista')}>Lista</button>
-            <button className={vista === 'iconos' ? 'active' : ''} aria-pressed={vista === 'iconos'} onClick={() => cambiarVista('iconos')}>Iconos</button>
-          </div>
-          <button className="btn" onClick={() => carpetaRef.current?.click()} disabled={subiendo}>Agregar carpeta</button>
-          <button className="btn btn-primary" onClick={() => inputRef.current?.click()} disabled={subiendo}>Subir archivo</button>
-        </div>
-        <input ref={inputRef} type="file" multiple style={{ display: 'none' }} onChange={subirArchivo} />
-        <input ref={carpetaRef} type="file" webkitdirectory="" directory="" multiple style={{ display: 'none' }} onChange={subirCarpeta} />
-      </div>
+      <Bloque titulo="Archivos" accion={<span className="bloque-acciones">
+        <button className="btn btn-sm" onClick={() => carpetaRef.current?.click()} disabled={subiendo}>Agregar carpeta</button>
+        <button className="btn btn-sm btn-primary" onClick={() => inputRef.current?.click()} disabled={subiendo}>Subir archivo</button>
+      </span>}>
+      <input ref={inputRef} type="file" multiple style={{ display: 'none' }} onChange={subirArchivo} />
+      <input ref={carpetaRef} type="file" webkitdirectory="" directory="" multiple style={{ display: 'none' }} onChange={subirCarpeta} />
 
       <p className="hint" style={{ marginBottom: 12 }}>Arrastrá archivos desde Windows para subirlos, o arrastrá un archivo de acá a otra carpeta para moverlo.</p>
 
@@ -262,6 +256,15 @@ export default function Archivos({ proyecto }) {
             : <div className="archivo-iconos">{sueltos.map(a => icono(a, a.name))}</div>}
         </div>
       )}
+
+      <div className="bloque-pie">
+        <span>Vista</span>
+        <div className="vista-toggle">
+          <button className={vista === 'lista' ? 'active' : ''} aria-pressed={vista === 'lista'} onClick={() => cambiarVista('lista')}>Lista</button>
+          <button className={vista === 'iconos' ? 'active' : ''} aria-pressed={vista === 'iconos'} onClick={() => cambiarVista('iconos')}>Iconos</button>
+        </div>
+      </div>
+      </Bloque>
 
       {viendo && <VisorArchivo archivo={viendo} cerrar={() => setViendo(null)} />}
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase, ESTADOS } from '../supabase.js'
+import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
 
 export default function Flujo({ proyectos, pantallasWeb = [], abrirPantalla, abrirHtml }) {
   const [tareas, setTareas] = useState([])
@@ -83,30 +84,44 @@ export default function Flujo({ proyectos, pantallasWeb = [], abrirPantalla, abr
   const columnas = [...ESTADOS, ...[...new Set(visibles.map(t => t.status))].filter(s => !ESTADOS.some(e => e.id === s)).map(s => ({ id: s, label: s || 'Sin estado' }))]
   const herramientas = pantallasWeb.filter(p => p.grupo === 'herramientas')
 
+  const de = estadoId => visibles.filter(t => t.status === estadoId)
+  const cuantas = estadoId => de(estadoId).length
+  const proyectoFiltrado = proyectos.find(p => p.id === filtro)?.name
+  const formulario = <form className="action-row flujo-anotar" onSubmit={guardar}>
+    <input aria-label="Anotá algo" value={nuevo} onChange={e => setNuevo(e.target.value)} placeholder="Anotá algo" disabled={cargando || ocupado} required />
+    <select aria-label="Proyecto de la tarea" value={nuevoProyecto} onChange={e => setNuevoProyecto(e.target.value)} disabled={cargando || ocupado}><option value="">Sin proyecto</option>{proyectos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+    <button className="btn btn-primary" disabled={cargando || ocupado || !nuevo.trim()}>{ocupado ? 'Guardando…' : 'Anotar'}</button>
+  </form>
+
   return <div>
-    <div className="page-head"><h1>Flujo</h1><div style={{ display:'flex', gap:8 }}><button className="btn" onClick={abrirHtml}>Abrir HTML</button><select aria-label="Filtrar por proyecto" value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width:'auto' }}><option value="">Todos</option>{proyectos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div></div>
-    {herramientas.length > 0 && (
-      <div className="card card-pad" style={{ marginBottom: 16 }}>
-        <h3 style={{ fontSize: 13, marginBottom: 10 }}>Herramientas</h3>
-        <div className="herramientas-grid">
-          {herramientas.map(p => <button className="herramienta-block" key={p.id} onClick={() => abrirPantalla(p.id)}>{p.nombre}</button>)}
-        </div>
-      </div>
-    )}
-    <form className="action-row" onSubmit={guardar}>
-      <input aria-label="Anotá algo" value={nuevo} onChange={e => setNuevo(e.target.value)} placeholder="Anotá algo" disabled={cargando || ocupado} required />
-      <select aria-label="Proyecto de la tarea" value={nuevoProyecto} onChange={e => setNuevoProyecto(e.target.value)} disabled={cargando || ocupado}><option value="">Sin proyecto</option>{proyectos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-      <button className="btn btn-primary" disabled={cargando || ocupado || !nuevo.trim()}>{ocupado ? 'Guardando…' : 'Anotar'}</button>
-    </form>
+    <CabeceraPantalla sobretitulo="Tareas" titulo="Flujo" cargando={cargando}
+      subtitulo={proyectoFiltrado ? `Solo ${proyectoFiltrado}` : undefined}
+      cifras={ESTADOS.map(e => ({ valor: cuantas(e.id), etiqueta: e.label.toLowerCase(), nivel: e.id === 'esperando' && cuantas(e.id) ? 'aviso' : undefined }))} />
     {cargando && <p className="empty-state">Cargando tareas…</p>}
     {error && !modal && <p role="alert" className="feedback-error">{error}</p>}
-    {columnas.map(estado => <div className="card card-pad flujo-columna" key={estado.id || 'sin-estado'}>
-      <h3 style={{ fontSize:13, marginBottom:10 }}>{estado.label} · {visibles.filter(t => t.status === estado.id).length}</h3>
-      <div className="flujo-lista">
-        {visibles.filter(t => t.status === estado.id).map(t => <div className="list-item" key={t.id}><button className="list-main text-button" disabled={ocupado} onClick={() => abrirModal(t)}>{t.title}</button><span className="row-actions"><button className="btn btn-sm" disabled={ocupado} onClick={() => avanzar(t)}>Mover</button><button className="btn btn-sm btn-danger" disabled={ocupado} onClick={() => borrar(t.id)}>Borrar</button></span></div>)}
-        {!visibles.some(t => t.status === estado.id) && <p className="empty-state">Nada acá.</p>}
-      </div>
-    </div>)}
+    <Bloques>
+      {columnas.map(estado => <Bloque key={estado.id || 'sin-estado'} titulo={estado.label} accion={<span className="bloque-nota">{cuantas(estado.id)}</span>}>
+        {estado.id === 'ideas' && formulario}
+        <div className="flujo-lista">
+          {de(estado.id).map(t => <div className="list-item" key={t.id}><button className="list-main text-button" disabled={ocupado} onClick={() => abrirModal(t)}>{t.title}</button><span className="row-actions"><button className="btn btn-sm" disabled={ocupado} onClick={() => avanzar(t)}>Mover</button><button className="btn btn-sm btn-danger" disabled={ocupado} onClick={() => borrar(t.id)}>Borrar</button></span></div>)}
+          {!cargando && !cuantas(estado.id) && <p className="empty-state">Nada acá.</p>}
+        </div>
+      </Bloque>)}
+      {herramientas.length > 0 && (
+        <Bloque titulo="Herramientas" ancho="completo">
+          <div className="herramientas-grid">
+            {herramientas.map(p => <button className="herramienta-block" key={p.id} onClick={() => abrirPantalla(p.id)}>{p.nombre}</button>)}
+          </div>
+        </Bloque>
+      )}
+    </Bloques>
+
+    <Pie titulo="Proyecto" resumen={proyectoFiltrado ? `mostrando solo ${proyectoFiltrado}` : 'mostrando todos los proyectos'} boton="Filtrar">
+      <select aria-label="Filtrar por proyecto" value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width: 'auto' }}>
+        <option value="">Todos</option>{proyectos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </Pie>
+    <Pie titulo="Archivo HTML" resumen="abrir uno guardado en la computadora" boton="Abrir HTML" onBoton={abrirHtml} />
 
     {modal && (
       <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget && !ocupado) setModal(null) }}>
