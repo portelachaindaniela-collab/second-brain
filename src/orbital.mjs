@@ -4,8 +4,8 @@
 import { RECORRIDOS, REGISTRO, FUENTES } from './tablero.mjs'
 import { trabada } from './trabajadores.mjs'
 
-export const LIENZO = { ancho: 880, alto: 600, cx: 440, cy: 300, nucleo: 46, nodo: 18, tarjeta: { ancho: 152, alto: 44 } }
-const ORBITA_BASE = 104, ORBITA_PASO = 32, ACHATADO = 0.62
+export const LIENZO = { ancho: 880, alto: 600, cx: 440, cy: 300, nucleo: 54, nodo: 18, tarjeta: { ancho: 152, alto: 44 } }
+const ORBITA_BASE = 124, ORBITA_PASO = 32, ACHATADO = 0.62
 const EXTERIOR = { rx: 348, ry: 232 }
 // Vuelta completa en 20 minutos: se nota que se mueve, sin distraer.
 export const GRADOS_POR_SEGUNDO = 0.3
@@ -144,15 +144,22 @@ export function ubicarEtiquetas(etiquetas, nodos) {
   ]
   const puestas = []
   const salida = {}
-  for (const e of etiquetas) {
-    let y = e.arriba ? e.y - radio - separacion - alto : e.y + radio + separacion
+  // Busca lugar corriéndose en un sentido; null si se sale del lienzo antes de encontrarlo.
+  const buscar = (e, arriba) => {
+    let y = arriba ? e.y - radio - separacion - alto : e.y + radio + separacion
     for (let i = 0; i < 24; i++) {
+      if (y < aire || y + alto > LIENZO.alto - aire) return null
       const caja = { x: e.x - e.w / 2, y, w: e.w, h: alto }
       const golpe = [...fijos.filter(f => f.id !== e.id), ...puestas].find(o => choca(caja, o))
-      if (!golpe) break
-      y = e.arriba ? golpe.y - alto - aire : golpe.y + golpe.h + aire
+      if (!golpe) return y
+      y = arriba ? golpe.y - alto - aire : golpe.y + golpe.h + aire
     }
-    y = Math.min(Math.max(y, aire), LIENZO.alto - alto - aire)
+    return null
+  }
+  for (const e of etiquetas) {
+    // Primero del lado de afuera de la órbita; si ahí no hay lugar, del otro lado del nodo.
+    let y = buscar(e, e.arriba) ?? buscar(e, !e.arriba)
+    if (y == null) y = Math.min(Math.max(e.arriba ? e.y - radio - separacion - alto : e.y + radio + separacion, aire), LIENZO.alto - alto - aire)
     puestas.push({ x: e.x - e.w / 2, y, w: e.w, h: alto })
     salida[e.id] = y
   }

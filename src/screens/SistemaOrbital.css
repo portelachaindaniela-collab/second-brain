@@ -15,8 +15,8 @@
 
 .orbital-nucleo-cuerpo { fill: var(--surface-raised); stroke: var(--gray-500); stroke-width: 1.2; }
 .orbital-nucleo-pulso { fill: none; stroke: var(--gray-500); transform-box: fill-box; transform-origin: center; animation: orbital-pulso 5s ease-out infinite; }
-.orbital-nucleo-titulo { font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-anchor: middle; fill: var(--gray-900); }
-.orbital-nucleo-dato { font-size: 9.5px; text-anchor: middle; fill: var(--gray-500); }
+.orbital-nucleo-titulo { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-anchor: middle; fill: var(--gray-900); }
+.orbital-nucleo-dato { font-size: 10px; text-anchor: middle; fill: var(--gray-500); }
 
 .orbital-tarjeta rect { fill: var(--surface-raised); stroke: var(--gray-300); stroke-width: 1; transition: stroke .3s; }
 .orbital-tarjeta.is-registro rect { stroke-dasharray: 4 3; }
@@ -68,8 +68,10 @@
   .orbital-trabajador, .orbital-trabajador-cuerpo, .orbital-orbita, .orbital-enlace path { transition: none; }
 }
 /* En pantallas angostas el sistema mantiene un tamaño legible y se desliza de costado. */
+.orbital-deslizar { display: none; }
 @media (max-width: 720px) {
-  .orbital { overflow-x: auto; }
+  .orbital { overflow-x: auto; overscroll-behavior-x: contain; }
   .orbital-svg { min-width: 680px; }
+  .orbital-deslizar { display: block; position: sticky; left: 0; margin: 6px 0 0; font-family: var(--font); font-size: 11.5px; color: var(--gray-500); text-align: center; }
 }
 .orbital-guia { stroke: var(--gray-500); stroke-width: 1; stroke-dasharray: 2 3; opacity: .8; }

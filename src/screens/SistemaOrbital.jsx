@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { haceCuanto } from '../trabajadores.mjs'
 import { colorIdentidad, vidaDeTrabajador, enCuanto } from '../tablero.mjs'
 import { LIENZO, ETIQUETA, GRADOS_POR_SEGUNDO, disposicion, trazo, estadoTrabajador, pasaFiltro, coincideBusqueda, focoDe, ubicarEtiquetas, anchoTexto } from '../orbital.mjs'
@@ -94,11 +94,23 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
   const lugarEtiqueta = ubicarEtiquetas(etiquetas, d.nodos)
   const anchoEtiqueta = Object.fromEntries(etiquetas.map(e => [e.id, e.w]))
 
+  // En pantallas angostas el dibujo es más ancho que la pantalla y se desliza de costado: arranca centrado en el
+  // núcleo y, al elegir un trabajador, lo trae a la vista.
+  const marco = useRef(null)
+  const xElegido = elegido ? porId[`t:${elegido}`]?.x : null
+  useEffect(() => {
+    const m = marco.current
+    if (!m || m.scrollWidth <= m.clientWidth) return
+    const escala = m.scrollWidth / LIENZO.ancho
+    const x = (xElegido ?? LIENZO.cx) * escala
+    m.scrollTo({ left: Math.max(0, x - m.clientWidth / 2), behavior: xElegido == null || reducido ? 'auto' : 'smooth' })
+  }, [xElegido, reducido])
+
   const señalado = encima && porId[`t:${encima}`]
   const t = señalado && porClave[encima]
   const v = señalado && vidas[encima]
 
-  return <div className="orbital">
+  return <div className="orbital" ref={marco}>
     <svg className={`orbital-svg${foco ? ' hay-foco' : ''}`} viewBox={`0 0 ${LIENZO.ancho} ${LIENZO.alto}`} onClick={() => onElegir(null)}
       role="group" aria-label="Sistema orbital: Second Brain en el centro, sus trabajadores alrededor, fuentes a la izquierda y destinos a la derecha">
       <defs>
@@ -126,8 +138,9 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
       <g className="orbital-nucleo" transform={`translate(${LIENZO.cx} ${LIENZO.cy})`}>
         {!reducido && <circle r={LIENZO.nucleo} className="orbital-nucleo-pulso" />}
         <circle r={LIENZO.nucleo} className="orbital-nucleo-cuerpo" />
-        <text y="-3" className="orbital-nucleo-titulo">SECOND BRAIN</text>
-        <text y="13" className="orbital-nucleo-dato">{activos} {activos === 1 ? 'trabajador activo' : 'trabajadores activos'}</text>
+        <text y="-6" className="orbital-nucleo-titulo">SECOND BRAIN</text>
+        <text y="10" className="orbital-nucleo-dato">{activos} {activos === 1 ? 'trabajador' : 'trabajadores'}</text>
+        <text y="22" className="orbital-nucleo-dato">{activos === 1 ? 'activo' : 'activos'}</text>
       </g>
 
       {d.nodos.filter(n => n.tipo !== 'trabajador').map(n => {
@@ -172,6 +185,7 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
       })}
     </svg>
 
+    <p className="orbital-deslizar">← deslizá para ver fuentes y destinos →</p>
     {señalado && <div className="orbital-tooltip" style={{ left: `${(señalado.x / LIENZO.ancho) * 100}%`, top: `${(señalado.y / LIENZO.alto) * 100}%` }} role="tooltip">
       <strong>{t.nombre}</strong>
       <dl>

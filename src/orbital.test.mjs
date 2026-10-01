@@ -90,3 +90,16 @@ test('etiquetas: ninguna se pisa con otra, con una tarjeta ni con el núcleo, en
     assert.ok(cajas.every(c => !choca(c, nucleo)), `giro ${giro}: una etiqueta pisa el núcleo`)
   }
 })
+
+test('el núcleo tiene lugar para su texto y ningún trabajador lo toca', () => {
+  // "SECOND BRAIN" en 10px con .12em de espacio entre letras: entra en la cuerda del círculo a esa altura.
+  const anchoTitulo = 'SECOND BRAIN'.length * 10 * (0.62 + 0.12)
+  const cuerda = y => 2 * Math.sqrt(LIENZO.nucleo ** 2 - y ** 2)
+  assert.ok(anchoTitulo + 8 < cuerda(-10), `el título (${anchoTitulo}) no entra en ${cuerda(-10)}`)
+  for (let giro = 0; giro < 360; giro += 5) {
+    for (const n of disposicion(trabajadores, { rotacion: giro }).nodos.filter(x => x.tipo === 'trabajador')) {
+      const distancia = Math.hypot(n.x - LIENZO.cx, n.y - LIENZO.cy)
+      assert.ok(distancia - LIENZO.nodo > LIENZO.nucleo + 4, `giro ${giro}: ${n.id} toca el núcleo`)
+    }
+  }
+})
