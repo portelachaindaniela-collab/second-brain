@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { haceCuanto } from '../trabajadores.mjs'
 import { colorIdentidad, vidaDeTrabajador, enCuanto } from '../tablero.mjs'
-import { LIENZO, ETIQUETA, GRADOS_POR_SEGUNDO, disposicion, trazo, estadoTrabajador, pasaFiltro, coincideBusqueda, focoDe, ubicarEtiquetas, anchoTexto } from '../orbital.mjs'
+import { ETIQUETA, GRADOS_POR_SEGUNDO, disposicion, trazo, estadoTrabajador, pasaFiltro, coincideBusqueda, focoDe, ubicarEtiquetas, anchoTexto } from '../orbital.mjs'
 import { MARCAS } from '../iconosMarcas.mjs'
 import './SistemaOrbital.css'
 
@@ -51,10 +51,25 @@ function useMovimientoReducido() {
   return reducido
 }
 
+// En el celular el sistema se dibuja vertical (fuentes arriba, destinos abajo) para entrar entero en el ancho.
+const ANGOSTA = '(max-width: 720px)'
+function useAngosta() {
+  const [angosta, setAngosta] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(ANGOSTA).matches)
+  useEffect(() => {
+    const m = window.matchMedia?.(ANGOSTA)
+    if (!m) return
+    const cambiar = () => setAngosta(m.matches)
+    m.addEventListener('change', cambiar)
+    return () => m.removeEventListener('change', cambiar)
+  }, [])
+  return angosta
+}
+
 const TEXTO_ESTADO = { ok: 'activo', corriendo: 'corriendo', trabado: 'trabado', error: 'con error', pausado: 'pausado', sin_corridas: 'sin corridas' }
 
 export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onElegir, filtro = 'todos', busqueda = '' }) {
   const reducido = useMovimientoReducido()
+  const vertical = useAngosta()
   const [encima, setEncima] = useState(null)
   // El sistema gira despacio; se queda quieto mientras hay algo señalado o elegido, para poder tocarlo. El tiempo
   // quieto se descuenta, así al soltarlo sigue desde donde estaba en vez de saltar.
@@ -67,7 +82,8 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
   const reloj = (pausa.desde ?? ahora) - pausa.acumulado
   const giro = reducido ? 0 : ((reloj / 1000) * GRADOS_POR_SEGUNDO) % 360
 
-  const d = useMemo(() => disposicion(trabajadores, { rotacion: giro, elegido }), [trabajadores, giro, elegido])
+  const d = useMemo(() => disposicion(trabajadores, { rotacion: giro, elegido, vertical }), [trabajadores, giro, elegido, vertical])
+  const LIENZO = d.lienzo
   const porId = Object.fromEntries(d.nodos.map(n => [n.id, n]))
   const porClave = Object.fromEntries(trabajadores.map(t => [t.clave, t]))
   const estados = Object.fromEntries(trabajadores.map(t => [t.clave, estadoTrabajador(t, corridasPor[t.clave] || [], ahora)]))
@@ -91,28 +107,17 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
   const etiquetas = d.nodos.filter(n => n.tipo === 'trabajador')
     .sort((a, b) => (b.clave === elegido) - (a.clave === elegido))
     .map(n => ({ id: n.id, x: n.x, y: n.y, w: Math.max(anchoTexto(n.etiqueta, 14), anchoTexto(datoDe(n), 12)) + 18, arriba: n.y < LIENZO.cy - 4 }))
-  const lugarEtiqueta = ubicarEtiquetas(etiquetas, d.nodos)
+  const lugarEtiqueta = ubicarEtiquetas(etiquetas, d.nodos, LIENZO)
   const anchoEtiqueta = Object.fromEntries(etiquetas.map(e => [e.id, e.w]))
 
-  // En pantallas angostas el dibujo es más ancho que la pantalla y se desliza de costado: arranca centrado en el
-  // núcleo y, al elegir un trabajador, lo trae a la vista.
-  const marco = useRef(null)
-  const xElegido = elegido ? porId[`t:${elegido}`]?.x : null
-  useEffect(() => {
-    const m = marco.current
-    if (!m || m.scrollWidth <= m.clientWidth) return
-    const escala = m.scrollWidth / LIENZO.ancho
-    const x = (xElegido ?? LIENZO.cx) * escala
-    m.scrollTo({ left: Math.max(0, x - m.clientWidth / 2), behavior: xElegido == null || reducido ? 'auto' : 'smooth' })
-  }, [xElegido, reducido])
-
-  const señalado = encima && porId[`t:${encima}`]
+  // En el celular no hay ficha flotante: los datos del trabajador tocado están en el panel de abajo.
+  const señalado = !vertical && encima && porId[`t:${encima}`]
   const t = señalado && porClave[encima]
   const v = señalado && vidas[encima]
 
-  return <div className="orbital" ref={marco}>
+  return <div className={`orbital${vertical ? ' is-vertical' : ''}`}>
     <svg className={`orbital-svg${foco ? ' hay-foco' : ''}`} viewBox={`0 0 ${LIENZO.ancho} ${LIENZO.alto}`} onClick={() => onElegir(null)}
-      role="group" aria-label="Sistema orbital: Second Brain en el centro, sus trabajadores alrededor, fuentes a la izquierda y destinos a la derecha">
+      role="group" aria-label={`Sistema orbital: Second Brain en el centro, sus trabajadores alrededor, ${vertical ? 'fuentes arriba y destinos abajo' : 'fuentes a la izquierda y destinos a la derecha'}`}>
       <defs>
         <marker id="orbital-flecha" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0.5 L7.5 4 L0 7.5 Z" className="orbital-flecha" />
@@ -123,7 +128,7 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
         className={`orbital-orbita${foco?.nodos.has(`t:${o.clave}`) ? ' is-foco' : ''}${tenue(`t:${o.clave}`) ? ' is-tenue' : ''}`} />)}
 
       {d.enlaces.map(e => {
-        const camino = trazo(porId[e.desde], porId[e.hasta])
+        const camino = trazo(porId[e.desde], porId[e.hasta], LIENZO)
         const enFoco = foco?.enlaces.has(e.id)
         const corriendo = estados[e.clave] === 'corriendo'
         const particulas = !reducido && (enFoco || corriendo)
@@ -147,9 +152,12 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
         const { ancho, alto } = LIENZO.tarjeta
         return <g key={n.id} transform={`translate(${n.x} ${n.y})`} className={`orbital-tarjeta orbital-${n.tipo}${n.registro ? ' is-registro' : ''}${tenue(n.id) ? ' is-tenue' : ''}${foco?.nodos.has(n.id) ? ' is-foco' : ''}`}>
           <rect x={-ancho / 2} y={-alto / 2} width={ancho} height={alto} rx="9" />
-          <g transform={`translate(${-ancho / 2 + 18} 0)`}>{n.tipo === 'fuente' ? <IconoFuente id={n.id.slice(2)} /> : <IconoDestino id={n.id.slice(2)} />}</g>
-          <text x={-ancho / 2 + 34} y="-2" className="orbital-tarjeta-titulo">{n.etiqueta}</text>
-          <text x={-ancho / 2 + 34} y="13" className="orbital-tarjeta-desc">{n.descripcion}</text>
+          <g transform={`translate(${-ancho / 2 + (vertical ? 16 : 18)} 0)`}>{n.tipo === 'fuente' ? <IconoFuente id={n.id.slice(2)} /> : <IconoDestino id={n.id.slice(2)} />}</g>
+          {/* En el celular la tarjeta es más angosta: solo el nombre; la descripción está en el panel del trabajador. */}
+          {vertical
+            ? <text x={-ancho / 2 + 30} y="4.5" className="orbital-tarjeta-titulo">{n.etiqueta}</text>
+            : <><text x={-ancho / 2 + 34} y="-2" className="orbital-tarjeta-titulo">{n.etiqueta}</text>
+              <text x={-ancho / 2 + 34} y="13" className="orbital-tarjeta-desc">{n.descripcion}</text></>}
         </g>
       })}
 
@@ -171,12 +179,12 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
           {/* Pastilla de fondo (ninguna línea pasa por encima) en el lugar libre que le tocó: ver ubicarEtiquetas.
               Si se corrió lejos de su nodo para no pisar nada, una línea fina la une a él. */}
           {(() => {
-            const arriba = lugarEtiqueta[n.id] < n.y
-            const borde = arriba ? lugarEtiqueta[n.id] - n.y + ETIQUETA.alto : lugarEtiqueta[n.id] - n.y
+            const arriba = lugarEtiqueta[n.id].y < n.y
+            const borde = arriba ? lugarEtiqueta[n.id].y - n.y + ETIQUETA.alto : lugarEtiqueta[n.id].y - n.y
             const separada = Math.abs(borde) > LIENZO.nodo + ETIQUETA.separacion + 2
             return separada && <line y1={arriba ? -LIENZO.nodo - 4 : LIENZO.nodo + 4} y2={borde} className="orbital-guia" />
           })()}
-          <g transform={`translate(0 ${lugarEtiqueta[n.id] - n.y})`} className="orbital-etiqueta">
+          <g transform={`translate(${lugarEtiqueta[n.id].x - n.x} ${lugarEtiqueta[n.id].y - n.y})`} className="orbital-etiqueta">
             <rect x={-anchoEtiqueta[n.id] / 2} width={anchoEtiqueta[n.id]} height={ETIQUETA.alto} rx="8" />
             <text y="17" className="orbital-nombre">{n.etiqueta}</text>
             <text y="32" className="orbital-dato">{dato}</text>
@@ -185,7 +193,6 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
       })}
     </svg>
 
-    <p className="orbital-deslizar">← deslizá para ver fuentes y destinos →</p>
     {señalado && <div className="orbital-tooltip" style={{ left: `${(señalado.x / LIENZO.ancho) * 100}%`, top: `${(señalado.y / LIENZO.alto) * 100}%` }} role="tooltip">
       <strong>{t.nombre}</strong>
       <dl>

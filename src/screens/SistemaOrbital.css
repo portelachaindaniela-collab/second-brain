@@ -67,11 +67,7 @@
   .orbital-nucleo-pulso, .orbital-latido { animation: none; display: none; }
   .orbital-trabajador, .orbital-trabajador-cuerpo, .orbital-orbita, .orbital-enlace path { transition: none; }
 }
-/* En pantallas angostas el sistema mantiene un tamaño legible y se desliza de costado. */
-.orbital-deslizar { display: none; }
-@media (max-width: 720px) {
-  .orbital { overflow-x: auto; overscroll-behavior-x: contain; }
-  .orbital-svg { min-width: 680px; }
-  .orbital-deslizar { display: block; position: sticky; left: 0; margin: 6px 0 0; font-family: var(--font); font-size: 11.5px; color: var(--gray-500); text-align: center; }
-}
+/* En el celular el dibujo es vertical y entra entero en el ancho: crece en alto según su proporción. */
+.orbital.is-vertical, .orbital.is-vertical .orbital-svg { height: auto; }
+.orbital.is-vertical .orbital-tarjeta-titulo { font-size: 13px; }
 .orbital-guia { stroke: var(--gray-500); stroke-width: 1; stroke-dasharray: 2 3; opacity: .8; }

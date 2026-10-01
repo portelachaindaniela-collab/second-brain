@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIENZO, ETIQUETA, disposicion, trazo, estadoTrabajador, pasaFiltro, contarFiltros, coincideBusqueda, focoDe, ubicarEtiquetas, anchoTexto } from './orbital.mjs'
+import { LIENZO, LIENZO_VERTICAL, ETIQUETA, disposicion, trazo, estadoTrabajador, pasaFiltro, contarFiltros, coincideBusqueda, focoDe, ubicarEtiquetas, anchoTexto } from './orbital.mjs'
 
 const trabajadores = [
   { clave: 'buscador_eventos', nombre: 'Buscador de eventos', color: 'rosa', activo: true },
@@ -20,13 +20,57 @@ test('cada trabajador en su órbita, fuentes a la izquierda y destinos a la dere
   assert.ok(nodo('d:trabajos_corridas').registro)
 })
 
-test('todo entra en el lienzo, tarjetas incluidas', () => {
-  const { ancho, alto } = LIENZO.tarjeta
-  for (const n of d.nodos) {
-    const [mx, my] = n.tipo === 'trabajador' ? [LIENZO.nodo, LIENZO.nodo] : [ancho / 2, alto / 2]
-    assert.ok(n.x - mx >= 0 && n.x + mx <= LIENZO.ancho, `${n.id} x`)
-    assert.ok(n.y - my >= 0 && n.y + my <= LIENZO.alto, `${n.id} y`)
-  }
+const choca = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+const cajaTarjeta = (n, L) => ({ x: n.x - L.tarjeta.ancho / 2, y: n.y - L.tarjeta.alto / 2, w: L.tarjeta.ancho, h: L.tarjeta.alto })
+
+for (const vertical of [false, true]) {
+  const nombre = vertical ? 'celular' : 'compu'
+  test(`${nombre}: todo entra en el lienzo, tarjetas incluidas, sin pisarse`, () => {
+    for (let giro = 0; giro < 360; giro += 15) {
+      const dd = disposicion(trabajadores, { rotacion: giro, vertical })
+      const L = dd.lienzo
+      for (const n of dd.nodos) {
+        const [mx, my] = n.tipo === 'trabajador' ? [L.nodo, L.nodo] : [L.tarjeta.ancho / 2, L.tarjeta.alto / 2]
+        assert.ok(n.x - mx >= 0 && n.x + mx <= L.ancho, `${n.id} x`)
+        assert.ok(n.y - my >= 0 && n.y + my <= L.alto, `${n.id} y`)
+      }
+      const tarjetas = dd.nodos.filter(n => n.tipo !== 'trabajador').map(n => cajaTarjeta(n, L))
+      for (let i = 0; i < tarjetas.length; i++) for (let j = i + 1; j < tarjetas.length; j++) assert.ok(!choca(tarjetas[i], tarjetas[j]), 'tarjetas pisadas')
+      for (const n of dd.nodos.filter(x => x.tipo === 'trabajador')) {
+        const circulo = { x: n.x - L.nodo, y: n.y - L.nodo, w: L.nodo * 2, h: L.nodo * 2 }
+        assert.ok(tarjetas.every(t => !choca(t, circulo)), `giro ${giro}: ${n.id} pisa una tarjeta`)
+      }
+    }
+  })
+
+  test(`${nombre}: etiquetas sin pisarse entre ellas, ni el núcleo, y sin salirse por los costados, en cualquier giro`, () => {
+    for (let giro = 0; giro < 360; giro += 7) {
+      for (const elegido of [null, 'google_sync']) {
+        const dd = disposicion(trabajadores, { rotacion: giro, vertical, elegido })
+        const L = dd.lienzo
+        const ws = dd.nodos.filter(n => n.tipo === 'trabajador').sort((a, b) => (b.clave === elegido) - (a.clave === elegido))
+        const etiquetas = ws.map(n => ({ id: n.id, x: n.x, y: n.y, w: Math.max(anchoTexto(n.etiqueta, 14), anchoTexto('hace 51 min · vuelve en 22 h', 12)) + 18, arriba: n.y < L.cy - 4 }))
+        const lugar = ubicarEtiquetas(etiquetas, dd.nodos, L)
+        const cajas = etiquetas.map(e => ({ x: lugar[e.id].x - e.w / 2, y: lugar[e.id].y, w: e.w, h: ETIQUETA.alto }))
+        for (let i = 0; i < cajas.length; i++) for (let j = i + 1; j < cajas.length; j++) assert.ok(!choca(cajas[i], cajas[j]), `giro ${giro}: ${etiquetas[i].id} pisa ${etiquetas[j].id}`)
+        const nucleo = { x: L.cx - L.nucleo, y: L.cy - L.nucleo, w: L.nucleo * 2, h: L.nucleo * 2 }
+        assert.ok(cajas.every(c => !choca(c, nucleo)), `giro ${giro}: una etiqueta pisa el núcleo`)
+        assert.ok(cajas.every(c => c.x >= 0 && c.x + c.w <= L.ancho && c.y >= 0 && c.y + c.h <= L.alto), `giro ${giro}: una etiqueta se sale del lienzo`)
+        // La pastilla siempre queda encima o debajo de su nodo, para que se lea de quién es.
+        assert.ok(etiquetas.every(e => Math.abs(lugar[e.id].x - e.x) <= e.w / 2 - L.nodo), `giro ${giro}: una etiqueta quedó lejos de su nodo`)
+      }
+    }
+  })
+}
+
+test('celular: fuentes arriba, destinos abajo, en dos columnas que entran en 340', () => {
+  const dv = disposicion(trabajadores, { vertical: true })
+  const L = dv.lienzo
+  assert.equal(L.ancho, LIENZO_VERTICAL.ancho)
+  const ws = dv.nodos.filter(n => n.tipo === 'trabajador')
+  assert.ok(dv.nodos.filter(n => n.tipo === 'fuente').every(f => ws.every(w => f.y < w.y)))
+  assert.ok(dv.nodos.filter(n => n.tipo === 'destino').every(t => ws.every(w => t.y > w.y)))
+  assert.match(trazo(dv.nodos.find(n => n.id === 'f:google'), dv.nodos.find(n => n.id === 't:google_sync'), L), /^M[\d.]+ [\d.]+ C/)
 })
 
 test('el sistema gira, y el elegido pasa al frente (arriba de su órbita)', () => {
@@ -77,29 +121,16 @@ test('foco: el trabajador, sus enlaces y sus puntas', () => {
   assert.equal(focoDe(null, d), null)
 })
 
-test('etiquetas: ninguna se pisa con otra, con una tarjeta ni con el núcleo, en cualquier giro', () => {
-  const choca = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
-  for (let giro = 0; giro < 360; giro += 7) {
-    const dd = disposicion(trabajadores, { rotacion: giro })
-    const ws = dd.nodos.filter(n => n.tipo === 'trabajador')
-    const etiquetas = ws.map(n => ({ id: n.id, x: n.x, y: n.y, w: Math.max(anchoTexto(n.etiqueta, 14), anchoTexto('hace 51 min · vuelve en 22 h', 12)) + 18, arriba: n.y < LIENZO.cy - 4 }))
-    const ys = ubicarEtiquetas(etiquetas, dd.nodos)
-    const cajas = etiquetas.map(e => ({ x: e.x - e.w / 2, y: ys[e.id], w: e.w, h: ETIQUETA.alto }))
-    for (let i = 0; i < cajas.length; i++) for (let j = i + 1; j < cajas.length; j++) assert.ok(!choca(cajas[i], cajas[j]), `giro ${giro}: ${etiquetas[i].id} pisa ${etiquetas[j].id}`)
-    const nucleo = { x: LIENZO.cx - LIENZO.nucleo, y: LIENZO.cy - LIENZO.nucleo, w: LIENZO.nucleo * 2, h: LIENZO.nucleo * 2 }
-    assert.ok(cajas.every(c => !choca(c, nucleo)), `giro ${giro}: una etiqueta pisa el núcleo`)
-  }
-})
-
 test('el núcleo tiene lugar para su texto y ningún trabajador lo toca', () => {
   // "SECOND BRAIN" en 10px con .12em de espacio entre letras: entra en la cuerda del círculo a esa altura.
   const anchoTitulo = 'SECOND BRAIN'.length * 10 * (0.62 + 0.12)
   const cuerda = y => 2 * Math.sqrt(LIENZO.nucleo ** 2 - y ** 2)
   assert.ok(anchoTitulo + 8 < cuerda(-10), `el título (${anchoTitulo}) no entra en ${cuerda(-10)}`)
-  for (let giro = 0; giro < 360; giro += 5) {
-    for (const n of disposicion(trabajadores, { rotacion: giro }).nodos.filter(x => x.tipo === 'trabajador')) {
-      const distancia = Math.hypot(n.x - LIENZO.cx, n.y - LIENZO.cy)
-      assert.ok(distancia - LIENZO.nodo > LIENZO.nucleo + 4, `giro ${giro}: ${n.id} toca el núcleo`)
+  for (const vertical of [false, true]) for (let giro = 0; giro < 360; giro += 5) {
+    const dd = disposicion(trabajadores, { rotacion: giro, vertical })
+    for (const n of dd.nodos.filter(x => x.tipo === 'trabajador')) {
+      const distancia = Math.hypot(n.x - dd.lienzo.cx, n.y - dd.lienzo.cy)
+      assert.ok(distancia - dd.lienzo.nodo > dd.lienzo.nucleo + 4, `giro ${giro}: ${n.id} toca el núcleo`)
     }
   }
 })
