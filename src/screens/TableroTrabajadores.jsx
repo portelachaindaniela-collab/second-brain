@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { horaAR } from '../trabajadores.mjs'
-import { colorIdentidad, actividadPorHora, grafoFlujo, caminoDe, destinosDe, corriendoAhora, GRAFO } from '../tablero.mjs'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { horaAR, haceCuanto } from '../trabajadores.mjs'
+import {
+  colorIdentidad, actividadPorHora, grafoFlujo, caminoDe, destinosDe, corriendoAhora, GRAFO,
+  vidaDeTrabajador, grosorHilo, ultimaActividad, textoTrabajador,
+} from '../tablero.mjs'
 
 const BARRAS = { ancho: 480, alto: 110 }
 
@@ -61,9 +64,9 @@ function curva(x1, y1, x2, y2) {
   return `M${x1} ${y1} C${m} ${y1} ${m} ${y2} ${x2} ${y2}`
 }
 
-// Borde del nodo por donde sale o entra un hilo.
+// Borde del nodo por donde sale o entra un hilo (en los trabajadores, por fuera del arco de la próxima corrida).
 function borde(n, lado) {
-  if (n.tipo === 'trabajador') return n.x + (lado === 'salida' ? GRAFO.radio : -GRAFO.radio)
+  if (n.tipo === 'trabajador') return n.x + (lado === 'salida' ? GRAFO.radio + 7 : -GRAFO.radio - 7)
   return n.x + (lado === 'salida' ? GRAFO.nodoAncho / 2 : -GRAFO.nodoAncho / 2)
 }
 
@@ -88,22 +91,37 @@ export function MapaFlujo({ trabajadores, corridasPor, ahora }) {
     })
   }, [firma, grafo])
 
+  const idPuntos = useId()
   const activos = new Set(corriendo)
   const camino = caminoDe(elegido, grafo)
   const porId = Object.fromEntries(grafo.nodos.map(n => [n.id, n]))
+  const porClave = Object.fromEntries(trabajadores.map(t => [t.clave, t]))
   const colorDe = Object.fromEntries(trabajadores.map(t => [t.clave, colorIdentidad(t.color)]))
+  // Señales de vida: cuándo corrió, cuándo vuelve, cuánto tráfico tuvo. Todo de trabajos_corridas y del cron.
+  const vidas = Object.fromEntries(trabajadores.map(t => [t.clave, vidaDeTrabajador(t, corridasPor[t.clave] || [], ahora)]))
+  const corridas24 = Object.values(vidas).reduce((suma, v) => suma + v.corridas24, 0)
   const atenuado = id => (camino && !camino.nodos.has(id) ? ' is-atenuado' : '')
   const elegir = id => e => { e.stopPropagation(); setElegido(actual => (actual === id ? null : id)) }
   const teclado = id => e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); elegir(id)(e) } }
   const W = GRAFO.nodoAncho, H = GRAFO.nodoAlto, R = GRAFO.radio
+  const actividad = (n, verbo) => {
+    const t = ultimaActividad(n.id, grafo, vidas)
+    return t ? `${verbo} ${haceCuanto(new Date(t).toISOString(), ahora)}` : `sin ${verbo === 'leído' ? 'lecturas' : 'escrituras'}`
+  }
 
   return <>
-    <p className="tablero-nota tenue">{elegido ? 'tocá el mismo nodo o el fondo para ver todo' : 'tocá un nodo para ver su camino'}</p>
+    <p className="tablero-nota tenue">{elegido ? 'tocá el mismo nodo o el fondo para ver todo' : 'tocá un nodo para ver su camino · el grosor de cada hilo es su tráfico en 24 h · el arco, cuánto falta para la próxima corrida'}</p>
     <div className="flujo-marco">
       <svg className={`flujo${camino ? ' hay-camino' : ''}`} viewBox={`0 0 ${GRAFO.ancho} ${grafo.alto}`} onClick={() => setElegido(null)}
         role="group" aria-label="Mapa de flujo: de dónde lee cada trabajador y adónde escribe">
+        <defs>
+          <pattern id={idPuntos} width="18" height="18" patternUnits="userSpaceOnUse">
+            <circle cx="9" cy="9" r="0.9" className="flujo-punto" />
+          </pattern>
+        </defs>
+        <rect width={GRAFO.ancho} height={grafo.alto} fill={`url(#${idPuntos})`} />
         {['fuentes', 'trabajadores', 'destinos'].map((t, i) =>
-          <text key={t} x={[GRAFO.x.fuente, GRAFO.x.trabajador, GRAFO.x.destino][i]} y="16" className="flujo-columna">{t}</text>)}
+          <text key={t} x={[GRAFO.x.fuente, GRAFO.x.trabajador, GRAFO.x.destino][i]} y="18" className="flujo-columna">{t}</text>)}
 
         <g>
           {grafo.hilos.map(h => {
@@ -111,7 +129,7 @@ export function MapaFlujo({ trabajadores, corridasPor, ahora }) {
             const activo = activos.has(h.clave)
             return <path key={h.id} d={curva(borde(a, 'salida'), a.y, borde(b, 'entrada'), b.y)}
               className={`flujo-hilo${activo ? ' is-activo' : ''}${camino && !camino.hilos.has(h.id) ? ' is-atenuado' : ''}`}
-              style={activo ? { '--id': colorDe[h.clave] } : undefined} />
+              style={{ strokeWidth: grosorHilo(vidas[h.clave]?.corridas24), ...(activo ? { '--id': colorDe[h.clave] } : {}) }} />
           })}
         </g>
 
@@ -121,19 +139,36 @@ export function MapaFlujo({ trabajadores, corridasPor, ahora }) {
             'aria-pressed': elegido === n.id, onClick: elegir(n.id), onKeyDown: teclado(n.id),
           }
           if (n.tipo === 'trabajador') {
+            const t = porClave[n.clave]
+            const vida = vidas[n.clave]
             const activo = activos.has(n.clave)
-            const pausado = trabajadores.find(t => t.clave === n.clave)?.activo === false
+            const pausado = t?.activo === false
+            const dato = textoTrabajador(t, vida, activo, ahora)
             return <g key={n.id} {...comun} className={`flujo-nodo flujo-nodo-trabajador${pausado ? ' is-pausado' : ''}${atenuado(n.id)}`} style={{ '--id': colorDe[n.clave] }}
-              aria-label={`${n.etiqueta}${activo ? ', corriendo' : pausado ? ', pausado' : ''}`}>
+              aria-label={`${n.etiqueta}: ${dato}`}>
+              <circle r={R + 13} className="flujo-halo" />
+              <circle r={R + 6} className="flujo-arco-pista" />
+              {!pausado && vida.progreso != null && <circle r={R + 6} className="flujo-arco" pathLength="100"
+                strokeDasharray={`${Math.max(vida.progreso * 100, 0.5)} 100`} transform="rotate(-90)" />}
               {activo && <circle r={R} className="flujo-anillo" />}
-              <circle r={R} className="flujo-circulo" />
-              <text y={R + 15} className="flujo-etiqueta">{n.etiqueta}</text>
+              <circle r={R} className="flujo-orbe" />
+              <circle r={R * 0.38} className="flujo-nucleo" />
+              <text y={R + 26} className="flujo-etiqueta">{n.etiqueta}</text>
+              <text y={R + 40} className="flujo-dato">{dato}</text>
             </g>
           }
-          return <g key={n.id} {...comun} className={`flujo-nodo flujo-nodo-${n.tipo}${n.registro ? ' flujo-registro' : ''}${atenuado(n.id)}`} aria-label={n.etiqueta}>
-            <rect x={-W / 2} y={-H / 2} width={W} height={H} rx="6" className="flujo-caja" />
-            {destellos[n.id] > 0 && <rect key={destellos[n.id]} x={-W / 2} y={-H / 2} width={W} height={H} rx="6" className="flujo-destello" />}
-            <text y="4" className="flujo-etiqueta">{n.etiqueta}</text>
+          const destino = n.tipo === 'destino'
+          const dato = n.registro ? `${corridas24} corridas en 24 h` : actividad(n, destino ? 'escrito' : 'leído')
+          return <g key={n.id} {...comun} className={`flujo-nodo flujo-nodo-${n.tipo}${n.registro ? ' flujo-registro' : ''}${atenuado(n.id)}`} aria-label={`${n.etiqueta}: ${dato}`}>
+            <rect x={-W / 2} y={-H / 2} width={W} height={H} rx={destino ? 7 : H / 2} className="flujo-caja" />
+            {destellos[n.id] > 0 && <rect key={destellos[n.id]} x={-W / 2} y={-H / 2} width={W} height={H} rx={destino ? 7 : H / 2} className="flujo-destello" />}
+            {destino
+              ? <g transform={`translate(${-W / 2 + 15} 0)`} className="flujo-icono">
+                <ellipse cy="-5" rx="6" ry="2.4" /><path d="M-6 -5 V5 A6 2.4 0 0 0 6 5 V-5" /><path d="M-6 0 A6 2.4 0 0 0 6 0" />
+              </g>
+              : <circle cx={-W / 2 + 15} r="3.5" className="flujo-icono-fuente" />}
+            <text x={-W / 2 + 28} y="4" className="flujo-etiqueta flujo-etiqueta-inicio">{n.etiqueta}</text>
+            <text y={H / 2 + 15} className="flujo-dato">{dato}</text>
           </g>
         })}
       </svg>

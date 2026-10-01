@@ -1,6 +1,6 @@
 // Cálculos del tablero de Trabajadores: actividad por hora, alertas y el grafo del mapa de flujo.
 // Solo presentación: todo sale de `trabajadores`, `trabajos_corridas` y salud_sistema().
-import { franjaHoras, programaDe, resumenFranja, trabada, duracionLegible } from './trabajadores.mjs'
+import { franjaHoras, programaDe, resumenFranja, trabada, duracionLegible, parsearCron, minutosProgramados, haceCuanto } from './trabajadores.mjs'
 
 const HORA_MS = 3600_000
 
@@ -68,7 +68,7 @@ export const RECORRIDOS = {
 }
 export const REGISTRO = 'trabajos_corridas'
 
-export const GRAFO = { ancho: 760, fila: 64, margen: 32, nodoAncho: 150, nodoAlto: 34, radio: 17, x: { fuente: 100, trabajador: 380, destino: 660 } }
+export const GRAFO = { ancho: 760, fila: 84, margen: 34, nodoAncho: 160, nodoAlto: 32, radio: 16, x: { fuente: 100, trabajador: 380, destino: 660 } }
 
 function columna(ids, alto) {
   const paso = ids.length ? alto / ids.length : 0
@@ -117,4 +117,61 @@ export function corriendoAhora(trabajadores, corridasPor, ahora = Date.now()) {
     const ultima = (corridasPor[t.clave] || [])[0]
     return ultima?.estado === 'corriendo' && !trabada(ultima, ahora, t.minutos_trabado)
   }).map(t => t.clave)
+}
+
+// ---------- Señales de vida del mapa: todo sale de datos reales, nada es decorativo ----------
+const MIN_MS = 60_000
+
+// Próxima corrida según el cron del trabajador (UTC, como pg_cron). null si está pausado o el cron no se entiende.
+export function proximaCorrida(trabajador, ahora = Date.now()) {
+  if (!trabajador?.activo) return null
+  const cron = parsearCron(trabajador.frecuencia)
+  if (!cron) return null
+  const inicio = Math.floor(ahora / HORA_MS) * HORA_MS
+  for (let h = 0; h <= 48; h++) {
+    const hora = inicio + h * HORA_MS
+    for (const m of minutosProgramados(cron, hora)) {
+      const t = hora + m * MIN_MS
+      if (t > ahora) return t
+    }
+  }
+  return null
+}
+
+export function enCuanto(t, ahora = Date.now()) {
+  const min = Math.ceil((t - ahora) / MIN_MS)
+  if (min <= 1) return 'en 1 min'
+  if (min < 60) return `en ${min} min`
+  const h = Math.round(min / 60)
+  return h < 24 ? `en ${h} h` : `en ${Math.round(h / 24)} d`
+}
+
+// progreso: cuánto pasó entre la última corrida terminada y la próxima (0 a 1). Es lo que llena el arco del nodo.
+export function vidaDeTrabajador(trabajador, corridas = [], ahora = Date.now()) {
+  const terminada = corridas.find(c => c.estado !== 'corriendo')
+  const ultimaFin = terminada ? Date.parse(terminada.finalizado_at || terminada.iniciado_at) : null
+  const proxima = proximaCorrida(trabajador, ahora)
+  const corridas24 = corridas.filter(c => Date.parse(c.iniciado_at) >= ahora - 24 * HORA_MS).length
+  const progreso = proxima && ultimaFin && proxima > ultimaFin ? Math.min(1, Math.max(0, (ahora - ultimaFin) / (proxima - ultimaFin))) : null
+  return { corridas24, ultimaFin, proxima, progreso }
+}
+
+// El grosor del hilo es el tráfico: corridas en 24 h, en escala logarítmica para que cada 15 min no aplaste al diario.
+export function grosorHilo(corridas24) {
+  return Math.round(Math.min(3.6, 1 + Math.log2(1 + (corridas24 || 0)) * 0.45) * 10) / 10
+}
+
+// Última vez que alguno de los trabajadores conectados a un nodo leyó o escribió ahí.
+export function ultimaActividad(id, { hilos }, vidas) {
+  const claves = new Set(hilos.filter(h => h.desde === id || h.hasta === id).map(h => h.clave))
+  const tiempos = [...claves].map(k => vidas[k]?.ultimaFin).filter(Number.isFinite)
+  return tiempos.length ? Math.max(...tiempos) : null
+}
+
+export function textoTrabajador(trabajador, vida, corriendo, ahora = Date.now()) {
+  if (!trabajador.activo) return 'pausado'
+  if (corriendo) return 'corriendo ahora'
+  const partes = [vida.ultimaFin ? `corrió ${haceCuanto(new Date(vida.ultimaFin).toISOString(), ahora)}` : 'todavía no corrió']
+  if (vida.proxima) partes.push(`vuelve ${enCuanto(vida.proxima, ahora)}`)
+  return partes.join(' · ')
 }

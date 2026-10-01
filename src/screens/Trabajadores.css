@@ -220,3 +220,26 @@ button.franja-bloque:hover, button.franja-bloque:focus-visible { outline: 1px so
 .tablero-nota { margin: 0 0 8px; font-size: 11.5px; }
 .consola .pantalla-bloque .tail-desplegable > summary.consola-subtitulo { margin-top: 0; }
 .consola .pantalla-bloque .consola-tarjeta { background: var(--surface-inset); }
+
+/* ---------- Mapa de flujo como ecosistema: señales de vida que salen de los datos ---------- */
+.flujo-punto { fill: var(--gray-300); opacity: .55; }
+.flujo-columna { font-size: 10.5px !important; letter-spacing: .14em !important; }
+.flujo-dato { font-size: 10.5px; text-anchor: middle; fill: var(--c-tenue) !important; }
+.flujo-hilo { stroke: var(--gray-300); stroke-linecap: round; opacity: .85; }
+.flujo-hilo.is-activo { opacity: 1; }
+.flujo-caja { fill: var(--surface-raised); stroke: var(--gray-300); }
+.flujo-nodo-fuente .flujo-caja { fill: var(--surface); }
+.flujo-icono { fill: none; stroke: var(--gray-500); stroke-width: 1.3; }
+.flujo-icono ellipse { fill: var(--surface-inset); }
+.flujo-icono-fuente { fill: var(--gray-500); }
+/* Trabajador: esfera con halo de su color, núcleo, y un arco que se llena hasta la próxima corrida. */
+.flujo-halo { fill: var(--id); opacity: .09; }
+.flujo-arco-pista { fill: none; stroke: var(--id); stroke-width: 2.5; opacity: .16; }
+.flujo-arco { fill: none; stroke: var(--id); stroke-width: 2.5; stroke-linecap: round; transition: stroke-dasharray .8s linear; }
+.flujo-orbe { fill: var(--surface-raised); stroke: var(--id); stroke-width: 2.5; }
+.flujo-nucleo { fill: var(--id); }
+.flujo-nodo-trabajador.is-pausado .flujo-nucleo { fill: none; stroke: var(--gray-500); stroke-width: 1.4; }
+.flujo-nodo-trabajador.is-pausado .flujo-halo { opacity: 0; }
+.flujo-nodo-trabajador .flujo-dato { paint-order: stroke; stroke: var(--surface-inset); stroke-width: 4px; stroke-linejoin: round; }
+@media (prefers-reduced-motion: reduce) { .flujo-arco { transition: none; } }
+.flujo-etiqueta-inicio { text-anchor: start !important; }

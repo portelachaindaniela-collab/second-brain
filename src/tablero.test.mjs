@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { colorIdentidad, actividadPorHora, alertas, grafoFlujo, caminoDe, destinosDe, corriendoAhora } from './tablero.mjs'
+import { colorIdentidad, actividadPorHora, alertas, grafoFlujo, caminoDe, destinosDe, corriendoAhora, proximaCorrida, enCuanto, vidaDeTrabajador, grosorHilo, ultimaActividad, textoTrabajador } from './tablero.mjs'
 
 const ahora = Date.parse('2026-09-30T20:30:00Z')
 const c = (id, inicio, estado = 'ok', extra = {}) => ({ id, iniciado_at: inicio, estado, ...extra })
@@ -70,4 +70,37 @@ test('camino: un trabajador resalta sus fuentes y destinos; un destino, solo qui
 test('corriendo en el mapa: última corrida en curso y no trabada', () => {
   const corridasPor = { google_sync: [c(2, '2026-09-30T20:28:00Z', 'corriendo')], maria: [c(3, '2026-09-30T20:07:00Z', 'corriendo')] }
   assert.deepEqual(corriendoAhora(trabajadores, corridasPor, ahora), ['google_sync'])
+})
+
+test('próxima corrida según el cron, en UTC como pg_cron', () => {
+  const ahora = Date.parse('2026-09-30T20:30:00Z')
+  assert.equal(proximaCorrida({ activo: true, frecuencia: '*/15 * * * *' }, ahora), Date.parse('2026-09-30T20:45:00Z'))
+  assert.equal(proximaCorrida({ activo: true, frecuencia: '37 * * * *' }, ahora), Date.parse('2026-09-30T20:37:00Z'))
+  assert.equal(proximaCorrida({ activo: true, frecuencia: '0 11 * * *' }, ahora), Date.parse('2026-10-01T11:00:00Z'))
+  assert.equal(proximaCorrida({ activo: false, frecuencia: '*/15 * * * *' }, ahora), null)
+  assert.equal(enCuanto(Date.parse('2026-09-30T20:37:00Z'), ahora), 'en 7 min')
+  assert.equal(enCuanto(Date.parse('2026-10-01T11:00:00Z'), ahora), 'en 15 h')
+})
+
+test('vida de un trabajador: el arco va de la última corrida a la próxima', () => {
+  const ahora = Date.parse('2026-09-30T20:40:00Z')
+  const t = { activo: true, frecuencia: '*/15 * * * *' }
+  const v = vidaDeTrabajador(t, [c(2, '2026-09-30T20:30:00Z', 'ok', { finalizado_at: '2026-09-30T20:30:10Z' }), c(1, '2026-09-29T10:00:00Z')], ahora)
+  assert.equal(v.corridas24, 1)
+  assert.equal(v.proxima, Date.parse('2026-09-30T20:45:00Z'))
+  assert.ok(v.progreso > 0.6 && v.progreso < 0.7)
+  assert.equal(textoTrabajador(t, v, false, ahora), 'corrió hace 9 min · vuelve en 5 min')
+  assert.equal(textoTrabajador(t, v, true, ahora), 'corriendo ahora')
+  assert.equal(textoTrabajador({ activo: false }, v, false, ahora), 'pausado')
+})
+
+test('grosor del hilo y última actividad de un nodo', () => {
+  assert.equal(grosorHilo(0), 1)
+  assert.ok(grosorHilo(96) > grosorHilo(24) && grosorHilo(24) > grosorHilo(1))
+  assert.equal(grosorHilo(10_000), 3.6)
+  const g = grafoFlujo(trabajadores)
+  const vidas = { google_sync: { ultimaFin: 200 }, maria: { ultimaFin: 300 } }
+  assert.equal(ultimaActividad('d:trabajos_corridas', g, vidas), 300)
+  assert.equal(ultimaActividad('f:google', g, vidas), 200)
+  assert.equal(ultimaActividad('d:eventos', g, vidas), null)
 })
