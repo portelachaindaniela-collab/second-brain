@@ -24,8 +24,9 @@ export function CabeceraPantalla({ sobretitulo, titulo, subtitulo, cifras = [], 
   </header>
 }
 
-export function Bloques({ children }) {
-  return <div className="pantalla-bloques">{children}</div>
+// disposicion 'principal': la primera columna el doble de ancha (un tablero central con un panel al costado).
+export function Bloques({ children, disposicion }) {
+  return <div className={`pantalla-bloques${disposicion ? ` bloques-${disposicion}` : ''}`}>{children}</div>
 }
 
 // ancho: 'completo' ocupa las dos columnas.

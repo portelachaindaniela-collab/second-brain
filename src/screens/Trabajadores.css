@@ -131,44 +131,6 @@ button.franja-bloque:hover, button.franja-bloque:focus-visible { outline: 1px so
 .tablero-leyenda i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .tablero-alertas { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px; }
 
-/* ---------- Mapa de flujo ---------- */
-.tablero-mapa { margin-top: 6px; }
-.flujo-marco { overflow-x: auto; border: 1px solid var(--c-linea); border-radius: var(--radius); background: var(--surface-inset); }
-.flujo { display: block; width: 100%; min-width: 600px; }
-.flujo text { font-family: var(--font-mono); fill: var(--gray-900); pointer-events: none; }
-.flujo-columna { font-size: 11px; fill: var(--c-tenue) !important; text-anchor: middle; text-transform: uppercase; letter-spacing: .08em; }
-.flujo-etiqueta { font-size: 12px; text-anchor: middle; }
-/* Halo del color de fondo: los hilos que pasan por detrás no tapan el nombre. */
-.flujo-nodo-trabajador .flujo-etiqueta { paint-order: stroke; stroke: var(--surface-inset); stroke-width: 5px; stroke-linejoin: round; }
-
-/* En reposo el hilo es gris, fino y quieto. Solo se anima mientras su trabajador corre. */
-.flujo-hilo { fill: none; stroke: var(--gray-300); stroke-width: 1.2; transition: opacity .2s; }
-.flujo-hilo.is-activo { stroke: var(--id); stroke-width: 2; stroke-dasharray: 6 6; animation: flujo-avance .6s linear infinite; }
-@keyframes flujo-avance { to { stroke-dashoffset: -12; } }
-
-.flujo-nodo { cursor: pointer; outline: none; transition: opacity .2s; }
-.flujo-caja { fill: var(--surface-raised); stroke: var(--gray-300); stroke-width: 1; }
-.flujo-registro .flujo-caja { stroke-dasharray: 4 3; stroke: var(--gray-500); }
-.flujo-nodo:hover .flujo-caja, .flujo-nodo:focus-visible .flujo-caja { stroke: var(--gray-700); }
-.flujo-nodo[aria-pressed="true"] .flujo-caja { stroke: var(--gray-900); stroke-width: 1.5; }
-.flujo-circulo { fill: var(--surface-inset); stroke: var(--id); stroke-width: 3; }
-.flujo-nodo-trabajador:focus-visible .flujo-circulo, .flujo-nodo-trabajador[aria-pressed="true"] .flujo-circulo { stroke-width: 5; }
-.flujo-anillo { fill: none; stroke: var(--id); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: flujo-anillo 1.4s ease-out infinite; }
-@keyframes flujo-anillo { from { transform: scale(1); opacity: .9; } to { transform: scale(2.1); opacity: 0; } }
-/* Al terminar una corrida, el destino parpadea una vez. */
-.flujo-destello { fill: var(--gray-900); opacity: 0; pointer-events: none; animation: flujo-destello .9s ease-out 1 forwards; }
-@keyframes flujo-destello { 0% { opacity: 0; } 20% { opacity: .35; } 100% { opacity: 0; } }
-.is-atenuado { opacity: .15; }
-.hay-camino .flujo-hilo:not(.is-atenuado):not(.is-activo) { stroke: var(--gray-500); }
-/* Pausado: como en el robot, más tenue; sigue en su color de identidad. */
-.flujo-nodo-trabajador.is-pausado:not(.is-atenuado) { opacity: .45; }
-
-@media (prefers-reduced-motion: reduce) {
-  .flujo-hilo.is-activo, .flujo-anillo, .flujo-destello { animation: none; }
-  .flujo-anillo, .flujo-destello { display: none; }
-  .flujo-hilo, .flujo-nodo { transition: none; }
-}
-
 @media (max-width: 900px) {
   .tablero-grilla, .tablero-paneles { grid-template-columns: minmax(0, 1fr); }
 }
@@ -221,25 +183,64 @@ button.franja-bloque:hover, button.franja-bloque:focus-visible { outline: 1px so
 .consola .pantalla-bloque .tail-desplegable > summary.consola-subtitulo { margin-top: 0; }
 .consola .pantalla-bloque .consola-tarjeta { background: var(--surface-inset); }
 
-/* ---------- Mapa de flujo como ecosistema: señales de vida que salen de los datos ---------- */
-.flujo-punto { fill: var(--gray-300); opacity: .55; }
-.flujo-columna { font-size: 10.5px !important; letter-spacing: .14em !important; }
-.flujo-dato { font-size: 10.5px; text-anchor: middle; fill: var(--c-tenue) !important; }
-.flujo-hilo { stroke: var(--gray-300); stroke-linecap: round; opacity: .85; }
-.flujo-hilo.is-activo { opacity: 1; }
-.flujo-caja { fill: var(--surface-raised); stroke: var(--gray-300); }
-.flujo-nodo-fuente .flujo-caja { fill: var(--surface); }
-.flujo-icono { fill: none; stroke: var(--gray-500); stroke-width: 1.3; }
-.flujo-icono ellipse { fill: var(--surface-inset); }
-.flujo-icono-fuente { fill: var(--gray-500); }
-/* Trabajador: esfera con halo de su color, núcleo, y un arco que se llena hasta la próxima corrida. */
-.flujo-halo { fill: var(--id); opacity: .09; }
-.flujo-arco-pista { fill: none; stroke: var(--id); stroke-width: 2.5; opacity: .16; }
-.flujo-arco { fill: none; stroke: var(--id); stroke-width: 2.5; stroke-linecap: round; transition: stroke-dasharray .8s linear; }
-.flujo-orbe { fill: var(--surface-raised); stroke: var(--id); stroke-width: 2.5; }
-.flujo-nucleo { fill: var(--id); }
-.flujo-nodo-trabajador.is-pausado .flujo-nucleo { fill: none; stroke: var(--gray-500); stroke-width: 1.4; }
-.flujo-nodo-trabajador.is-pausado .flujo-halo { opacity: 0; }
-.flujo-nodo-trabajador .flujo-dato { paint-order: stroke; stroke: var(--surface-inset); stroke-width: 4px; stroke-linejoin: round; }
-@media (prefers-reduced-motion: reduce) { .flujo-arco { transition: none; } }
-.flujo-etiqueta-inicio { text-anchor: start !important; }
+
+/* ---------- Panel del trabajador elegido en el sistema orbital ---------- */
+.panel-trabajador { display: flex; flex-direction: column; gap: 12px; font-family: var(--font); font-size: 13px; color: var(--gray-900); }
+.panel-cabecera { display: flex; align-items: center; gap: 10px; }
+.panel-icono-fondo { fill: var(--surface-inset); stroke: var(--id); stroke-width: 1.5; }
+.panel-titulo { display: flex; flex: 1; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.panel-titulo strong { font-size: 15px; line-height: 1.25; }
+.panel-estado { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap;
+  color: var(--green-600); background: color-mix(in srgb, var(--green-600) 16%, transparent); }
+.panel-estado.estado-corriendo { color: var(--amber-600); background: color-mix(in srgb, var(--amber-600) 16%, transparent); }
+.panel-estado.estado-error, .panel-estado.estado-trabado { color: var(--red-600); background: color-mix(in srgb, var(--red-600) 16%, transparent); }
+.panel-estado.estado-pausado, .panel-estado.estado-sin_corridas { color: var(--gray-500); background: var(--gray-100); }
+.panel-estado-texto.estado-ok { color: var(--green-600); }
+.panel-estado-texto.estado-corriendo { color: var(--amber-600); }
+.panel-estado-texto.estado-error, .panel-estado-texto.estado-trabado { color: var(--red-600); }
+.panel-menu { position: relative; }
+.panel-boton-menu { width: 32px; height: 28px; border: 1px solid var(--gray-300); border-radius: 6px; background: none; color: var(--gray-700); font-size: 16px; line-height: 1; cursor: pointer; }
+.panel-boton-menu:hover { color: var(--gray-900); border-color: var(--gray-500); }
+.panel-menu-lista { position: absolute; top: 34px; right: 0; z-index: 10; display: flex; flex-direction: column; min-width: 190px; padding: 4px;
+  background: var(--surface); border: 1px solid var(--gray-300); border-radius: var(--radius-sm); box-shadow: var(--shadow-md); }
+.panel-menu-lista button { padding: 8px 10px; border: none; border-radius: 4px; background: none; color: var(--gray-900); font: inherit; text-align: left; cursor: pointer; }
+.panel-menu-lista button:hover:not(:disabled) { background: var(--gray-100); }
+.panel-descripcion { margin: 0; color: var(--gray-700); line-height: 1.5; }
+.panel-pestanas { display: flex; gap: 2px; border-bottom: 1px solid var(--gray-200); }
+.panel-pestanas button { padding: 8px 10px; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; color: var(--gray-500); font: inherit; cursor: pointer; }
+.panel-pestanas button:hover { color: var(--gray-900); }
+.panel-pestanas button.is-activa { color: var(--gray-900); border-bottom-color: var(--id); }
+.panel-datos { margin: 0; }
+.panel-datos > div { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--gray-200); }
+.panel-datos dt { color: var(--gray-500); }
+.panel-datos dd { display: flex; flex-direction: column; gap: 2px; margin: 0; }
+.panel-subtitulo { margin: 14px 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--gray-500); }
+.panel-puntas { margin: 0; padding: 0; list-style: none; }
+.panel-puntas li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--gray-200); font-size: 12.5px; }
+.panel-puntas strong { font-weight: 600; }
+.panel-historial { max-height: 280px; margin-top: 10px; overflow: auto; }
+.panel-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid var(--gray-200); }
+
+/* ---------- Actividad reciente ---------- */
+.actividad-vivo { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font); font-size: 11.5px; color: var(--green-600); }
+.actividad-vivo::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--green-600); animation: consola-latido 2.4s ease-in-out infinite; }
+.actividad-linea { display: flex; gap: 10px; padding-bottom: 6px; overflow-x: auto; scroll-snap-type: x proximity; }
+.actividad-tarjeta { display: flex; flex: 0 0 190px; flex-direction: column; gap: 3px; padding: 10px 12px; text-align: left; cursor: pointer; scroll-snap-align: start;
+  border: 1px solid var(--gray-200); border-top: 2px solid var(--id); border-radius: var(--radius-sm); background: var(--surface-inset); color: inherit; font-family: var(--font); }
+.actividad-tarjeta:hover, .actividad-tarjeta:focus-visible { border-color: var(--gray-500); border-top-color: var(--id); outline: none; }
+.actividad-hora { font-family: var(--font-mono); font-size: 12px; color: var(--gray-500); }
+.actividad-nombre { overflow: hidden; font-size: 13px; font-weight: 600; color: var(--gray-900); white-space: nowrap; text-overflow: ellipsis; }
+.actividad-nombre i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--id); vertical-align: 1px; }
+.actividad-estado { font-size: 12px; color: var(--green-600); }
+.actividad-tarjeta.estado-error .actividad-estado { color: var(--red-600); }
+.actividad-tarjeta.estado-corriendo .actividad-estado { color: var(--amber-600); }
+.actividad-cuando { font-size: 11.5px; color: var(--gray-500); }
+.actividad-todas { max-height: 320px; margin-top: 10px; overflow: auto; }
+.actividad-ver { margin-top: 8px; }
+.filtros-trabajadores { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.filtros-trabajadores input { flex: 1 1 240px; }
+@media (prefers-reduced-motion: reduce) { .actividad-vivo::before { animation: none; } }
+.sistema-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.sistema-cuerpo.con-panel { grid-template-columns: minmax(0, 1fr) 320px; }
+.sistema-panel { padding: 14px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); background: var(--surface-inset); }
+@media (max-width: 1000px) { .sistema-cuerpo.con-panel { grid-template-columns: minmax(0, 1fr); } }

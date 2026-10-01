@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase.js'
 import {
   PRESETS_FRECUENCIA, describirFrecuencia, frecuenciaValida, duracionLegible, aplicarCorrida, parsearParametros,
-  horaAR, fechaAR, franjaHoras, franjasPorDia, resumenFranja, trabada, contadores24h, sparkline, barraBloques, programaDe,
+  horaAR, fechaAR, haceCuanto, franjaHoras, franjasPorDia, resumenFranja, trabada, contadores24h, sparkline, barraBloques, programaDe,
 } from '../trabajadores.mjs'
-import { colorIdentidad, alertas as calcularAlertas } from '../tablero.mjs'
+import { colorIdentidad, alertas as calcularAlertas, RECORRIDOS, REGISTRO, FUENTES, vidaDeTrabajador, enCuanto } from '../tablero.mjs'
 import { detalleCorrida } from '../detalleCorrida.mjs'
-import { Actividad, Salud, MapaFlujo } from './TableroTrabajadores.jsx'
-import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
+import { estadoTrabajador, pasaFiltro, coincideBusqueda, contarFiltros, disposicion, FILTROS, DESCRIPCION_FUENTE, DESCRIPCION_DESTINO } from '../orbital.mjs'
+import { Actividad, Salud } from './TableroTrabajadores.jsx'
+import { SistemaOrbital, IconoTrabajador } from './SistemaOrbital.jsx'
+import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
 import './Trabajadores.css'
 
 // Todo sale de las tablas `trabajadores` (configuración) y `trabajos_corridas` (corridas):
@@ -208,8 +210,7 @@ function CorridaModal({ corrida, nombre, ahora, cerrar }) {
   </div>
 }
 
-function BarraAcciones({ trabajador, actualizado, abrirDetalle }) {
-  const [editando, setEditando] = useState(false)
+function useAcciones(trabajador, actualizado) {
   const [ocupado, setOcupado] = useState('')
   const [aviso, setAviso] = useState(null)
 
@@ -231,6 +232,12 @@ function BarraAcciones({ trabajador, actualizado, abrirDetalle }) {
     else if (error && !respuesta?.estado) setAviso({ error: true, texto: respuesta?.error || 'no se pudo disparar el trabajador.' })
   }
 
+  return { ocupado, aviso, alternarActivo, correrAhora }
+}
+
+function BarraAcciones({ trabajador, actualizado, abrirDetalle }) {
+  const [editando, setEditando] = useState(false)
+  const { ocupado, aviso, alternarActivo, correrAhora } = useAcciones(trabajador, actualizado)
   return <>
     <div className="consola-acciones">
       <button className="consola-boton" disabled={!!ocupado} onClick={alternarActivo}>{ocupado === 'activo' ? '[…]' : trabajador.activo ? '[pausar]' : '[activar]'}</button>
@@ -365,6 +372,126 @@ function DetalleTrabajador({ trabajador, volver, actualizado, ahora }) {
   </div>
 }
 
+
+const fechaLarga = ms => new Date(ms).toLocaleString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+const ETIQUETA_ESTADO = { ok: 'Activo', corriendo: 'Corriendo', trabado: 'Trabado', error: 'Con error', pausado: 'Pausado', sin_corridas: 'Sin corridas' }
+
+function fraseEstado(estado, corridas, ahora) {
+  if (estado === 'ok') return 'Funcionando correctamente.'
+  if (estado === 'corriendo') return `Corriendo hace ${duracionLegible(ahora - Date.parse(corridas[0].iniciado_at))}.`
+  if (estado === 'trabado') return 'Lleva demasiado corriendo: parece trabado.'
+  if (estado === 'error') return `La última corrida falló: ${corridas.find(c => c.estado !== 'corriendo')?.error || 'sin mensaje'}`
+  if (estado === 'pausado') return 'Pausado: no corre hasta que lo actives.'
+  return 'Todavía no corrió.'
+}
+
+// Entradas y salidas de un trabajador, con cuándo las tocó por última vez (su última corrida terminada).
+function puntas(trabajador, vida, ahora) {
+  const r = RECORRIDOS[trabajador.clave] ?? { fuentes: [], destinos: [] }
+  const cuando = vida.ultimaFin ? haceCuanto(new Date(vida.ultimaFin).toISOString(), ahora) : null
+  return {
+    entradas: r.fuentes.map(f => ({ id: f, nombre: FUENTES[f] ?? f, descripcion: DESCRIPCION_FUENTE[f] ?? '', cuando: cuando ? `leído ${cuando}` : 'sin lecturas' })),
+    salidas: [...r.destinos, REGISTRO].map(d => ({ id: d, nombre: d, descripcion: DESCRIPCION_DESTINO[d] ?? '', cuando: cuando ? `escrito ${cuando}` : 'sin escrituras' })),
+  }
+}
+
+function ListaPuntas({ items, conDescripcion }) {
+  return <ul className="panel-puntas">{items.map(x => <li key={x.id}>
+    <span><strong>{x.nombre}</strong>{conDescripcion && x.descripcion && <span className="tenue"> · {x.descripcion}</span>}</span>
+    <span className="tenue">{x.cuando}</span>
+  </li>)}</ul>
+}
+
+const PESTANAS = [['resumen', 'Resumen'], ['entradas', 'Entradas'], ['salidas', 'Salidas'], ['historial', 'Historial']]
+
+function PanelTrabajador({ trabajador, corridas, ahora, actualizado, abrirCorrida, verHistorial, cerrar }) {
+  const [pestana, setPestana] = useState('resumen')
+  const [menu, setMenu] = useState(false)
+  const [editando, setEditando] = useState(false)
+  const { ocupado, aviso, alternarActivo, correrAhora } = useAcciones(trabajador, actualizado)
+  const estado = estadoTrabajador(trabajador, corridas, ahora)
+  const vida = vidaDeTrabajador(trabajador, corridas, ahora)
+  const { entradas, salidas } = puntas(trabajador, vida, ahora)
+  const bloques = franjaHoras(corridas, ahora, programaDe(trabajador))
+
+  return <div className="panel-trabajador" style={{ '--id': colorIdentidad(trabajador.color) }}>
+    <div className="panel-cabecera">
+      <svg viewBox="-16 -16 32 32" width="34" height="34" aria-hidden="true"><circle r="15" className="panel-icono-fondo" /><IconoTrabajador clave={trabajador.clave} /></svg>
+      <div className="panel-titulo">
+        <strong>{trabajador.nombre}</strong>
+        <span className={`panel-estado estado-${estado}`}>{ETIQUETA_ESTADO[estado]}</span>
+      </div>
+      <div className="panel-menu">
+        <button className="panel-boton-menu" aria-label="Más acciones" aria-expanded={menu} onClick={() => setMenu(m => !m)}>⋯</button>
+        {menu && <div className="panel-menu-lista" role="menu" onClick={() => setMenu(false)}>
+          <button role="menuitem" disabled={!!ocupado} onClick={alternarActivo}>{trabajador.activo ? 'Pausar' : 'Activar'}</button>
+          <button role="menuitem" onClick={() => setEditando(true)}>Editar configuración</button>
+          <button role="menuitem" onClick={verHistorial}>Historial completo</button>
+          <button role="menuitem" onClick={cerrar}>Cerrar panel</button>
+        </div>}
+      </div>
+    </div>
+    {trabajador.descripcion && <p className="panel-descripcion">{trabajador.descripcion}</p>}
+
+    <div className="panel-pestanas" role="tablist">
+      {PESTANAS.map(([id, etiqueta]) => <button key={id} role="tab" aria-selected={pestana === id} className={pestana === id ? 'is-activa' : undefined} onClick={() => setPestana(id)}>{etiqueta}</button>)}
+    </div>
+
+    <div className="panel-contenido" role="tabpanel">
+      {pestana === 'resumen' && <>
+        <dl className="panel-datos">
+          <div><dt>Última ejecución</dt><dd>{vida.ultimaFin ? <><strong>{haceCuanto(new Date(vida.ultimaFin).toISOString(), ahora)}</strong><span className="tenue">{fechaLarga(vida.ultimaFin)}</span></> : '—'}</dd></div>
+          <div><dt>Próxima ejecución</dt><dd>{vida.proxima ? <><strong>{enCuanto(vida.proxima, ahora)}</strong><span className="tenue">{fechaLarga(vida.proxima)}</span></> : <strong>{trabajador.activo ? '—' : 'pausado'}</strong>}</dd></div>
+          <div><dt>Estado</dt><dd><strong className={`panel-estado-texto estado-${estado}`}>{ETIQUETA_ESTADO[estado]}</strong><span className="tenue">{fraseEstado(estado, corridas, ahora)}</span></dd></div>
+        </dl>
+        <p className="panel-subtitulo">Entradas ({entradas.length})</p>
+        <ListaPuntas items={entradas} />
+        <p className="panel-subtitulo">Salidas ({salidas.length})</p>
+        <ListaPuntas items={salidas} />
+      </>}
+      {pestana === 'entradas' && <ListaPuntas items={entradas} conDescripcion />}
+      {pestana === 'salidas' && <ListaPuntas items={salidas} conDescripcion />}
+      {pestana === 'historial' && <>
+        <Franja bloques={bloques} abrirCorrida={abrirCorrida} />
+        <div className="consola-eje tenue"><span>-24h</span><span>{textoResumen(resumenFranja(bloques))}</span><span>now</span></div>
+        <div className="tail panel-historial">
+          {corridas.slice(0, 12).map(c => <LineaTail key={c.id} corrida={c} nombre={trabajador.nombre} ahora={ahora} abrir={() => abrirCorrida(c)} />)}
+        </div>
+        <button className="consola-boton" onClick={verHistorial}>[historial completo]</button>
+      </>}
+    </div>
+
+    <div className="panel-pie">
+      <button className="btn btn-primary" disabled={!!ocupado || !trabajador.activo} onClick={correrAhora}>{ocupado === 'correr' ? 'Disparando…' : 'Ejecutar ahora'}</button>
+      {aviso && <span className={aviso.error ? 'txt-error' : 'tenue'} role="status">{aviso.texto}</span>}
+    </div>
+    {editando && <EditarTrabajador trabajador={trabajador} cerrar={() => setEditando(false)} guardado={t => { setEditando(false); actualizado(t) }} />}
+  </div>
+}
+
+const TEXTO_CORRIDA = { ok: 'Ejecución completada', error: 'Falló', corriendo: 'En curso' }
+
+// Actividad reciente: las últimas corridas de todos, en una línea de tiempo horizontal que se actualiza en vivo.
+function ActividadReciente({ tail, trabajadores, ahora, abrirCorrida, verTodas, setVerTodas, cargando }) {
+  const porClave = Object.fromEntries(trabajadores.map(t => [t.clave, t]))
+  const nombre = clave => porClave[clave]?.nombre || clave
+  return <>
+    <div className="actividad-linea">
+      {tail.slice(0, 12).map(c => <button key={c.id} type="button" className={`actividad-tarjeta estado-${c.estado}`} style={{ '--id': colorIdentidad(porClave[c.trabajador]?.color) }} onClick={() => abrirCorrida(c)}>
+        <span className="actividad-hora">{horaAR(Date.parse(c.iniciado_at))}</span>
+        <span className="actividad-nombre"><i aria-hidden="true" />{nombre(c.trabajador)}</span>
+        <span className="actividad-estado">{TEXTO_CORRIDA[c.estado] || c.estado}</span>
+        <span className="actividad-cuando">{c.estado === 'corriendo' ? `lleva ${duracionLegible(ahora - Date.parse(c.iniciado_at))}` : haceCuanto(c.finalizado_at || c.iniciado_at, ahora)}</span>
+      </button>)}
+      {!cargando && tail.length === 0 && <p className="tenue">sin corridas todavía.</p>}
+    </div>
+    {verTodas && <div className="tail actividad-todas" aria-live="polite">
+      {tail.map(cr => <LineaTail key={cr.id} corrida={cr} nombre={nombre(cr.trabajador)} ahora={ahora} abrir={() => abrirCorrida(cr)} />)}
+    </div>}
+    <button className="consola-boton actividad-ver" onClick={() => setVerTodas(!verTodas)}>{verTodas ? '[ver menos]' : '[ver todas]'}</button>
+  </>
+}
+
 export default function Trabajadores() {
   const [trabajadores, setTrabajadores] = useState([])
   const [corridasPor, setCorridasPor] = useState({})
@@ -375,6 +502,10 @@ export default function Trabajadores() {
   const [abierta, setAbierta] = useState(null)
   const [salud, setSalud] = useState({ datos: null, ms: null, error: '' })
   const [tailAbierto, setTailAbierto] = useState(leerTailAbierto)
+  const [elegido, setElegido] = useState(null)
+  const [filtro, setFiltro] = useState('todos')
+  const [busqueda, setBusqueda] = useState('')
+  const bloqueSistema = useRef(null)
   const ahora = useReloj()
 
   const cargarSalud = useCallback(async () => {
@@ -415,26 +546,48 @@ export default function Trabajadores() {
   const detalle = trabajadores.find(t => t.clave === seleccionado)
   if (detalle) return <DetalleTrabajador trabajador={detalle} volver={() => setSeleccionado(null)} actualizado={actualizado} ahora={ahora} />
 
-  const nombres = Object.fromEntries(trabajadores.map(t => [t.clave, t.nombre]))
   const c = contadores24h(trabajadores, corridasPor, ahora)
   const pendientes = calcularAlertas({ trabajadores, corridasPor, ahora, salud: salud.datos })
   const recargar = () => { cargar(); cargarSalud() }
+  const estados = Object.fromEntries(trabajadores.map(t => [t.clave, estadoTrabajador(t, corridasPor[t.clave] || [], ahora)]))
+  const cuenta = contarFiltros(Object.values(estados))
+  const lectura = disposicion(trabajadores)
+  const filtrados = trabajadores.filter(t => pasaFiltro(estados[t.clave], filtro) && coincideBusqueda(t.clave, busqueda, lectura))
+  const elegidoT = trabajadores.find(t => t.clave === elegido)
+  const resumenFiltros = [FILTROS.find(f => f.id === filtro)?.etiqueta.toLowerCase(), busqueda.trim() && `que coincidan con "${busqueda.trim()}"`].filter(Boolean).join(' · ')
+
   return <div className="consola">
-    <CabeceraPantalla sobretitulo="Sistema" titulo="Trabajadores" subtitulo={<Reloj ahora={ahora} recargar={recargar} />} cargando={cargando}
+    <CabeceraPantalla sobretitulo="Sistema" titulo="Trabajadores" cargando={cargando}
+      subtitulo={<>Automatiza, conecta y da vida a tus ideas. · <Reloj ahora={ahora} recargar={recargar} /></>}
       cifras={[
-        { valor: c.trabajadores, etiqueta: 'trabajadores' },
-        { valor: c.ok, etiqueta: 'ok 24h' },
-        { valor: c.error, etiqueta: 'error', nivel: c.error ? 'error' : undefined },
-        { valor: c.huecos, etiqueta: 'huecos', nivel: c.huecos ? 'aviso' : undefined },
+        { valor: cuenta.todos, etiqueta: 'trabajadores' },
+        { valor: cuenta.activos, etiqueta: 'activos' },
+        { valor: cuenta.pausados, etiqueta: 'pausados' },
+        { valor: cuenta.errores, etiqueta: 'con errores', nivel: cuenta.errores ? 'error' : undefined },
       ]} />
 
     {error && <p className="txt-error">{error}</p>}
     {cargando && <p className="tenue">cargando…</p>}
+    <div ref={bloqueSistema}>
+      <Bloques>
+        <Bloque titulo="Sistema" ancho="completo" accion={<span className="bloque-nota">{elegidoT ? 'tocá el fondo para volver a ver todo' : 'tocá un trabajador para ver su detalle'} · {c.ok} corridas ok en 24 h{c.trabados > 0 && <span className="txt-corriendo"> · {c.trabados} trabado{c.trabados === 1 ? '' : 's'}</span>}</span>}>
+          {!cargando && !error && trabajadores.length === 0 && <p className="tenue">no hay trabajadores configurados.</p>}
+          {trabajadores.length > 0 && <div className={`sistema-cuerpo${elegidoT ? ' con-panel' : ''}`}>
+            <SistemaOrbital trabajadores={trabajadores} corridasPor={corridasPor} ahora={ahora} elegido={elegido} onElegir={setElegido} filtro={filtro} busqueda={busqueda} />
+            {elegidoT && <aside className="sistema-panel" aria-label={`Detalle de ${elegidoT.nombre}`}>
+              <PanelTrabajador key={elegidoT.clave} trabajador={elegidoT} corridas={corridasPor[elegidoT.clave] || []} ahora={ahora} actualizado={actualizado}
+                abrirCorrida={setAbierta} verHistorial={() => setSeleccionado(elegidoT.clave)} cerrar={() => setElegido(null)} />
+            </aside>}
+          </div>}
+        </Bloque>
+      </Bloques>
+    </div>
+
     <Bloques>
-      <Bloque titulo="Trabajadores" ancho="completo" accion={c.trabados > 0 && <span className="bloque-nota txt-corriendo">{c.trabados} trabado{c.trabados === 1 ? '' : 's'}</span>}>
-        {!cargando && !error && trabajadores.length === 0 && <p className="tenue">no hay trabajadores configurados.</p>}
+      <Bloque titulo="Trabajadores" ancho="completo" accion={filtrados.length < trabajadores.length && <span className="bloque-nota">{filtrados.length} de {trabajadores.length}</span>}>
+        {!cargando && filtrados.length === 0 && trabajadores.length > 0 && <p className="tenue">ningún trabajador coincide con el filtro.</p>}
         <div className="tablero-grilla">
-          {trabajadores.map(t => <FilaTrabajador key={t.id} tarjeta trabajador={t} corridas={corridasPor[t.clave] || []} ahora={ahora}
+          {filtrados.map(t => <FilaTrabajador key={t.id} tarjeta trabajador={t} corridas={corridasPor[t.clave] || []} ahora={ahora}
             actualizado={actualizado} abrirDetalle={() => setSeleccionado(t.clave)} abrirCorrida={setAbierta} />)}
         </div>
       </Bloque>
@@ -444,22 +597,20 @@ export default function Trabajadores() {
       <Bloque titulo="Salud del sistema">
         <Salud salud={salud} alertas={pendientes} />
       </Bloque>
-      {trabajadores.length > 0 && <Bloque titulo="Mapa de flujo" ancho="completo">
-        <MapaFlujo trabajadores={trabajadores} corridasPor={corridasPor} ahora={ahora} />
-      </Bloque>}
-      <Bloque titulo="Tail en vivo" ancho="completo">
-        <details className="tail-desplegable" open={tailAbierto} onToggle={e => { setTailAbierto(e.currentTarget.open); guardarTailAbierto(e.currentTarget.open) }}>
-          <summary className="consola-subtitulo">
-            {tail.length} corridas
-            {!tailAbierto && tail[0] && <span className="tail-ultima tenue"> · última {horaAR(Date.parse(tail[0].iniciado_at), true)} {nombres[tail[0].trabajador] || tail[0].trabajador} <span className={`txt-${tail[0].estado}`}>{ESTADO_TEXTO[tail[0].estado] || tail[0].estado}</span></span>}
-          </summary>
-          <div className="tail" aria-live="polite">
-            {tail.map(cr => <LineaTail key={cr.id} corrida={cr} nombre={nombres[cr.trabajador] || cr.trabajador} ahora={ahora} abrir={() => setAbierta(cr)} />)}
-            {!cargando && tail.length === 0 && <p className="tenue">sin corridas todavía.</p>}
-          </div>
-        </details>
+      <Bloque titulo="Actividad reciente" ancho="completo" accion={<span className="actividad-vivo">en tiempo real</span>}>
+        <ActividadReciente tail={tail} trabajadores={trabajadores} ahora={ahora} abrirCorrida={setAbierta} cargando={cargando}
+          verTodas={tailAbierto} setVerTodas={v => { setTailAbierto(v); guardarTailAbierto(v) }} />
       </Bloque>
     </Bloques>
+
+    <Pie titulo="Filtros" resumen={`mostrando ${resumenFiltros}`} boton="Filtrar">
+      <div className="filtros-trabajadores">
+        <div className="vista-toggle">
+          {FILTROS.map(f => <button key={f.id} className={filtro === f.id ? 'active' : ''} aria-pressed={filtro === f.id} onClick={() => setFiltro(f.id)}>{f.etiqueta} {cuenta[f.id]}</button>)}
+        </div>
+        <input type="search" aria-label="Buscar trabajador, fuente o destino" placeholder="Buscar trabajador, fuente o destino…" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+      </div>
+    </Pie>
     {abierta && <CorridaModal corrida={abierta} nombre={trabajadores.find(t => t.clave === abierta.trabajador)?.nombre || abierta.trabajador} ahora={ahora} cerrar={() => setAbierta(null)} />}
   </div>
 }

@@ -351,8 +351,9 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .pie-resumen { color: var(--gray-500); }
 .pie-detalle { margin-top: 14px; padding: 16px 18px; background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius); }
 
+.pantalla-bloques.bloques-principal { grid-template-columns: minmax(0, 2fr) minmax(290px, 1fr); }
 @media (max-width: 900px) {
-  .pantalla-bloques { grid-template-columns: minmax(0, 1fr); }
+  .pantalla-bloques, .pantalla-bloques.bloques-principal { grid-template-columns: minmax(0, 1fr); }
   .pantalla-cabecera { align-items: stretch; }
   .pantalla-cifras { width: 100%; grid-template-columns: repeat(var(--columnas), minmax(0, 1fr)); }
 }
