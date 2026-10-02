@@ -97,10 +97,27 @@ function ResumenTema({ tema, lista, referentes, ahora, marcar, abrir }) {
   </Bloque>
 }
 
-// Lista larga que se muestra de a tandas, para no armar un scroll enorme.
-function useTandas(total, tanda) {
-  const [cuantas, setCuantas] = useState(tanda)
-  return { cuantas, hayMas: total > cuantas, mas: () => setCuantas(c => c + tanda) }
+// Listas largas por páginas: la página no crece al ver más, se cambia de página. Al cambiar, si el principio del
+// bloque quedó arriba de la pantalla, se lo trae a la vista.
+function usePaginas(lista, porPagina) {
+  const [pedida, setPedida] = useState(0)
+  const total = Math.max(1, Math.ceil(lista.length / porPagina))
+  const pagina = Math.min(pedida, total - 1)
+  return { pagina, total, items: lista.slice(pagina * porPagina, (pagina + 1) * porPagina), ir: setPedida }
+}
+
+function Paginador({ p, ancla }) {
+  if (p.total < 2) return null
+  const ir = n => {
+    p.ir(n)
+    const nodo = ancla.current
+    if (nodo && nodo.getBoundingClientRect().top < 0) nodo.scrollIntoView({ block: 'start' })
+  }
+  return <nav className="paginador" aria-label="Páginas">
+    <button disabled={p.pagina === 0} onClick={() => ir(p.pagina - 1)}>← Anteriores</button>
+    <span>página {p.pagina + 1} de {p.total}</span>
+    <button disabled={p.pagina >= p.total - 1} onClick={() => ir(p.pagina + 1)}>Siguientes →</button>
+  </nav>
 }
 
 function Personas({ personas }) {
@@ -120,23 +137,27 @@ function Personas({ personas }) {
 
 // Solapa de un área: todas sus notas a la izquierda; lo que dicen sus referentes y quiénes son, a la derecha.
 function VistaTema({ tema, lista, referentes, personas, ahora, marcar }) {
-  const notas = useTandas(lista.length, 12)
-  const posts = useTandas(referentes.length, 8)
+  // La primera nota con foto encabeza la página 1 en grande; el resto va en filas, de a 10 por página.
   const primera = lista.find(n => n.imagen) ?? lista[0]
-  const resto = lista.filter(n => n !== primera).slice(0, notas.cuantas - 1)
+  const ordenadas = primera ? [primera, ...lista.filter(n => n !== primera)] : []
+  const notas = usePaginas(ordenadas, 10)
+  const posts = usePaginas(referentes, 6)
+  const anclaNotas = useRef(null)
+  const anclaPosts = useRef(null)
   return <Bloques disposicion="principal">
-    <Bloque titulo={`Noticias de ${tema.nombre}`} accion={<span className="bloque-nota">{lista.length} {lista.length === 1 ? 'nota' : 'notas'}</span>}>
+    <div ref={anclaNotas} className="nicho-ancla"><Bloque titulo={`Noticias de ${tema.nombre}`} accion={<span className="bloque-nota">{lista.length} {lista.length === 1 ? 'nota' : 'notas'}</span>}>
       {!primera && <p className="hint">Canillita no encontró notas de este tema con los filtros actuales.</p>}
-      {primera && <Grande n={primera} ahora={ahora} marcar={marcar} />}
-      {resto.map(n => <Fila key={n.id} n={n} ahora={ahora} marcar={marcar} />)}
-      {notas.hayMas && <button className="noticias-mas" onClick={notas.mas}>Ver más notas →</button>}
-    </Bloque>
+      {notas.items.map((n, i) => (notas.pagina === 0 && i === 0
+        ? <Grande key={n.id} n={n} ahora={ahora} marcar={marcar} />
+        : <Fila key={n.id} n={n} ahora={ahora} marcar={marcar} />))}
+      <Paginador p={notas} ancla={anclaNotas} />
+    </Bloque></div>
     <div className="nicho-columna">
-      <Bloque titulo="Qué dicen los referentes" accion={<span className="bloque-nota">{referentes.length} posts</span>}>
+      <div ref={anclaPosts} className="nicho-ancla"><Bloque titulo="Qué dicen los referentes" accion={<span className="bloque-nota">{referentes.length} posts</span>}>
         {!referentes.length && <p className="hint">Sin posts de referentes con los filtros actuales.</p>}
-        {referentes.slice(0, posts.cuantas).map(n => <PostReferente key={n.id} n={n} ahora={ahora} marcar={marcar} />)}
-        {posts.hayMas && <button className="noticias-mas" onClick={posts.mas}>Ver más posts →</button>}
-      </Bloque>
+        {posts.items.map(n => <PostReferente key={n.id} n={n} ahora={ahora} marcar={marcar} />)}
+        <Paginador p={posts} ancla={anclaPosts} />
+      </Bloque></div>
       <Bloque titulo={`Referentes de ${tema.nombre}`} accion={<span className="bloque-nota">{personas.length}</span>}>
         <Personas personas={personas} />
       </Bloque>
