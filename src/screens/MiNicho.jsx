@@ -47,45 +47,34 @@ function Enlace({ n, marcar, className, children }) {
   return <a className={className} href={n.url} target="_blank" rel="noreferrer" onClick={() => { if (!n.leida) marcar(n, { leida: true }) }}>{children}</a>
 }
 
-function Imagen({ src, className }) {
+// Miniatura de tamaño fijo (la foto se recorta para llenarla). Sin foto, o si no carga, queda el mismo hueco con el
+// ícono del canal: así todas las tarjetas quedan alineadas.
+function Imagen({ n }) {
   const [rota, setRota] = useState(false)
-  return <div className={`noticia-img ${className ?? ''}`}>
-    {src && !rota && <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setRota(true)} />}
+  return <div className="noticia-img" aria-hidden="true">
+    {n.imagen && !rota
+      ? <img src={n.imagen} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setRota(true)} />
+      : <span className="noticia-img-vacia">{(CANALES[n.canal] ?? CANALES.web).icono}</span>}
   </div>
 }
 
-function Destacada({ d, ahora, marcar }) {
-  const n = d.noticia
-  return <article className={`noticia-destacada${n.leida ? ' leida' : ''}`}>
-    <Enlace n={n} marcar={marcar} className="noticia-link">
-      <Imagen src={n.imagen} className="img-destacada" />
-      <span className="noticia-tema">{nombreTema(temaPrincipal(n))}</span>
-      <h3>{n.titulo}</h3>
-    </Enlace>
-    <Meta n={n} ahora={ahora} otros={d.otros} marcar={marcar} />
+// Tarjeta horizontal: miniatura a la izquierda, texto a la derecha. tamano: 'destacada' | 'grande' | 'fila'.
+function Tarjeta({ n, tamano, ahora, marcar, otros = 0 }) {
+  const Titulo = tamano === 'fila' ? 'h4' : 'h3'
+  return <article className={`noticia-tarjeta tarjeta-${tamano}${n.leida ? ' leida' : ''}`}>
+    <Enlace n={n} marcar={marcar} className="noticia-link noticia-tarjeta-img"><Imagen n={n} /></Enlace>
+    <div className="noticia-tarjeta-texto">
+      {tamano === 'destacada' && <span className="noticia-tema">{nombreTema(temaPrincipal(n))}</span>}
+      <Enlace n={n} marcar={marcar} className="noticia-link"><Titulo>{n.titulo}</Titulo></Enlace>
+      {tamano === 'grande' && n.resumen && <p className="noticia-resumen">{n.resumen}</p>}
+      <Meta n={n} ahora={ahora} otros={otros} marcar={marcar} />
+    </div>
   </article>
 }
 
-function Grande({ n, ahora, marcar }) {
-  return <article className={`noticia-grande${n.leida ? ' leida' : ''}`}>
-    <Enlace n={n} marcar={marcar} className="noticia-link">
-      <Imagen src={n.imagen} className="img-grande" />
-      <h3>{n.titulo}</h3>
-    </Enlace>
-    <Meta n={n} ahora={ahora} marcar={marcar} />
-    {n.resumen && <p className="noticia-resumen">{n.resumen}</p>}
-  </article>
-}
-
-function Fila({ n, ahora, marcar }) {
-  return <article className={`noticia-fila${n.leida ? ' leida' : ''}`}>
-    <Enlace n={n} marcar={marcar} className="noticia-link noticia-fila-link">
-      <Imagen src={n.imagen} className="img-fila" />
-      <h4>{n.titulo}</h4>
-    </Enlace>
-    <Meta n={n} ahora={ahora} marcar={marcar} />
-  </article>
-}
+const Destacada = ({ d, ahora, marcar }) => <Tarjeta n={d.noticia} tamano="destacada" otros={d.otros} ahora={ahora} marcar={marcar} />
+const Grande = ({ n, ahora, marcar }) => <Tarjeta n={n} tamano="grande" ahora={ahora} marcar={marcar} />
+const Fila = ({ n, ahora, marcar }) => <Tarjeta n={n} tamano="fila" ahora={ahora} marcar={marcar} />
 
 // Lo que publica un referente es un post corto: va en una fila de texto, sin foto grande.
 function PostReferente({ n, ahora, marcar }) {
