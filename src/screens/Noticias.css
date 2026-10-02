@@ -114,8 +114,10 @@
 
 /* Páginas en vez de "ver más": la altura del bloque no crece. */
 .nicho-ancla { min-width: 0; scroll-margin-top: 12px; }
-.paginador { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--gray-200); font-size: 12px; color: var(--gray-500); }
-.paginador span { font-family: var(--font-mono); font-size: 11px; }
-.paginador button { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
-.paginador button:hover:not(:disabled) { color: var(--accent-hover); }
+.paginador { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--gray-200); }
+.paginador button { min-width: 28px; height: 28px; padding: 0 6px; border: 1px solid transparent; border-radius: 5px; background: none; color: var(--gray-700); font: inherit; font-family: var(--font-mono); font-size: 12px; cursor: pointer; }
+.paginador button:hover:not(:disabled) { border-color: var(--gray-300); color: var(--gray-900); }
+.paginador button.activa { border-color: var(--accent); background: var(--accent-100); color: var(--accent); font-weight: 600; }
 .paginador button:disabled { color: var(--gray-300); cursor: default; }
+.paginador button.paginador-flecha { font-family: var(--font); }
+.paginador-hueco { min-width: 18px; text-align: center; color: var(--gray-500); font-size: 12px; }

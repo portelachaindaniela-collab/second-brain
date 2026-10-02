@@ -114,16 +114,27 @@ function Paginador({ p, ancla }) {
     if (nodo && nodo.getBoundingClientRect().top < 0) nodo.scrollIntoView({ block: 'start' })
   }
   return <nav className="paginador" aria-label="Páginas">
-    <button disabled={p.pagina === 0} onClick={() => ir(p.pagina - 1)}>← Anteriores</button>
-    <span>página {p.pagina + 1} de {p.total}</span>
-    <button disabled={p.pagina >= p.total - 1} onClick={() => ir(p.pagina + 1)}>Siguientes →</button>
+    <button className="paginador-flecha" disabled={p.pagina === 0} onClick={() => ir(p.pagina - 1)} aria-label="Página anterior">←</button>
+    {numerosDePagina(p.pagina, p.total).map((n, i) => (n === null
+      ? <span key={`h${i}`} className="paginador-hueco">…</span>
+      : <button key={n} className={n === p.pagina ? 'activa' : undefined} aria-current={n === p.pagina ? 'page' : undefined} onClick={() => ir(n)}>{n + 1}</button>))}
+    <button className="paginador-flecha" disabled={p.pagina >= p.total - 1} onClick={() => ir(p.pagina + 1)} aria-label="Página siguiente">→</button>
   </nav>
 }
 
-function Personas({ personas }) {
+// Hasta 7 páginas se muestran todas; con más, la primera, la última y las vecinas de la actual (null = "…").
+function numerosDePagina(actual, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i)
+  const cerca = [actual - 1, actual, actual + 1].filter(n => n > 0 && n < total - 1)
+  const lista = [0, ...cerca, total - 1]
+  return lista.flatMap((n, i) => (i && n - lista[i - 1] > 1 ? [null, n] : [n]))
+}
+
+function Personas({ personas, ancla }) {
+  const p = usePaginas(personas, 5)
   if (!personas.length) return <p className="hint">Todavía no hay referentes cargados para esta área.</p>
   return <div className="personas">
-    {personas.map(r => <div key={r.id} className={`persona${r.ultimo_error ? ' con-error' : ''}`} title={r.ultimo_error ?? ''}>
+    {p.items.map(r => <div key={r.id} className={`persona${r.ultimo_error ? ' con-error' : ''}`} title={r.ultimo_error ?? ''}>
       <span className="persona-ico">{r.medio.replace(/[^A-Za-zÀ-ÿ ]/g, '').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()}</span>
       <div className="persona-texto"><b>{r.medio}</b><small>{r.descripcion}</small></div>
       <span className="medio-canales">
@@ -132,6 +143,7 @@ function Personas({ personas }) {
         {r.bluesky && <a href={`https://bsky.app/profile/${r.bluesky}`} target="_blank" rel="noreferrer" title={`@${r.bluesky}`}>🦋</a>}
       </span>
     </div>)}
+    <Paginador p={p} ancla={ancla} />
   </div>
 }
 
@@ -144,6 +156,7 @@ function VistaTema({ tema, lista, referentes, personas, ahora, marcar }) {
   const posts = usePaginas(referentes, 6)
   const anclaNotas = useRef(null)
   const anclaPosts = useRef(null)
+  const anclaPersonas = useRef(null)
   return <Bloques disposicion="principal">
     <div ref={anclaNotas} className="nicho-ancla"><Bloque titulo={`Noticias de ${tema.nombre}`} accion={<span className="bloque-nota">{lista.length} {lista.length === 1 ? 'nota' : 'notas'}</span>}>
       {!primera && <p className="hint">Canillita no encontró notas de este tema con los filtros actuales.</p>}
@@ -158,9 +171,9 @@ function VistaTema({ tema, lista, referentes, personas, ahora, marcar }) {
         {posts.items.map(n => <PostReferente key={n.id} n={n} ahora={ahora} marcar={marcar} />)}
         <Paginador p={posts} ancla={anclaPosts} />
       </Bloque></div>
-      <Bloque titulo={`Referentes de ${tema.nombre}`} accion={<span className="bloque-nota">{personas.length}</span>}>
-        <Personas personas={personas} />
-      </Bloque>
+      <div ref={anclaPersonas} className="nicho-ancla"><Bloque titulo={`Referentes de ${tema.nombre}`} accion={<span className="bloque-nota">{personas.length}</span>}>
+        <Personas personas={personas} ancla={anclaPersonas} />
+      </Bloque></div>
     </div>
   </Bloques>
 }
