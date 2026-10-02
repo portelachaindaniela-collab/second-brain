@@ -12,7 +12,7 @@ const EXTERIOR = { rx: 348, ry: 232 }
 // Vertical: 340 de ancho (lo que entra en un celular sin achicar la letra), órbitas más altas que anchas y tarjetas
 // en dos columnas. El alto y el centro dependen de cuántas fuentes y destinos hay: los calcula disposicion().
 export const LIENZO_VERTICAL = { vertical: true, ancho: 340, cx: 170, nucleo: 54, nodo: 18, tarjeta: { ancho: 162, alto: 38 } }
-const VERTICAL = { base: 84, paso: 18, alargado: 1.3, margen: 6, hueco: 8, aireOrbita: 70 }
+const VERTICAL = { base: 92, paso: 16, alargado: 1, margen: 6, hueco: 8, aireOrbita: 70 }
 // Vuelta completa en 20 minutos: se nota que se mueve, sin distraer.
 export const GRADOS_POR_SEGUNDO = 0.3
 
@@ -66,9 +66,12 @@ export function disposicion(trabajadores, { rotacion = 0, elegido = null, vertic
     const cy = margen + alturaGrilla(fuentes.length, LIENZO_VERTICAL) + aireOrbita + ryMax
     L = { ...LIENZO_VERTICAL, cy, alto: cy + ryMax + aireOrbita + alturaGrilla(destinos.length, LIENZO_VERTICAL) + margen }
   }
+  // Con un elegido, gira todo el sistema hasta dejarlo arriba: así no se le encima el que ocupaba ese lugar.
+  const iElegido = trabajadores.findIndex(t => t.clave === elegido)
+  const giro = iElegido >= 0 ? -(360 / n) * iElegido : rotacion
   const nodos = trabajadores.map((t, i) => {
     const orbita = orbitaDe(i)
-    const angulo = t.clave === elegido ? -90 : -90 + (360 / n) * i + rotacion
+    const angulo = -90 + (360 / n) * i + giro
     return { id: `t:${t.clave}`, tipo: 'trabajador', clave: t.clave, etiqueta: t.nombre, color: t.color, orbita, angulo, ...punto(orbita.rx, orbita.ry, angulo, L) }
   })
   const enlaces = recorridos.flatMap(({ clave, fuentes: fs, destinos: ds }) => [

@@ -13,7 +13,7 @@ export const PARAMETROS_DEFECTO = {
   palabras_clave: [
     'tecnología', 'tecnologías', 'tech', 'ia', 'ai', 'inteligencia artificial', 'machine learning', 'agentes',
     'datos', 'data', 'analytics', 'software', 'programación', 'developers', 'cloud', 'open source',
-    'ciberseguridad', 'hacking', 'ekoparty', 'marketing', 'digital', 'ecommerce', 'ux', 'startup', 'startups',
+    'ciberseguridad', 'hacking', 'ekoparty', 'marketing', 'transformación digital', 'ecommerce', 'ux', 'startup', 'startups',
     'innovación', 'robótica', 'iot', 'lorawan',
   ],
   incluir_online: false,

@@ -59,12 +59,15 @@ export const FUENTES = {
   google: 'API de Google',
   sitios: 'Sitios propios',
   eventbrite: 'Eventbrite',
+  medios: 'Webs de medios',
+  x: 'X (FxTwitter)',
 }
 export const RECORRIDOS = {
   scraper_empleo: { fuentes: ['github_pages'], destinos: [] },
   google_sync: { fuentes: ['google'], destinos: ['calendar_events', 'emails'] },
   maria: { fuentes: ['sitios', 'github_pages'], destinos: ['process_reports'] },
   buscador_eventos: { fuentes: ['eventbrite'], destinos: ['eventos'] },
+  canillita: { fuentes: ['medios', 'x'], destinos: ['noticias'] },
 }
 export const REGISTRO = 'trabajos_corridas'
 

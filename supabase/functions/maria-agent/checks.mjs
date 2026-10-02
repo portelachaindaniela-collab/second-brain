@@ -33,13 +33,14 @@ export function actionsCheck(data) {
   if(!run)return {nivel:'aviso',detalle:'Sin corridas registradas.'};
   return {nivel:run.status!=='completed'?'aviso':run.conclusion==='success'?'ok':'error',detalle:run.status!=='completed'?`Corrida ${run.status}.`:`Última corrida: ${run.conclusion}.`};
 }
-export async function monitor(fetcher=fetch) {
+// `lista` sale de trabajadores.parametros.sitios cuando la corre el trabajador; `sites` queda como valor por defecto.
+export async function monitor(fetcher=fetch, lista=sites) {
   // No se siguen redirecciones: evita que un destino remoto redirija a una red privada.
   async function get(url) {
     const response=await fetcher(url,{redirect:'manual',signal:AbortSignal.timeout(12000),headers:{'User-Agent':'MARIA-monitor/2.0','Accept':'application/json,text/html'}});
     const text=await readLimited(response);return {response,text};
   }
-  const results=await Promise.all(sites.map(async site=>{
+  const results=await Promise.all(lista.map(async site=>{
     const checks=[];const start=Date.now();
     try {const {response,text}=await get(site.url);const ms=Date.now()-start;
       const marker=['page not found','site not found','404 not found','application error','internal server error'].find(x=>text.toLowerCase().includes(x));

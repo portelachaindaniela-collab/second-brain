@@ -95,7 +95,31 @@ function scraper(p) {
   }
 }
 
-const FORMAS = { buscador_eventos: buscador, google_sync: google, maria, scraper_empleo: scraper }
+const TEMAS_NOTICIAS = { ia: 'IA', politica_ia: 'política de IA', futbol_femenino: 'fútbol femenino', datos: 'datos', ciberseguridad: 'ciberseguridad', tecnologia: 'tecnología', marketing: 'marketing', comunicacion: 'comunicación' }
+
+function canillita(p) {
+  const temas = Object.entries(p.por_tema ?? {}).sort(([, a], [, b]) => b - a)
+  const errores = p.errores ?? []
+  return {
+    resumen: `Leyó ${n(p.medios_leidos)} de ${plural(p.medios_totales, 'medio', 'medios')}: ${plural(p.notas_de_tema, 'nota', 'notas')} de tus temas, `
+      + (Number(p.nuevas) ? `${n(p.nuevas)} nuevas.` : 'ninguna nueva.')
+      + (errores.length ? ` ${plural(errores.length, 'medio falló', 'medios fallaron')}.` : ''),
+    secciones: [
+      { titulo: 'recorrido', filas: [
+        { etiqueta: 'medios leídos en esta tanda', valor: n(p.medios_leidos) },
+        { etiqueta: 'notas de tus temas', valor: n(p.notas_de_tema) },
+        { etiqueta: 'ya estaban en Noticias', valor: n(p.ya_estaban), tenue: true },
+        { etiqueta: 'fotos buscadas en la página', valor: n(p.fotos_buscadas), tenue: true },
+        { etiqueta: 'borradas por viejas', valor: n(p.borradas_por_viejas), tenue: true },
+        { etiqueta: 'nuevas', valor: n(p.nuevas), fuerte: true },
+      ] },
+      ...(temas.length ? [{ titulo: 'nuevas por tema', filas: temas.map(([k, v]) => ({ etiqueta: TEMAS_NOTICIAS[k] ?? legible(k), valor: n(v) })) }] : []),
+      ...(errores.length ? [{ titulo: 'medios que fallaron', items: errores.map(texto => ({ texto, nivel: 'aviso' })) }] : []),
+    ],
+  }
+}
+
+const FORMAS = { buscador_eventos: buscador, canillita, google_sync: google, maria, scraper_empleo: scraper }
 
 const legible = k => String(k).replace(/_/g, ' ')
 

@@ -83,7 +83,8 @@ button.franja-bloque:hover, button.franja-bloque:focus-visible { outline: 1px so
 
 /* Carita de robot. --id es el color de identidad del trabajador (antena, borde, cuello y base) y nunca
    cambia con el estado; el estado se lee solo en la cara. */
-.cara { --id: var(--gray-500); display: block; overflow: visible; }
+/* La cara mantiene su proporción en cualquier ancho: solo se fija el ancho y el alto sale de ahí. */
+.cara { --id: var(--gray-500); display: block; overflow: visible; flex-shrink: 0; align-self: start; width: 48px; height: auto; aspect-ratio: 48 / 60; }
 .cara-cabeza { fill: var(--surface-inset); stroke: var(--id); stroke-width: 2; }
 .cara-trazo { fill: none; stroke: var(--gray-700); stroke-width: 2; stroke-linecap: round; }
 .cara-relleno { fill: var(--gray-900); }
@@ -105,7 +106,7 @@ button.franja-bloque:hover, button.franja-bloque:focus-visible { outline: 1px so
 
 @media (max-width: 560px) {
   .consola-fila { grid-template-columns: 36px minmax(0, 1fr); gap: 10px; }
-  .consola-fila .cara { width: 36px; height: 45px; }
+  .consola-fila .cara { width: 36px; }
   .consola-dia { grid-template-columns: 3.2em minmax(0, 1fr); }
   .consola-dia-resumen { display: none; }
 }
@@ -266,12 +267,20 @@ button.franja-bloque:hover, button.franja-bloque:focus-visible { outline: 1px so
 /* Celular: nada se desliza de costado ni queda cortado contra el borde. La actividad reciente pasa a dos columnas con
    las últimas seis (el resto, en "ver todas") y cada línea de la lista completa baja de renglón si no entra. */
 @media (max-width: 720px) {
-  .actividad-linea { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; padding-bottom: 0; }
-  .actividad-tarjeta { min-width: 0; }
+  /* Una fila por corrida: hora, quién y cuándo arriba; el resultado abajo. Nada se estira a lo alto. */
+  .actividad-linea { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; overflow: visible; padding-bottom: 0; }
+  .actividad-tarjeta { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 10px; row-gap: 1px; align-items: baseline; min-width: 0;
+    padding: 8px 12px; border-top-width: 1px; border-left: 3px solid var(--id); border-top-color: var(--gray-200); }
+  .actividad-tarjeta:hover, .actividad-tarjeta:focus-visible { border-top-color: var(--gray-500); border-left-color: var(--id); }
+  .actividad-hora { grid-column: 1; grid-row: 1; }
+  .actividad-nombre { grid-column: 2; grid-row: 1; }
+  .actividad-nombre i { display: none; }
+  .actividad-cuando { grid-column: 3; grid-row: 1; white-space: nowrap; }
+  .actividad-estado { grid-column: 2 / 4; grid-row: 2; }
   .actividad-tarjeta:nth-child(n + 7) { display: none; }
-  .actividad-cuando { overflow-wrap: anywhere; }
   .tail-linea { flex-wrap: wrap; gap: 2px 10px; padding: 6px 0; white-space: normal; }
   .tail-detalle { flex-basis: 100%; overflow-wrap: anywhere; }
+  .tail-nombre { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
   .actividad-nombre { white-space: normal; overflow-wrap: anywhere; }
   /* Tarjetas de robots: el minigráfico va en su propio renglón y entero; si igual no entra, se recorta lo más viejo. */
   .consola-linea { flex-wrap: wrap; row-gap: 3px; }

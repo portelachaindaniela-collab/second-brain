@@ -65,7 +65,7 @@ function estadoCara(trabajador, ultima) {
 
 // El color de identidad (antena, borde y base) dice quién es; la cara dice cómo está. Nunca al revés.
 function Cara({ estado, color, nombre }) {
-  return <svg className={`cara cara-${estado}`} style={{ '--id': colorIdentidad(color) }} viewBox="0 0 48 60" width="48" height="60"
+  return <svg className={`cara cara-${estado}`} style={{ '--id': colorIdentidad(color) }} viewBox="0 0 48 60" width="48" height="60" preserveAspectRatio="xMidYMid meet"
     role="img" aria-label={`Robot${nombre ? ` de ${nombre}` : ''}: ${estado}`}>
     <line x1="24" y1="4" x2="24" y2="13" className="cara-trazo" />
     <circle cx="24" cy="4" r="3.2" className="cara-antena" />

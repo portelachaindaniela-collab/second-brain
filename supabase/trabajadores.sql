@@ -176,3 +176,24 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke execute on function public.salud_sistema() from public, anon;
 grant execute on function public.salud_sistema() to authenticated;
+
+-- ---------- María solo consolida (2026-10-01, cargado por SQL, sin migración) ----------
+-- Lo que antes hacía María adentro de agentes-orquestador pasa a dos trabajadores propios. María lee sus corridas
+-- (y las de todos) y escribe lo consolidado en process_reports. Los jobs de cron los crea el trigger de alta.
+insert into public.trabajadores (clave, funcion, nombre, descripcion, tipo, activo, frecuencia, minutos_trabado, color, parametros) values
+('monitor_sitios', 'trabajador-sitios', 'Monitor de sitios', 'Revisa que tus sitios respondan, y la última corrida del scraper y de su GitHub Actions. Lo interpreta María.', 'monitor', true, '27 * * * *', 5, 'cian',
+ '{"sitios": [
+   {"nombre": "Radar Laboral (scraper de empleos)", "url": "https://portelachaindaniela-collab.github.io/scraper-busquedas-laborales/", "extras": true},
+   {"nombre": "ODBA - Arma mi dia", "url": "https://odba.netlify.app"},
+   {"nombre": "Portfolio Daniela", "url": "https://danielaportelachain.vercel.app"},
+   {"nombre": "Point Data Global", "url": "https://pointdataglobal.netlify.app"},
+   {"nombre": "Primera AFA Femenina", "url": "https://primeraafem.netlify.app"},
+   {"nombre": "Creando Sentido", "url": "https://creandosentido.netlify.app"}]}'::jsonb),
+('tareas_estancadas', 'trabajador-tareas', 'Tareas estancadas', 'Lista las tareas sin tocar hace más de unos días. Cuántas son demasiadas lo decide María.', 'monitor', true, '17 * * * *', 5, 'lima',
+ '{"dias_sin_tocar": 3}'::jsonb);
+
+-- El buscador de eventos dejaba pasar vouchers de spa por la palabra "digital".
+update public.trabajadores
+set parametros = jsonb_set(parametros, '{palabras_clave}',
+  (select jsonb_agg(case when p = 'digital' then 'transformación digital' else p end) from jsonb_array_elements_text(parametros->'palabras_clave') p))
+where clave = 'buscador_eventos' and parametros->'palabras_clave' ? 'digital';
