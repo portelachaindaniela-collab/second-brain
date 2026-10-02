@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
 import {
@@ -10,8 +10,6 @@ import './Noticias.css'
 
 const FILTROS_VACIOS = { pais: '', idioma: '', web: true, x: true, bluesky: true, fuente: '', soloSinLeer: false, guardadas: false, texto: '' }
 const CANALES = { web: { icono: '◎', titulo: 'Nota en la web' }, x: { icono: '𝕏', titulo: 'Post en X' }, bluesky: { icono: '🦋', titulo: 'Post en Bluesky' } }
-const POR_BLOQUE = 4
-const REFERENTES_POR_BLOQUE = 3
 
 function useReloj() {
   const [ahora, setAhora] = useState(() => Date.now())
@@ -84,31 +82,66 @@ function PostReferente({ n, ahora, marcar }) {
   </article>
 }
 
-function BloqueTema({ tema, lista, referentes, ahora, marcar }) {
-  const [todas, setTodas] = useState(false)
-  const [todosRef, setTodosRef] = useState(false)
+// En Inicio, cada área es un resumen corto que lleva a su solapa.
+function ResumenTema({ tema, lista, referentes, ahora, marcar, abrir }) {
   const primera = lista.find(n => n.imagen) ?? lista[0]
-  const resto = lista.filter(n => n !== primera)
-  const visibles = todas ? resto : resto.slice(0, POR_BLOQUE - 1)
-  const refVisibles = todosRef ? referentes : referentes.slice(0, REFERENTES_POR_BLOQUE)
+  const resto = lista.filter(n => n !== primera).slice(0, 2)
   const nota = lista.length + referentes.length
     ? `${lista.length} ${lista.length === 1 ? 'nota' : 'notas'} · ${referentes.length} de referentes`
     : 'sin novedades'
   return <Bloque titulo={tema.nombre} accion={<span className="bloque-nota">{nota}</span>}>
-    {!lista.length && !referentes.length && <p className="hint">Canillita no encontró nada de este tema con los filtros actuales.</p>}
+    {!primera && <p className="hint">Canillita no encontró notas de este tema con los filtros actuales.</p>}
     {primera && <Grande n={primera} ahora={ahora} marcar={marcar} />}
-    {visibles.map(n => <Fila key={n.id} n={n} ahora={ahora} marcar={marcar} />)}
-    {resto.length > POR_BLOQUE - 1 && <button className="noticias-mas" onClick={() => setTodas(x => !x)}>
-      {todas ? 'Ver menos' : `Ver las ${lista.length} notas →`}
-    </button>}
-    {referentes.length > 0 && <div className="referentes-tema">
-      <h3 className="referentes-titulo">Qué dicen los referentes</h3>
-      {refVisibles.map(n => <PostReferente key={n.id} n={n} ahora={ahora} marcar={marcar} />)}
-      {referentes.length > REFERENTES_POR_BLOQUE && <button className="noticias-mas" onClick={() => setTodosRef(x => !x)}>
-        {todosRef ? 'Ver menos' : `Ver los ${referentes.length} posts →`}
-      </button>}
-    </div>}
+    {resto.map(n => <Fila key={n.id} n={n} ahora={ahora} marcar={marcar} />)}
+    <button className="noticias-mas" onClick={abrir}>Ver todo {tema.nombre} →</button>
   </Bloque>
+}
+
+// Lista larga que se muestra de a tandas, para no armar un scroll enorme.
+function useTandas(total, tanda) {
+  const [cuantas, setCuantas] = useState(tanda)
+  return { cuantas, hayMas: total > cuantas, mas: () => setCuantas(c => c + tanda) }
+}
+
+function Personas({ personas }) {
+  if (!personas.length) return <p className="hint">Todavía no hay referentes cargados para esta área.</p>
+  return <div className="personas">
+    {personas.map(r => <div key={r.id} className={`persona${r.ultimo_error ? ' con-error' : ''}`} title={r.ultimo_error ?? ''}>
+      <span className="persona-ico">{r.medio.replace(/[^A-Za-zÀ-ÿ ]/g, '').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()}</span>
+      <div className="persona-texto"><b>{r.medio}</b><small>{r.descripcion}</small></div>
+      <span className="medio-canales">
+        {r.rss && <a href={r.sitio} target="_blank" rel="noreferrer" title="blog o newsletter">◎</a>}
+        {r.x && <a href={`https://x.com/${r.x}`} target="_blank" rel="noreferrer" title={`@${r.x}`}>𝕏</a>}
+        {r.bluesky && <a href={`https://bsky.app/profile/${r.bluesky}`} target="_blank" rel="noreferrer" title={`@${r.bluesky}`}>🦋</a>}
+      </span>
+    </div>)}
+  </div>
+}
+
+// Solapa de un área: todas sus notas a la izquierda; lo que dicen sus referentes y quiénes son, a la derecha.
+function VistaTema({ tema, lista, referentes, personas, ahora, marcar }) {
+  const notas = useTandas(lista.length, 12)
+  const posts = useTandas(referentes.length, 8)
+  const primera = lista.find(n => n.imagen) ?? lista[0]
+  const resto = lista.filter(n => n !== primera).slice(0, notas.cuantas - 1)
+  return <Bloques disposicion="principal">
+    <Bloque titulo={`Noticias de ${tema.nombre}`} accion={<span className="bloque-nota">{lista.length} {lista.length === 1 ? 'nota' : 'notas'}</span>}>
+      {!primera && <p className="hint">Canillita no encontró notas de este tema con los filtros actuales.</p>}
+      {primera && <Grande n={primera} ahora={ahora} marcar={marcar} />}
+      {resto.map(n => <Fila key={n.id} n={n} ahora={ahora} marcar={marcar} />)}
+      {notas.hayMas && <button className="noticias-mas" onClick={notas.mas}>Ver más notas →</button>}
+    </Bloque>
+    <div className="nicho-columna">
+      <Bloque titulo="Qué dicen los referentes" accion={<span className="bloque-nota">{referentes.length} posts</span>}>
+        {!referentes.length && <p className="hint">Sin posts de referentes con los filtros actuales.</p>}
+        {referentes.slice(0, posts.cuantas).map(n => <PostReferente key={n.id} n={n} ahora={ahora} marcar={marcar} />)}
+        {posts.hayMas && <button className="noticias-mas" onClick={posts.mas}>Ver más posts →</button>}
+      </Bloque>
+      <Bloque titulo={`Referentes de ${tema.nombre}`} accion={<span className="bloque-nota">{personas.length}</span>}>
+        <Personas personas={personas} />
+      </Bloque>
+    </div>
+  </Bloques>
 }
 
 function Newsletters({ items, medios, ahora }) {
@@ -154,27 +187,6 @@ function ListaMedios({ medios, ahora }) {
   </div>
 }
 
-function ListaReferentes({ referentes, ahora }) {
-  return <div className="medios-lista">
-    {TEMAS.map(t => {
-      const lista = referentes.filter(r => r.temas?.includes(t.clave))
-      if (!lista.length) return null
-      return <div key={t.clave} className="medios-pais">
-        <h4>{t.nombre}</h4>
-        {lista.map(r => <div key={r.id} className={`medio-fila referente-fila${r.ultimo_error ? ' con-error' : ''}`} title={r.ultimo_error ?? r.descripcion ?? ''}>
-          <span><b>{r.medio}</b><small>{r.descripcion}</small></span>
-          <span className="medio-canales">
-            {r.rss && <a href={r.sitio} target="_blank" rel="noreferrer" title="blog o newsletter">◎</a>}
-            {r.x && <a href={`https://x.com/${r.x}`} target="_blank" rel="noreferrer" title={`@${r.x}`}>𝕏</a>}
-            {r.bluesky && <a href={`https://bsky.app/profile/${r.bluesky}`} target="_blank" rel="noreferrer" title={`@${r.bluesky}`}>🦋</a>}
-          </span>
-          <span className="hint">{r.ultimo_error ? 'falló la última lectura' : r.ultima_lectura_at ? haceCuanto(r.ultima_lectura_at, ahora) : 'sin leer todavía'}</span>
-        </div>)}
-      </div>
-    })}
-  </div>
-}
-
 // Mi nicho: por ahora, las noticias y los referentes de los temas de Daniela; más adelante, también métricas.
 export default function MiNicho() {
   const ahora = useReloj()
@@ -187,6 +199,8 @@ export default function MiNicho() {
   const [f, setF] = useState(FILTROS_VACIOS)
   const [ocupado, setOcupado] = useState(false)
   const [nota, setNota] = useState('')
+  const [seccion, setSeccion] = useState('inicio')
+  const solapas = useRef(null)
 
   const cargar = useCallback(async () => {
     const desde = new Date(Date.now() - 15 * 86_400_000).toISOString()
@@ -218,6 +232,11 @@ export default function MiNicho() {
       .subscribe()
     return () => { supabase.removeChannel(canal) }
   }, [cargar])
+
+  function abrirSeccion(clave) {
+    setSeccion(clave)
+    solapas.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }
 
   const marcar = useCallback(async (n, cambio) => {
     setNoticias(lista => lista.map(x => (x.id === n.id ? { ...x, ...cambio } : x)))
@@ -274,13 +293,25 @@ export default function MiNicho() {
     {error && <p className="noticias-error" role="alert">No se pudieron cargar las noticias: {error}</p>}
     {!cargando && !noticias.length && !error && <p className="hint">Canillita todavía no trajo noticias. Corre cada hora; podés pedirle que lea ahora desde el pie.</p>}
 
-    {noticias.length > 0 && <Bloques>
-      {top.length > 0 && <Bloque titulo="Destacadas" ancho="completo" accion={<span className="bloque-nota">las que más medios cubrieron en el día</span>}>
-        <div className="noticias-destacadas">{top.map(d => <Destacada key={d.noticia.id} d={d} ahora={ahora} marcar={marcar} />)}</div>
-      </Bloque>}
-      {TEMAS.map(t => <BloqueTema key={t.clave} tema={t} lista={temas[t.clave]?.notas ?? []} referentes={temas[t.clave]?.referentes ?? []} ahora={ahora} marcar={marcar} />)}
-      <Newsletters items={newsletters} medios={soloMedios} ahora={ahora} />
-    </Bloques>}
+    {noticias.length > 0 && <>
+      <nav className="nicho-solapas" role="tablist" aria-label="Áreas" ref={solapas}>
+        {[{ clave: 'inicio', nombre: 'Inicio' }, ...TEMAS].map(t => {
+          const cuantas = t.clave === 'inicio' ? null : (temas[t.clave]?.notas.length ?? 0) + (temas[t.clave]?.referentes.length ?? 0)
+          return <button key={t.clave} role="tab" aria-selected={seccion === t.clave} className={seccion === t.clave ? 'activa' : undefined} onClick={() => abrirSeccion(t.clave)}>
+            {t.nombre}{cuantas != null && <span className="solapa-cuenta">{cuantas}</span>}
+          </button>
+        })}
+      </nav>
+      {seccion === 'inicio' ? <Bloques>
+        {top.length > 0 && <Bloque titulo="Destacadas" ancho="completo" accion={<span className="bloque-nota">las que más medios cubrieron en el día</span>}>
+          <div className="noticias-destacadas">{top.map(d => <Destacada key={d.noticia.id} d={d} ahora={ahora} marcar={marcar} />)}</div>
+        </Bloque>}
+        {TEMAS.map(t => <ResumenTema key={t.clave} tema={t} lista={temas[t.clave]?.notas ?? []} referentes={temas[t.clave]?.referentes ?? []}
+          ahora={ahora} marcar={marcar} abrir={() => abrirSeccion(t.clave)} />)}
+        <Newsletters items={newsletters} medios={soloMedios} ahora={ahora} />
+      </Bloques> : <VistaTema key={seccion} tema={TEMAS.find(t => t.clave === seccion)} lista={temas[seccion]?.notas ?? []}
+        referentes={temas[seccion]?.referentes ?? []} personas={referentes.filter(r => r.temas?.includes(seccion))} ahora={ahora} marcar={marcar} />}
+    </>}
 
     <Pie titulo="Filtros" resumen={resumenFiltros} boton="Filtrar">
       <div className="noticias-filtros">
@@ -310,9 +341,6 @@ export default function MiNicho() {
       onBoton={actualizar} ocupado={ocupado} nota={nota} />
     <Pie titulo="Fuentes" resumen={`${soloMedios.length} medios de ${paisesMedios} países · ${enX} en X · ${conNewsletter} con newsletter`} boton="Ver medios">
       <ListaMedios medios={soloMedios} ahora={ahora} />
-    </Pie>
-    <Pie titulo="Referentes" resumen={`${referentes.length} personas y cuentas que marcan agenda en tus temas`} boton="Ver referentes">
-      <ListaReferentes referentes={referentes} ahora={ahora} />
     </Pie>
   </div>
 }
