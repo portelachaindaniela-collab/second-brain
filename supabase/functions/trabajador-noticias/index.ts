@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { identificarCorrida, abrirCorrida, cerrarCorrida, HEADER_SECRETO } from "../_shared/trabajador.mjs";
 import {
-  TRABAJADOR, leerParametros, leerFeed, leerPostsX, leerPostsBluesky, filasDeItems, mediosATocar, ogImage, codificacionDe,
+  TRABAJADOR, leerParametros, leerFeed, leerPostsX, leerPostsBluesky, leerWordPress, leerSitemapNoticias, leerEnlaces, metaDePagina,
+  filasDeItems, mediosATocar, codificacionDe,
 } from "./logic.mjs";
 
 const cors = {
@@ -34,9 +35,19 @@ const motivo = (e: unknown) => (e instanceof Error ? (e.name === "TimeoutError" 
 
 const esperar = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+// Cómo se lee la web de cada medio (noticias_medios.formato). Sumar un formato = sumar una entrada acá.
+const LECTORES: Record<string, (texto: string, medio: any) => any[]> = {
+  rss: (t, m) => leerFeed(t, m.sitio ?? m.rss),
+  wordpress: (t, m) => leerWordPress(JSON.parse(t), m.filtro),
+  sitemap: (t, m) => leerSitemapNoticias(t, m.filtro),
+  enlaces: (t, m) => leerEnlaces(t, m.rss, m.filtro),
+};
+
 async function leerWeb(medio: any, p: ReturnType<typeof leerParametros>) {
   try {
-    return { filas: filasDeItems(leerFeed(await traerTexto(medio.rss), medio.sitio ?? medio.rss), medio, "web", p), error: null };
+    const lector = LECTORES[medio.formato ?? "rss"];
+    if (!lector) throw new Error(`formato "${medio.formato}" desconocido`);
+    return { filas: filasDeItems(lector(await traerTexto(medio.rss), medio), medio, "web", p), error: null };
   } catch (e) { return { filas: [], error: `web: ${motivo(e)}` }; }
 }
 
@@ -106,13 +117,19 @@ async function correr(admin: any, ownerId: string, parametros: unknown) {
   }
   const nuevas = unicas.filter(f => !ya.has(f.url));
 
-  // A las notas de la web que llegaron sin foto se les busca la de la página (og:image), con tope por corrida.
-  const sinFoto = nuevas.filter(f => !f.imagen && f.canal === "web").slice(0, MAX_FOTOS_POR_CORRIDA);
-  await enTandas(sinFoto, EN_PARALELO, async f => { f.imagen = ogImage(await traerTexto(f.url, 8000), f.url); });
+  // Las notas de la web sin foto, o que vienen de un link suelto (completar), se completan con su propia página:
+  // título, foto y fecha. Con tope por corrida; lo que quede afuera se guarda como llegó.
+  const aCompletar = nuevas.filter(f => f.canal === "web" && (f.completar || !f.imagen)).slice(0, MAX_FOTOS_POR_CORRIDA);
+  await enTandas(aCompletar, EN_PARALELO, async f => {
+    const meta = metaDePagina(await traerTexto(f.url, 8000), f.url);
+    f.imagen ??= meta.imagen;
+    if (f.completar && meta.titulo) f.titulo = meta.titulo;
+    if (f.completar && meta.fecha) f.publicada_at = meta.fecha;
+  });
 
   if (nuevas.length) {
     const { error: errorAlta } = await admin.from("noticias")
-      .upsert(nuevas.map(f => ({ ...f, owner_id: ownerId })), { onConflict: "owner_id,url", ignoreDuplicates: true });
+      .upsert(nuevas.map(({ completar: _, ...f }) => ({ ...f, owner_id: ownerId })), { onConflict: "owner_id,url", ignoreDuplicates: true });
     if (errorAlta) throw new Error(`No se pudieron guardar las noticias: ${errorAlta.message}`);
   }
 
@@ -136,7 +153,7 @@ async function correr(admin: any, ownerId: string, parametros: unknown) {
       ya_estaban: unicas.length - nuevas.length,
       nuevas: nuevas.length,
       por_tema: porTema,
-      fotos_buscadas: sinFoto.length,
+      paginas_completadas: aCompletar.length,
       borradas_por_viejas: borradas ?? 0,
       ...(conError.length ? { errores: conError.map(l => `${l.medio.medio} (${l.medio.pais}) · ${l.errores.join(" · ")}`) } : {}),
     },

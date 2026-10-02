@@ -87,3 +87,12 @@ alter table public.noticias_medios
 alter table public.noticias drop constraint noticias_canal_check;
 alter table public.noticias add constraint noticias_canal_check check (canal in ('web', 'x', 'bluesky'));
 alter table public.noticias add column de_referente boolean not null default false;
+
+-- ---------- Sitios sin feed (migración noticias_futbol_femenino_argentina) ----------
+-- formato dice cómo se lee la web del medio: 'rss' (RSS/Atom), 'wordpress' (API pública /wp-json/wp/v2/posts),
+-- 'sitemap' (sitemap de noticias de Google) o 'enlaces' (links de una página; cada nota nueva se completa con su
+-- propia página). filtro: expresión regular que tiene que cumplir el link de la nota.
+alter table public.noticias_medios
+  add column formato text not null default 'rss' check (formato in ('rss', 'wordpress', 'sitemap', 'enlaces')),
+  add column filtro text;
+-- Fútbol femenino argentino (El Femenino, TyC Sports, FutFemGol, Femeninoinfo, Romina Sacher): ver noticias-futbol-femenino-ar.sql.

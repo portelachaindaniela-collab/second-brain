@@ -219,6 +219,56 @@ export function leerFeed(xml, base) {
   }).filter(i => i.titulo && i.url)
 }
 
+// Sitios sin feed. Cada medio dice cómo se lee en noticias_medios.formato ('rss' por defecto) y, si hace falta,
+// noticias_medios.filtro: una expresión regular que tiene que cumplir el link de la nota.
+const coincide = (url, filtro) => !filtro || new RegExp(filtro, 'i').test(url)
+
+// API pública de WordPress (/wp-json/wp/v2/posts?_embed=wp:featuredmedia): título, link, fecha y foto destacada.
+export function leerWordPress(json, filtro) {
+  return (Array.isArray(json) ? json : []).map(p => ({
+    titulo: textoPlano(p?.title?.rendered, 300),
+    url: urlValida(p?.link ?? ''),
+    resumen: textoPlano(p?.excerpt?.rendered, 280) || null,
+    imagen: urlValida(p?._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? '') ?? null,
+    fecha: p?.date_gmt ? fechaISO(`${p.date_gmt}Z`) : fechaISO(p?.date),
+  })).filter(i => i.titulo && i.url && coincide(i.url, filtro))
+}
+
+// Sitemap de noticias de Google (news:title, news:publication_date, image:loc), el que publican los diarios grandes.
+export function leerSitemapNoticias(xml, filtro) {
+  return [...String(xml ?? '').matchAll(/<url>([\s\S]*?)<\/url>/gi)].map(([, b]) => ({
+    titulo: textoPlano(etiqueta(b, ['news:title']), 300),
+    url: urlValida(textoPlano(etiqueta(b, ['loc']))),
+    resumen: null,
+    imagen: urlValida(textoPlano(etiqueta(b, ['image:loc'])) || '') ?? null,
+    fecha: fechaISO(textoPlano(etiqueta(b, ['news:publication_date']))),
+  })).filter(i => i.titulo && i.url && coincide(i.url, filtro))
+}
+
+// Página con links a notas y sin fecha: el texto del link es provisorio (suele traer la sección pegada); las notas
+// nuevas se completan después con el título, la foto y la fecha de su propia página (metaDePagina).
+export function leerEnlaces(html, base, filtro) {
+  const vistos = new Set()
+  const salida = []
+  for (const [, href, texto] of String(html ?? '').matchAll(/<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const url = urlValida(href, base)
+    if (!url || vistos.has(url) || !coincide(new URL(url).pathname, filtro)) continue
+    vistos.add(url)
+    const titulo = textoPlano(texto, 300) || decodeURIComponent(new URL(url).pathname.split('/').pop()).replace(/-/g, ' ')
+    salida.push({ titulo, url, resumen: null, imagen: null, fecha: null, completar: true })
+  }
+  return salida
+}
+
+export function metaDePagina(html, base) {
+  const meta = nombre => atributo(String(html ?? '').match(new RegExp(`<meta\\b[^>]*(?:property|name)=["']${nombre}["'][^>]*>`, 'i'))?.[0], 'content')
+  return {
+    titulo: meta('og:title') ? textoPlano(meta('og:title'), 300) : null,
+    imagen: ogImage(html, base),
+    fecha: fechaISO(meta('article:published_time')),
+  }
+}
+
 const tituloDePost = texto => {
   const limpio = String(texto ?? '').replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim()
   return limpio.length > 220 ? `${limpio.slice(0, 219).replace(/\s+\S*$/, '')}…` : limpio
@@ -272,6 +322,7 @@ export function filasDeItems(items, medio, canal, { temas, dias_maximos, max_por
       url: i.url, titulo: i.titulo, resumen: i.resumen, imagen: i.imagen, medio: medio.medio, medio_id: medio.id,
       pais: medio.pais, idioma: medio.idioma ?? null, canal, temas: deTema, publicada_at: new Date(t).toISOString(),
       de_referente: medio.tipo === 'referente',
+      ...(i.completar ? { completar: true } : {}),
     })
     if (filas.length >= max_por_medio) break
   }

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  clasificar, leerFeed, leerPostsX, leerPostsBluesky, filasDeItems, mediosATocar, leerParametros, ogImage, textoPlano, PARAMETROS_DEFECTO, codificacionDe,
+  clasificar, leerFeed, leerPostsX, leerPostsBluesky, leerWordPress, leerSitemapNoticias, leerEnlaces, metaDePagina, filasDeItems, mediosATocar, leerParametros, ogImage, textoPlano, PARAMETROS_DEFECTO, codificacionDe,
 } from './logic.mjs'
 
 test('clasificar: temas por palabra entera, en varios idiomas', () => {
@@ -159,4 +159,32 @@ test('clasificar: marketing y comunicación', () => {
   assert.deepEqual(clasificar('La nueva campaña publicitaria de la marca gana en Cannes Lions'), ['marketing'])
   assert.deepEqual(clasificar('Crece la desinformación en redes sociales antes de las elecciones'), ['comunicacion'])
   assert.deepEqual(clasificar('Recortes en las redacciones: el periodismo local en crisis'), ['comunicacion'])
+})
+
+test('leerWordPress: título, link, fecha en UTC, foto destacada y filtro', () => {
+  const json = [
+    { date_gmt: '2026-10-01T16:27:40', link: 'https://elfemenino.com.ar/argentina-confirmo/', title: { rendered: 'ARGENTINA CONFIRM&#211; SUS CONVOCADAS' }, excerpt: { rendered: '<p>Lista para Brasil</p>' }, _embedded: { 'wp:featuredmedia': [{ source_url: 'https://elfemenino.com.ar/foto.jpg' }] } },
+    { date: '2026-09-29T20:24:54', link: 'https://elfemenino.com.ar/otra/', title: { rendered: 'Otra' } },
+  ]
+  const [a, b] = leerWordPress(json)
+  assert.deepEqual(a, { titulo: 'ARGENTINA CONFIRMÓ SUS CONVOCADAS', url: 'https://elfemenino.com.ar/argentina-confirmo/', resumen: 'Lista para Brasil', imagen: 'https://elfemenino.com.ar/foto.jpg', fecha: '2026-10-01T16:27:40.000Z' })
+  assert.equal(b.imagen, null)
+  assert.equal(leerWordPress(json, 'confirmo').length, 1)
+  assert.deepEqual(leerWordPress({ code: 'rest_forbidden' }), [])
+})
+
+test('leerSitemapNoticias: solo las URLs que cumplen el filtro', () => {
+  const xml = `<urlset><url><loc>https://www.tycsports.com/futbol-femenino/boca-vs-san-luis-id1.html</loc><news:news><news:publication_date>2026-10-01T23:50:17-03:00</news:publication_date><news:title><![CDATA[Boca vs San Luis FC]]></news:title></news:news><image:image><image:loc>https://media.tycsports.com/a.webp</image:loc></image:image></url>
+  <url><loc>https://www.tycsports.com/copa-argentina/otra-id2.html</loc><news:news><news:publication_date>2026-10-01T20:00:00-03:00</news:publication_date><news:title>Otra</news:title></news:news></url></urlset>`
+  assert.deepEqual(leerSitemapNoticias(xml, 'femenin'), [{ titulo: 'Boca vs San Luis FC', url: 'https://www.tycsports.com/futbol-femenino/boca-vs-san-luis-id1.html', resumen: null, imagen: 'https://media.tycsports.com/a.webp', fecha: '2026-10-02T02:50:17.000Z' }])
+  assert.equal(leerSitemapNoticias(xml).length, 2)
+})
+
+test('leerEnlaces y metaDePagina: links de notas sin repetir, a completar con la página', () => {
+  const html = `<a href="/noticias/primera-a">Primera A</a><a href="/noticias/primera-a/boca-vencio-a-river"><span>Primera A</span> Boca venció a River</a>
+  <a href="/noticias/primera-a/boca-vencio-a-river">repetido</a><a href="https://otro.com/x">afuera</a>`
+  const items = leerEnlaces(html, 'https://www.futfemgol.com/', '^/noticias/[^/]+/[^/]+$')
+  assert.deepEqual(items.map(i => [i.url, i.titulo, i.completar]), [['https://www.futfemgol.com/noticias/primera-a/boca-vencio-a-river', 'Primera A Boca venció a River', true]])
+  const meta = metaDePagina('<meta property="og:title" content="&amp;#8220;No es todo plata&amp;#8221;"><meta property="og:image" content="/f.jpg"><meta property="article:published_time" content="2026-10-01T12:00:00Z">', 'https://www.futfemgol.com/n')
+  assert.deepEqual(meta, { titulo: '“No es todo plata”', imagen: 'https://www.futfemgol.com/f.jpg', fecha: '2026-10-01T12:00:00.000Z' })
 })

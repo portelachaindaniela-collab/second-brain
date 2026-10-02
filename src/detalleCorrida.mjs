@@ -109,7 +109,7 @@ function canillita(p) {
         { etiqueta: 'medios leídos en esta tanda', valor: n(p.medios_leidos) },
         { etiqueta: 'notas de tus temas', valor: n(p.notas_de_tema) },
         { etiqueta: 'ya estaban en Noticias', valor: n(p.ya_estaban), tenue: true },
-        { etiqueta: 'fotos buscadas en la página', valor: n(p.fotos_buscadas), tenue: true },
+        { etiqueta: 'notas completadas con su página', valor: n(p.paginas_completadas ?? p.fotos_buscadas), tenue: true },
         { etiqueta: 'borradas por viejas', valor: n(p.borradas_por_viejas), tenue: true },
         { etiqueta: 'nuevas', valor: n(p.nuevas), fuerte: true },
       ] },
