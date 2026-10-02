@@ -24,7 +24,7 @@ export const PAISES = {
   QA: 'Qatar', IL: 'Israel', AE: 'Emiratos Árabes', SA: 'Arabia Saudita', TR: 'Turquía', EG: 'Egipto', MA: 'Marruecos',
   ZA: 'Sudáfrica', NG: 'Nigeria', KE: 'Kenia', IN: 'India', PK: 'Pakistán', BD: 'Bangladés', CN: 'China', JP: 'Japón',
   KR: 'Corea del Sur', TW: 'Taiwán', SG: 'Singapur', PH: 'Filipinas', VN: 'Vietnam', TH: 'Tailandia', ID: 'Indonesia',
-  MY: 'Malasia', AU: 'Australia', NZ: 'Nueva Zelanda', SK: 'Eslovaquia',
+  MY: 'Malasia', AU: 'Australia', NZ: 'Nueva Zelanda', SK: 'Eslovaquia', RO: 'Rumania', LA: 'Latinoamérica',
 }
 export const nombrePais = codigo => PAISES[codigo] ?? codigo
 
