@@ -14,6 +14,9 @@ import Login from './Login.jsx'
 import BotFlotante from './BotFlotante.jsx'
 import MailCalendario from './screens/MailCalendario.jsx'
 import VisorArchivo from './screens/VisorArchivo.jsx'
+import Inicio from './Inicio.jsx'
+import UpApp from './up/UpApp.jsx'
+import './up/up.css'
 import { TRABAJADOR_GOOGLE, estadoGoogle, debeSincronizarAlAbrir } from './googleEstado.mjs'
 
 const Escritor = lazy(() => import('./screens/Escritor.jsx'))
@@ -21,6 +24,8 @@ const GRUPOS = []
 
 export default function App() {
   const [session, setSession] = useState(undefined)
+  // App elegida en el inicio: null muestra las dos (BS67 y UP).
+  const [app, setApp] = useState(null)
   const [botAbierto, setBotAbierto] = useState(false)
   const [botTexto, setBotTexto] = useState('')
   const [botMensajes, setBotMensajes] = useState([])
@@ -80,7 +85,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s)
-      if (!s) { setBotMensajes([]); setBotTexto(''); setBotAbierto(false); setBotConsultando(false) }
+      if (!s) { setApp(null); setBotMensajes([]); setBotTexto(''); setBotAbierto(false); setBotConsultando(false) }
     })
     return () => sub.subscription.unsubscribe()
   }, [])
@@ -152,6 +157,8 @@ export default function App() {
 
   if (session === undefined) return null
   if (!session) return <Login />
+  if (!app) return <Inicio email={session.user.email} elegir={setApp} salir={() => supabase.auth.signOut()} />
+  if (app === 'up') return <UpApp email={session.user.email} volver={() => setApp(null)} />
 
   function abrirProyecto(id) {
     setHojaProyecto('resumen')
@@ -204,9 +211,9 @@ export default function App() {
       {menuAbierto && <div className="sidebar-backdrop" onClick={() => setMenuAbierto(false)} />}
       <aside className={`sidebar${menuAbierto ? ' open' : ''}`} onClick={() => setMenuAbierto(false)}>
         <div className="sidebar-brand">
-          <div className="brand-mark">SB</div>
+          <div className="brand-mark" style={{ fontSize: 10 }}>BS67</div>
           <div className="brand-text">
-            <strong>Second brain</strong>
+            <strong>BS67</strong>
             <span>{session.user.email}</span>
           </div>
         </div>
@@ -268,6 +275,7 @@ export default function App() {
               {google?.reconectar && <div style={{ marginTop: 4 }}>Hace falta reconectar.</div>}
             </>
           )}
+          <button className="nav-item" onClick={() => setApp(null)} style={{ marginTop: 8, padding: '4px 0' }}>← Inicio</button>
           <button className="nav-item" onClick={() => supabase.auth.signOut()} style={{ marginTop: 8, padding: '4px 0' }}>Salir</button>
         </div>
       </aside>
