@@ -1,20 +1,22 @@
 import { useState } from 'react'
 import { supabase } from '../supabase.js'
+import Hoy from './Hoy.jsx'
 import Calendario from './Calendario.jsx'
 import Ficha from './Ficha.jsx'
 
 const PANTALLAS = [
+  { id: 'hoy', label: 'Hoy' },
   { id: 'calendario', label: 'Calendario' },
   { id: 'ficha', label: 'Ficha de datos' },
 ]
 
-function fechaLarga() {
+function fechaConAnio() {
   const t = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   return t.charAt(0).toUpperCase() + t.slice(1)
 }
 
 export default function UpApp({ email, volver }) {
-  const [pantalla, setPantalla] = useState('calendario')
+  const [pantalla, setPantalla] = useState('hoy')
 
   return (
     <div className="up">
@@ -26,7 +28,7 @@ export default function UpApp({ email, volver }) {
           <button onClick={() => supabase.auth.signOut()}>Salir</button>
         </div>
         <header className="up-cab">
-          <div className="up-cab-izq">{fechaLarga()}</div>
+          <div className="up-cab-izq">{fechaConAnio()}</div>
           <h1>UP</h1>
           <div className="up-cab-lema">Publicaciones de LinkedIn, X e Instagram</div>
         </header>
@@ -36,6 +38,7 @@ export default function UpApp({ email, volver }) {
           ))}
         </nav>
         <main className="up-cuerpo">
+          {pantalla === 'hoy' && <Hoy abrirCalendario={() => setPantalla('calendario')} />}
           {pantalla === 'calendario' && <Calendario />}
           {pantalla === 'ficha' && <Ficha />}
         </main>

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 
 const GRUPOS = ['ReporTV', 'San Luis FC', 'AFA', 'DeporTV', 'Colegiales', 'Proyectos']
+// Los datos que describen el puesto van como bajada del grupo; el resto son los hechos.
+const CONTEXTO = /^(Organización|Puesto|Período):\s*/
 
 // Fase 1: lectura de la ficha importada. Editar y "Agregar dato" llegan en la fase 3.
 export default function Ficha() {
@@ -22,18 +24,23 @@ export default function Ficha() {
   return (
     <>
       <div className="up-enc">
-        <h2 className="up-titular">Ficha de datos</h2>
-        <p className="up-bajada">La única fuente de hechos y números. Si un dato no está acá, UP te lo pregunta antes de escribirlo.</p>
+        <div className="up-antetitulo">Ficha de datos · {datos.length} datos</div>
+        <h2 className="up-titular-1">La única fuente de hechos y números</h2>
+        <p className="up-bajada">Si un dato no está acá, UP te lo pregunta antes de escribirlo.</p>
       </div>
       <div className="up-ficha">
         {GRUPOS.map(g => {
           const items = datos.filter(d => d.grupo === g)
+          const contexto = items.filter(d => CONTEXTO.test(d.dato)).map(d => d.dato.replace(CONTEXTO, ''))
+          const hechos = items.filter(d => !CONTEXTO.test(d.dato))
           return (
             <section key={g} className="up-bloque">
-              <div className="up-vol">{g}<span>{items.length} {items.length === 1 ? 'dato' : 'datos'}</span></div>
-              {items.length === 0 ? <p className="up-vacio">Sin datos.</p> : (
+              <div className="up-vol">{hechos.length} {hechos.length === 1 ? 'dato' : 'datos'}</div>
+              <h3 className="up-titular-2">{g}</h3>
+              {contexto.length > 0 && <p className="up-ficha-contexto">{contexto.join(' · ')}</p>}
+              {hechos.length === 0 ? <p className="up-vacio">Sin datos.</p> : (
                 <ul className="up-datos">
-                  {items.map(d => <li key={d.id}>{d.dato}{d.fuente && <small>{d.fuente}</small>}</li>)}
+                  {hechos.map(d => <li key={d.id}>{d.dato}{d.fuente && <small>{d.fuente}</small>}</li>)}
                 </ul>
               )}
             </section>
