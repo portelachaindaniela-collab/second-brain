@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { LogoRed } from './logos.jsx'
 import { hoyIso, fechaLarga } from './fechas.js'
-import { ESTADOS, NOMBRE_RED } from './pipeline.js'
+import { ESTADOS, NOMBRE_RED, estadoVisible } from './pipeline.js'
 
 // Estado de un día, a partir de sus piezas: manda lo que necesita atención.
 const ESTADOS_DIA = {
@@ -19,7 +19,7 @@ const ESTADOS_DIA = {
 function estadoDelDia(dia, piezas) {
   if (dia.salteado) return 'salteado'
   if (!piezas.length) return 'sin_borrador'
-  for (const e of ['error', 'falta_info', 'revision']) if (piezas.some(p => p.estado === e)) return e
+  for (const e of ['error', 'falta_info', 'revision']) if (piezas.some(p => estadoVisible(p) === e)) return e
   if (piezas.some(p => p.estado === 'pendiente')) return piezas.some(p => p.estado === 'pendiente' && p.texto) ? 'borrador' : 'sin_borrador'
   return piezas.every(p => p.estado === 'publicado') ? 'publicado' : 'aprobado'
 }
@@ -55,7 +55,7 @@ export default function Calendario() {
   useEffect(() => {
     Promise.all([
       supabase.from('up_calendario').select('id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,fotos_propias,salteado').order('fecha'),
-      supabase.from('up_piezas').select('id,fecha,red,estado,texto,url_publicada'),
+      supabase.from('up_piezas').select('id,fecha,red,estado,texto,url_publicada,error_publicacion'),
     ]).then(([cal, pie]) => {
       if (cal.error || pie.error) { setError('No se pudo cargar el calendario: ' + (cal.error || pie.error).message); return }
       setDatos({ dias: cal.data || [], piezas: pie.data || [] })
@@ -122,7 +122,7 @@ export default function Calendario() {
                 {piezasDe(dia.fecha).map(p => (
                   <li key={p.id}>
                     <LogoRed red={p.red} />{NOMBRE_RED[p.red]}
-                    <span className={`up-estado e-${p.estado}`}>{p.url_publicada ? <a href={p.url_publicada} target="_blank" rel="noreferrer">{ESTADOS[p.estado]}</a> : ESTADOS[p.estado]}</span>
+                    <span className={`up-estado e-${estadoVisible(p)}`}>{p.url_publicada ? <a href={p.url_publicada} target="_blank" rel="noreferrer">{ESTADOS[p.estado]}</a> : ESTADOS[estadoVisible(p)]}</span>
                   </li>
                 ))}
               </ul>

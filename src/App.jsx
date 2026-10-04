@@ -25,7 +25,8 @@ const GRUPOS = []
 export default function App() {
   const [session, setSession] = useState(undefined)
   // App elegida en el inicio: null muestra las dos (BS67 y UP).
-  const [app, setApp] = useState(null)
+  // Al volver de conectar una red (up-linkedin redirige con ?up_redes=...) se entra directo a UP.
+  const [app, setApp] = useState(() => (new URLSearchParams(window.location.search).has('up_redes') ? 'up' : null))
   const [botAbierto, setBotAbierto] = useState(false)
   const [botTexto, setBotTexto] = useState('')
   const [botMensajes, setBotMensajes] = useState([])
