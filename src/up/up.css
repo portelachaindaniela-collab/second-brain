@@ -8,6 +8,10 @@
 .inicio-app .brand-mark { width: auto; min-width: 40px; height: 40px; padding: 0 8px; font-size: 14px; }
 .inicio-app strong { font-size: 16px; }
 .inicio-app span:last-child { font-size: 12.5px; color: var(--gray-500); line-height: 1.45; }
+.inicio-pie { display: flex; justify-content: center; gap: 18px; }
+.inicio-pie .login-alt { width: auto; }
+.inicio-clave { max-width: 320px; margin: 0 auto; text-align: left; }
+.inicio-clave .login-alt { display: block; margin: 10px auto 0; }
 @media (max-width: 560px) { .inicio-apps { grid-template-columns: 1fr; } }
 
 /* UP: estética de diario, clara, independiente del tema oscuro de BS67.
