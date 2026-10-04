@@ -5,6 +5,19 @@ import { hoyIso, partesFecha, fechaLarga } from './fechas.js'
 import { correrPipeline, ESTADOS, NOMBRE_RED } from './pipeline.js'
 import { conResaltados } from './resaltar.jsx'
 
+const CAMPOS_PIEZA = 'id,fecha,red,texto,estado,pregunta,motivo_revision,problemas,intentos_revision,assets,assets_texto,formato:contenido->>formato'
+
+// Las placas del carrusel. El diseñador las arma con la plantilla cada 15 minutos; si el texto cambió, las vuelve a armar.
+function Placas({ pieza }) {
+  if (pieza.formato !== 'carrusel' || !pieza.texto) return null
+  if (pieza.assets_texto !== pieza.texto) return <p className="up-aviso-nota">El diseñador está armando las placas con este texto. Volvé a esta pantalla en unos minutos para verlas.</p>
+  if (!pieza.assets?.length) return <p className="up-aviso-nota up-aviso-error">El diseñador no encontró placas en el texto. Cada una tiene que empezar con «Placa 1.», «Placa 2.»…</p>
+  return (
+    <div className="up-placas">
+      {pieza.assets.map((url, i) => <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Placa ${i + 1} de ${pieza.assets.length}`} loading="lazy" /></a>)}
+    </div>
+  )
+}
 
 // Una pieza del día con sus acciones: editar el texto, aprobar y marcar como publicada.
 function Pieza({ red, pieza, principal, titulo, guardar }) {
@@ -12,7 +25,9 @@ function Pieza({ red, pieza, principal, titulo, guardar }) {
   const [borrador, setBorrador] = useState('')
   const [ocupada, setOcupada] = useState(false)
   const texto = pieza?.texto || ''
-  const parrafos = texto.split(/\n{2,}/).filter(Boolean)
+  // Con las placas armadas, el texto de cada placa ya se lee en las imágenes: abajo va solo el caption.
+  const placasListas = pieza?.formato === 'carrusel' && pieza.assets?.length > 0 && pieza.assets_texto === texto && !pieza.problemas?.length
+  const parrafos = (placasListas ? texto.split(/^Caption:[ \t]*$/m)[1] || '' : texto).split(/\n{2,}/).filter(Boolean)
 
   async function cambiar(cambios) {
     setOcupada(true)
@@ -32,6 +47,7 @@ function Pieza({ red, pieza, principal, titulo, guardar }) {
           <ul>{pieza.motivo_revision.split('\n').map((m, i) => <li key={i}>{m}</li>)}</ul>
         </div>
       )}
+      {pieza && !editando && <Placas pieza={pieza} />}
       {editando ? (
         <textarea className="up-editor" value={borrador} onChange={e => setBorrador(e.target.value)} rows={Math.max(8, borrador.split('\n').length + 2)} aria-label={`Texto de ${NOMBRE_RED[red]}`} />
       ) : parrafos.length > 0 ? (
@@ -70,7 +86,7 @@ export default function Hoy({ abrirCalendario, abrirPreguntas, alCambiar }) {
     const hoy = hoyIso()
     const [cal, pie] = await Promise.all([
       supabase.from('up_calendario').select('id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,fotos_propias').order('fecha'),
-      supabase.from('up_piezas').select('id,fecha,red,texto,estado,pregunta,motivo_revision,problemas,intentos_revision').or(`fecha.eq.${hoy},estado.eq.falta_info`),
+      supabase.from('up_piezas').select(CAMPOS_PIEZA).or(`fecha.eq.${hoy},estado.eq.falta_info`),
     ])
     if (cal.error || pie.error) { setError('No se pudo cargar el día: ' + (cal.error || pie.error).message); return }
     setDatos({ dias: cal.data || [], piezas: pie.data || [] })
@@ -79,7 +95,7 @@ export default function Hoy({ abrirCalendario, abrirPreguntas, alCambiar }) {
   useEffect(() => { cargar() }, [cargar])
 
   async function guardar(id, cambios) {
-    const { data, error } = await supabase.from('up_piezas').update(cambios).eq('id', id).select('id,fecha,red,texto,estado,pregunta,motivo_revision,problemas,intentos_revision').single()
+    const { data, error } = await supabase.from('up_piezas').update(cambios).eq('id', id).select(CAMPOS_PIEZA).single()
     if (error) { setAviso('No se pudo guardar: ' + error.message); return false }
     setAviso('')
     setDatos(d => ({ ...d, piezas: d.piezas.map(p => (p.id === id ? data : p)) }))

@@ -117,3 +117,25 @@ create index up_corridas_owner_idx on public.up_corridas (owner_id, iniciado_at 
 alter table public.up_corridas enable row level security;
 create policy "dueña lee sus corridas" on public.up_corridas for select to authenticated using (owner_id = auth.uid());
 alter publication supabase_realtime add table public.up_corridas;
+
+-- ---------- Diseñador (migración up_disenador) ----------
+-- assets_texto: el texto del que salieron los assets. Si la dueña edita el texto, deja de coincidir y el diseñador
+-- vuelve a armar las placas. Las placas se renderizan en GitHub Actions (.github/workflows/up-disenador.yml) y la
+-- Edge Function up-disenador las sube a un bucket público (Instagram necesita URLs públicas).
+alter table public.up_piezas add column assets_texto text;
+
+insert into storage.buckets (id, name, public) values ('up-assets', 'up-assets', true);
+
+-- Secreto propio de la Action (no el de los trabajadores de BS67). Se genera en la base; el valor va solo al
+-- secret UP_DISENADOR_SECRETO del repo.
+select vault.create_secret(encode(extensions.gen_random_bytes(24), 'hex'), 'up_disenador_secreto', 'GitHub Action del diseñador de UP (secret UP_DISENADOR_SECRETO del repo second-brain).');
+
+create function public.up_disenador_secreto_valido(p_secreto text)
+returns boolean language sql stable security definer set search_path to ''
+as $$
+  select coalesce(p_secreto <> '' and exists (
+    select 1 from vault.decrypted_secrets where name = 'up_disenador_secreto' and decrypted_secret = p_secreto
+  ), false)
+$$;
+revoke execute on function public.up_disenador_secreto_valido(text) from public, anon, authenticated;
+grant execute on function public.up_disenador_secreto_valido(text) to service_role;
