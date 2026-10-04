@@ -10,7 +10,7 @@ const AGENTES = [
   { id: 'redactor', nombre: 'Redactor', rol: 'Escribe LinkedIn largo, X corto o en hilo, y el texto de Instagram, solo con datos de la ficha.' },
   { id: 'revisor', nombre: 'Revisor', rol: 'Chequea datos, cámara y largo. Devuelve al redactor hasta dos veces; si sigue mal, te lo pasa.' },
   { id: 'disenador', nombre: 'Diseñador', rol: 'Arma las placas del carrusel con la plantilla y tu firma. Si cambiás el texto, las vuelve a armar. Los reels llegan después.' },
-  { id: 'publicador', nombre: 'Publicador', rol: 'Publica lo aprobado cuando llega el horario de cada red.', fase: 5 },
+  { id: 'publicador', nombre: 'Publicador', rol: 'Publica en LinkedIn lo aprobado del día cuando llega tu horario (se configura en Redes). X e Instagram llegan después.' },
 ]
 const ESTADO_CORRIDA = { corriendo: 'Trabajando', ok: 'Completa', cortado: 'Cortada por cuota', error: 'Con error' }
 const DIAS_RESUMEN = 7
@@ -71,8 +71,19 @@ function resumen(agente, pasos) {
       const n = cuenta(p => p.accion === 'armó'), f = cuenta(p => p.accion === 'no pudo armar')
       return { cifra: n, texto: plural(n, 'carrusel armado', 'carruseles armados'), extra: f ? `${f} sin placas en el texto` : null }
     }
+    case 'publicador': {
+      const n = cuenta(p => p.accion === 'publicó'), f = cuenta(p => p.accion === 'no pudo publicar')
+      return { cifra: n, texto: plural(n, 'publicación', 'publicaciones'), extra: f ? `${f} no ${plural(f, 'salió', 'salieron')}` : null }
+    }
     default: return null
   }
+}
+
+// Las corridas del diseñador y del publicador son aparte de las de los agentes que escriben.
+function tituloCorrida(pasos) {
+  if (pasos.length && pasos.every(p => p.agente === 'disenador')) return 'Placas'
+  if (pasos.length && pasos.every(p => p.agente === 'publicador')) return 'Publicaciones'
+  return 'Borradores'
 }
 
 function Corrida({ corrida, abierta, alternar }) {
@@ -81,7 +92,7 @@ function Corrida({ corrida, abierta, alternar }) {
     <li className={`up-corrida${abierta ? ' abierta' : ''}`}>
       <button className="up-corrida-fila" onClick={alternar} aria-expanded={abierta}>
         <span className="up-corrida-hora">{new Date(corrida.iniciado_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} · {hora(corrida.iniciado_at)}</span>
-        <span className="up-corrida-titulo">{pasos.length && pasos.every(p => p.agente === 'disenador') ? 'Placas' : 'Borradores'} del {fechaLarga(corrida.fecha).toLowerCase()}<small>{corrida.origen === 'cron' ? 'Corrida automática' : 'La pediste vos'} · {pasos.length} pasos</small></span>
+        <span className="up-corrida-titulo">{tituloCorrida(pasos)} del {fechaLarga(corrida.fecha).toLowerCase()}<small>{corrida.origen === 'cron' ? 'Corrida automática' : 'La pediste vos'} · {pasos.length} pasos</small></span>
         <span className={`up-estado c-${corrida.estado}`}>{ESTADO_CORRIDA[corrida.estado]}</span>
       </button>
       {abierta && (
@@ -148,7 +159,7 @@ export default function Agentes() {
         </h2>
         <p className="up-bajada">
           {proxima && <>Próxima corrida: {cuandoEs(proxima, ahora)} a las {hora(proxima.toISOString())}. </>}
-          Los que escriben corren cada mañana entre las 06:02 y las 07:52, cada 10 minutos, con Gemini (cuota gratuita compartida con BS67). El diseñador revisa cada 15 minutos si hay placas para armar.
+          Los que escriben corren cada mañana entre las 06:02 y las 07:52, cada 10 minutos, con Gemini (cuota gratuita compartida con BS67). El diseñador y el publicador revisan cada 15 minutos si hay algo para hacer.
         </p>
       </div>
 

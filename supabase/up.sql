@@ -139,3 +139,60 @@ as $$
 $$;
 revoke execute on function public.up_disenador_secreto_valido(text) from public, anon, authenticated;
 grant execute on function public.up_disenador_secreto_valido(text) to service_role;
+
+-- ---------- Publicador (migraciones up_publicador y up_publicador_cron) ----------
+-- Conexiones con cada red: el token lo leen solo las Edge Functions (sin políticas RLS); la app ve nombre y
+-- vencimiento con up_mis_conexiones(). up_oauth_estados guarda el state del OAuth mientras dura el permiso.
+create table public.up_conexiones (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  red text not null check (red in ('linkedin', 'x', 'instagram')),
+  access_token text not null,
+  expira_at timestamptz,
+  cuenta_id text not null,
+  nombre text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (owner_id, red)
+);
+alter table public.up_conexiones enable row level security;
+create trigger up_conexiones_updated_at before update on public.up_conexiones for each row execute function public.tocar_updated_at();
+
+create table public.up_oauth_estados (
+  estado text primary key,
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  red text not null check (red in ('linkedin', 'x', 'instagram')),
+  created_at timestamptz not null default now()
+);
+alter table public.up_oauth_estados enable row level security;
+
+create function public.up_mis_conexiones()
+returns table (red text, nombre text, expira_at timestamptz)
+language sql stable security definer set search_path to ''
+as $$ select c.red, c.nombre, c.expira_at from public.up_conexiones c where c.owner_id = auth.uid() $$;
+revoke execute on function public.up_mis_conexiones() from public, anon;
+grant execute on function public.up_mis_conexiones() to authenticated;
+
+-- Hora de publicación de cada red (la elige la dueña en Redes). Sin hora, no sale nada solo.
+create table public.up_horarios (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  red text not null check (red in ('linkedin', 'x', 'instagram')),
+  hora time not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (owner_id, red)
+);
+alter table public.up_horarios enable row level security;
+create policy "dueña lee sus horarios" on public.up_horarios for select to authenticated using (owner_id = auth.uid());
+create policy "dueña crea sus horarios" on public.up_horarios for insert to authenticated with check (owner_id = auth.uid());
+create policy "dueña edita sus horarios" on public.up_horarios for update to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy "dueña borra sus horarios" on public.up_horarios for delete to authenticated using (owner_id = auth.uid());
+create trigger up_horarios_updated_at before update on public.up_horarios for each row execute function public.tocar_updated_at();
+
+-- Si una publicación falla, la pieza sigue "aprobado" (los agentes no reescriben lo aprobado) con el motivo acá;
+-- la app la muestra como error y no se reintenta hasta que la dueña toca Reintentar.
+alter table public.up_piezas add column error_publicacion text;
+
+-- Cada 15 minutos el publicador sube lo aprobado de hoy cuyo horario ya llegó.
+select cron.schedule('up-publicador', '*/15 * * * *', $c$select net.http_post(url := 'https://itultpcdafpxpgtblgfb.supabase.co/functions/v1/up-publicador', headers := jsonb_build_object('Content-Type', 'application/json', 'apikey', 'sb_publishable_jK_ebdVy29E9sKQA4sd3Qw_X4YJJ4Qu', 'x-trabajador-secreto', (select decrypted_secret from vault.decrypted_secrets where name = 'trabajadores_secreto')), timeout_milliseconds := 60000);$c$);

@@ -6,6 +6,7 @@ import Revisor from './Revisor.jsx'
 import Calendario from './Calendario.jsx'
 import Ficha from './Ficha.jsx'
 import Agentes from './Agentes.jsx'
+import Redes from './Redes.jsx'
 
 const PANTALLAS = [
   { id: 'hoy', label: 'Hoy' },
@@ -13,6 +14,7 @@ const PANTALLAS = [
   { id: 'revisor', label: 'Revisor', cuenta: 'revision' },
   { id: 'calendario', label: 'Calendario' },
   { id: 'ficha', label: 'Ficha de datos' },
+  { id: 'redes', label: 'Redes' },
   { id: 'agentes', label: 'Agentes' },
 ]
 
@@ -22,7 +24,7 @@ function fechaConAnio() {
 }
 
 export default function UpApp({ email, volver }) {
-  const [pantalla, setPantalla] = useState('hoy')
+  const [pantalla, setPantalla] = useState(() => (new URLSearchParams(window.location.search).has('up_redes') ? 'redes' : 'hoy'))
   const [cuentas, setCuentas] = useState({})
 
   // Cuántos días esperan una respuesta y cuántas piezas quedaron en revisión, para el menú.
@@ -63,6 +65,7 @@ export default function UpApp({ email, volver }) {
           {pantalla === 'revisor' && <Revisor alCambiar={contar} />}
           {pantalla === 'calendario' && <Calendario />}
           {pantalla === 'ficha' && <Ficha />}
+          {pantalla === 'redes' && <Redes />}
           {pantalla === 'agentes' && <Agentes />}
         </main>
       </div>

@@ -13,3 +13,10 @@ export async function correrPipeline(fecha, regenerar = false) {
 
 export const ESTADOS = { pendiente: 'Pendiente', falta_info: 'Falta info', revision: 'En revisión', aprobado: 'Aprobado', publicado: 'Publicado', error: 'Error' }
 export const NOMBRE_RED = { linkedin: 'LinkedIn', x: 'X', instagram: 'Instagram' }
+
+// Redes en las que el publicador ya sube solo lo aprobado (las demás se publican a mano).
+export const REDES_AUTOMATICAS = ['linkedin']
+
+// Una pieza aprobada que no se pudo publicar se muestra como error; el estado sigue "aprobado" para que los agentes
+// no reescriban el texto.
+export const estadoVisible = p => (p.error_publicacion ? 'error' : p.estado)

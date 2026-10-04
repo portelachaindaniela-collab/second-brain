@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { LogoRed } from './logos.jsx'
 import { hoyIso, partesFecha, fechaLarga } from './fechas.js'
-import { correrPipeline, ESTADOS, NOMBRE_RED } from './pipeline.js'
+import { correrPipeline, ESTADOS, NOMBRE_RED, REDES_AUTOMATICAS, estadoVisible } from './pipeline.js'
 import { conResaltados } from './resaltar.jsx'
 
-const CAMPOS_PIEZA = 'id,fecha,red,texto,estado,pregunta,motivo_revision,problemas,intentos_revision,assets,assets_texto,formato:contenido->>formato'
+const CAMPOS_PIEZA = 'id,fecha,red,texto,estado,pregunta,motivo_revision,problemas,intentos_revision,assets,assets_texto,url_publicada,error_publicacion,formato:contenido->>formato'
 
 // Las placas del carrusel. El diseñador las arma con la plantilla cada 15 minutos; si el texto cambió, las vuelve a armar.
 function Placas({ pieza }) {
@@ -19,8 +19,17 @@ function Placas({ pieza }) {
   )
 }
 
+// Qué pasa con una pieza aprobada: si sale sola y cuándo, o qué falta para que salga.
+function cuandoSale(red, pieza, envio) {
+  if (!REDES_AUTOMATICAS.includes(red)) return `La publicación automática en ${NOMBRE_RED[red]} llega más adelante: publicalo vos y tocá Publicado.`
+  if (pieza.fecha !== hoyIso()) return 'Ese día ya pasó, así que no sale solo: publicalo vos y tocá Publicado.'
+  if (!envio?.conectada) return `Para que salga solo, conectá ${NOMBRE_RED[red]} en Redes.`
+  if (!envio.hora) return `Para que salga solo, elegí un horario para ${NOMBRE_RED[red]} en Redes.`
+  return `Sale solo hoy a las ${envio.hora} en ${NOMBRE_RED[red]}.`
+}
+
 // Una pieza del día con sus acciones: editar el texto, aprobar y marcar como publicada.
-function Pieza({ red, pieza, principal, titulo, guardar }) {
+function Pieza({ red, pieza, principal, titulo, guardar, envio }) {
   const [editando, setEditando] = useState(false)
   const [borrador, setBorrador] = useState('')
   const [ocupada, setOcupada] = useState(false)
@@ -38,10 +47,13 @@ function Pieza({ red, pieza, principal, titulo, guardar }) {
 
   return (
     <article className={principal ? 'up-nota up-nota-principal' : 'up-nota'}>
-      <div className="up-vol"><LogoRed red={red} />{NOMBRE_RED[red]}{pieza && <span className={`up-estado e-${pieza.estado}`}>{ESTADOS[pieza.estado]}</span>}</div>
+      <div className="up-vol"><LogoRed red={red} />{NOMBRE_RED[red]}{pieza && <span className={`up-estado e-${estadoVisible(pieza)}`}>{ESTADOS[estadoVisible(pieza)]}</span>}</div>
       {titulo && (principal ? <h2 className="up-titular-1">{titulo}</h2> : <h3 className="up-titular-3">{titulo}</h3>)}
       {pieza?.estado === 'falta_info' && pieza.pregunta && <p className="up-aviso-nota"><b>Falta un dato.</b> {pieza.pregunta}</p>}
       {pieza?.estado === 'error' && <p className="up-aviso-nota up-aviso-error"><b>No se pudo generar.</b> {pieza.motivo_revision}</p>}
+      {pieza?.error_publicacion && <p className="up-aviso-nota up-aviso-error"><b>No se pudo publicar.</b> {pieza.error_publicacion}</p>}
+      {pieza?.estado === 'aprobado' && !pieza.error_publicacion && <p className="up-aviso-nota up-aviso-ok">{cuandoSale(red, pieza, envio)}</p>}
+      {pieza?.estado === 'publicado' && pieza.url_publicada && <p className="up-aviso-nota up-aviso-ok">Publicado. <a href={pieza.url_publicada} target="_blank" rel="noreferrer">Ver en {NOMBRE_RED[red]}</a></p>}
       {pieza?.estado === 'revision' && pieza.motivo_revision && (
         <div className="up-aviso-nota"><b>El revisor marcó{pieza.intentos_revision ? ` (después de ${pieza.intentos_revision} ${pieza.intentos_revision === 1 ? 'corrección' : 'correcciones'})` : ''}:</b>
           <ul>{pieza.motivo_revision.split('\n').map((m, i) => <li key={i}>{m}</li>)}</ul>
@@ -60,14 +72,15 @@ function Pieza({ red, pieza, principal, titulo, guardar }) {
           {editando ? (
             <>
               <button className="up-btn" disabled={ocupada} onClick={() => setEditando(false)}>Cancelar</button>
-              <button className="up-btn up-btn-p" disabled={ocupada || !borrador.trim()} onClick={() => cambiar({ texto: borrador.trim(), estado: pieza.estado === 'aprobado' ? 'aprobado' : 'pendiente', problemas: null, motivo_revision: null })}>Guardar</button>
+              <button className="up-btn up-btn-p" disabled={ocupada || !borrador.trim()} onClick={() => cambiar({ texto: borrador.trim(), estado: pieza.estado === 'aprobado' ? 'aprobado' : 'pendiente', problemas: null, motivo_revision: null, error_publicacion: null })}>Guardar</button>
             </>
           ) : (
             <>
               <button className="up-btn" disabled={ocupada} onClick={() => { setBorrador(texto); setEditando(true) }}>Editar</button>
               {pieza.estado === 'aprobado'
-                ? <button className="up-btn up-btn-p" disabled={ocupada} onClick={() => cambiar({ estado: 'publicado' })}>Publicado</button>
+                ? <button className={pieza.error_publicacion ? 'up-btn' : 'up-btn up-btn-p'} disabled={ocupada} onClick={() => cambiar({ estado: 'publicado', error_publicacion: null })}>Publicado</button>
                 : <button className="up-btn up-btn-p" disabled={ocupada} onClick={() => cambiar({ estado: 'aprobado' })}>Aprobar</button>}
+              {pieza.error_publicacion && <button className="up-btn up-btn-p" disabled={ocupada} onClick={() => cambiar({ error_publicacion: null })}>Reintentar</button>}
             </>
           )}
         </div>
@@ -84,12 +97,19 @@ export default function Hoy({ abrirCalendario, abrirPreguntas, alCambiar }) {
 
   const cargar = useCallback(async () => {
     const hoy = hoyIso()
-    const [cal, pie] = await Promise.all([
+    const [cal, pie, hor, con] = await Promise.all([
       supabase.from('up_calendario').select('id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,fotos_propias').order('fecha'),
       supabase.from('up_piezas').select(CAMPOS_PIEZA).or(`fecha.eq.${hoy},estado.eq.falta_info`),
+      supabase.from('up_horarios').select('red,hora'),
+      supabase.rpc('up_mis_conexiones'),
     ])
     if (cal.error || pie.error) { setError('No se pudo cargar el día: ' + (cal.error || pie.error).message); return }
-    setDatos({ dias: cal.data || [], piezas: pie.data || [] })
+    // Para cada red: si está conectada y a qué hora sale lo aprobado (lo configura la pantalla Redes).
+    const envio = {}
+    for (const red of REDES_AUTOMATICAS) {
+      envio[red] = { conectada: (con.data || []).some(c => c.red === red), hora: (hor.data || []).find(h => h.red === red)?.hora?.slice(0, 5) ?? null }
+    }
+    setDatos({ dias: cal.data || [], piezas: pie.data || [], envio })
   }, [])
 
   useEffect(() => { cargar() }, [cargar])
@@ -134,11 +154,11 @@ export default function Hoy({ abrirCalendario, abrirPreguntas, alCambiar }) {
             </div>
             {aviso && <p role="alert" className="up-error">{aviso}</p>}
             <div className="up-portada-notas">
-              <Pieza red="linkedin" principal titulo={dia.tema_dia} pieza={pieza('linkedin')} guardar={guardar} />
+              <Pieza red="linkedin" principal titulo={dia.tema_dia} pieza={pieza('linkedin')} guardar={guardar} envio={datos.envio.linkedin} />
               <div className="up-portada-segunda">
-                <Pieza red="x" pieza={pieza('x')} guardar={guardar} />
+                <Pieza red="x" pieza={pieza('x')} guardar={guardar} envio={datos.envio.x} />
                 {dia.redes.includes('instagram') && dia.formato_instagram !== 'ninguno' && (
-                  <Pieza red="instagram" titulo={dia.tema_instagram} pieza={pieza('instagram')} guardar={guardar} />
+                  <Pieza red="instagram" titulo={dia.tema_instagram} pieza={pieza('instagram')} guardar={guardar} envio={datos.envio.instagram} />
                 )}
               </div>
             </div>
