@@ -126,8 +126,8 @@ alter table public.up_piezas add column assets_texto text;
 
 insert into storage.buckets (id, name, public) values ('up-assets', 'up-assets', true);
 
--- Secreto propio de la Action (no el de los trabajadores de BS67). Se genera en la base; el valor va solo al
--- secret UP_DISENADOR_SECRETO del repo.
+-- La Action se identifica con su token OIDC de GitHub (lo verifica up-disenador; no hay secrets en el repo).
+-- Este secreto queda para correr el diseñador a mano (no es el de los trabajadores de BS67).
 select vault.create_secret(encode(extensions.gen_random_bytes(24), 'hex'), 'up_disenador_secreto', 'GitHub Action del diseñador de UP (secret UP_DISENADOR_SECRETO del repo second-brain).');
 
 create function public.up_disenador_secreto_valido(p_secreto text)

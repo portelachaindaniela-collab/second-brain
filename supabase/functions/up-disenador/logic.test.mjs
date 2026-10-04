@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { placasDeTexto, necesitaDiseno, rutaDeAsset } from './logic.mjs'
+import { placasDeTexto, necesitaDiseno, rutaDeAsset, oidcValido } from './logic.mjs'
 import { armarPieza } from '../up-pipeline/logic.mjs'
 
 const dia = { formato_instagram: 'carrusel', fotos_propias: false }
@@ -41,4 +41,13 @@ test('solo diseña carruseles con texto nuevo y sin publicar', () => {
 test('saca la ruta del bucket de la URL pública', () => {
   assert.equal(rutaDeAsset('https://x.supabase.co/storage/v1/object/public/up-assets/u/p/1-1.png'), 'u/p/1-1.png')
   assert.equal(rutaDeAsset('https://otra.cosa/a.png'), null)
+})
+
+test('solo acepta el token del workflow del diseñador en master de este repo', () => {
+  const ok = { repository: 'portelachaindaniela-collab/second-brain', workflow_ref: 'portelachaindaniela-collab/second-brain/.github/workflows/up-disenador.yml@refs/heads/master' }
+  assert.equal(oidcValido(ok), true)
+  assert.equal(oidcValido({ ...ok, workflow_ref: ok.workflow_ref.replace('master', 'otra-rama') }), false)
+  assert.equal(oidcValido({ ...ok, workflow_ref: ok.workflow_ref.replace('up-disenador', 'deploy-pages') }), false)
+  assert.equal(oidcValido({ ...ok, repository: 'otra/second-brain' }), false)
+  assert.equal(oidcValido(null), false)
 })
