@@ -3,6 +3,7 @@ import { haceCuanto } from '../trabajadores.mjs'
 import { colorIdentidad, vidaDeTrabajador, enCuanto, REGISTRO } from '../tablero.mjs'
 import { ETIQUETA, GRADOS_POR_SEGUNDO, disposicion, trazo, estadoTrabajador, pasaFiltro, coincideBusqueda, focoDe, ubicarEtiquetas, anchoTexto } from '../orbital.mjs'
 import { MARCAS } from '../iconosMarcas.mjs'
+import { nombreCorto } from '../panorama.mjs'
 import './SistemaOrbital.css'
 
 // Íconos de cada trabajador, en una caja de 14×14 centrada en 0,0.
@@ -117,7 +118,7 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
   }
   const etiquetas = d.nodos.filter(n => n.tipo === 'trabajador')
     .sort((a, b) => (b.clave === elegido) - (a.clave === elegido))
-    .map(n => ({ id: n.id, x: n.x, y: n.y, w: Math.max(anchoTexto(n.etiqueta, 14), anchoTexto(datoDe(n), 12)) + 18, arriba: n.y < LIENZO.cy - 4 }))
+    .map(n => ({ id: n.id, x: n.x, y: n.y, w: anchoTexto(nombreCorto(n.etiqueta), 13) + 20, arriba: n.y < LIENZO.cy - 4 }))
   const lugarEtiqueta = ubicarEtiquetas(etiquetas, d.nodos, LIENZO)
   const anchoEtiqueta = Object.fromEntries(etiquetas.map(e => [e.id, e.w]))
 
@@ -199,8 +200,7 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
           })()}
           <g transform={`translate(${lugarEtiqueta[n.id].x - n.x} ${lugarEtiqueta[n.id].y - n.y})`} className="orbital-etiqueta">
             <rect x={-anchoEtiqueta[n.id] / 2} width={anchoEtiqueta[n.id]} height={ETIQUETA.alto} rx="8" />
-            <text y="17" className="orbital-nombre">{n.etiqueta}</text>
-            <text y="32" className="orbital-dato">{dato}</text>
+            <text y="16.5" className="orbital-nombre">{nombreCorto(n.etiqueta)}</text>
           </g>
         </g>
       })}

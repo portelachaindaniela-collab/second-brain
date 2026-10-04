@@ -1,5 +1,6 @@
 /* Panorama de Trabajadores: el flujo y la grilla de paneles. Cada panel es un gráfico; el texto queda como etiqueta. */
-.pantalla-bloques.bloques-tres { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pantalla-bloques.bloques-tres { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; margin: 16px 0; }
+.bloques-tres .tablero-barras { height: 140px; }
 @media (max-width: 1180px) { .pantalla-bloques.bloques-tres { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .pantalla-bloques.bloques-tres { grid-template-columns: minmax(0, 1fr); } }
 .bloques-tres .bloque-cabecera h2, .pano-bloque .bloque-cabecera h2 { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gray-700); }

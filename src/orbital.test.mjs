@@ -134,3 +134,17 @@ test('el núcleo tiene lugar para su texto y ningún trabajador lo toca', () => 
     }
   }
 })
+
+test('con muchos trabajadores las órbitas se juntan y ninguno pisa las tarjetas', () => {
+  const muchos = Array.from({ length: 9 }, (_, i) => ({ clave: 't' + i, nombre: 'T' + i, color: 'azul', activo: true }))
+  for (let giro = 0; giro < 360; giro += 15) {
+    const d = disposicion(muchos, { rotacion: giro })
+    const tarjetas = d.nodos.filter(n => n.tipo !== 'trabajador')
+    for (const n of d.nodos.filter(x => x.tipo === 'trabajador')) {
+      for (const c of tarjetas) {
+        const dx = Math.abs(n.x - c.x) - LIENZO.tarjeta.ancho / 2, dy = Math.abs(n.y - c.y) - LIENZO.tarjeta.alto / 2
+        assert.ok(dx > LIENZO.nodo || dy > LIENZO.nodo, `${n.id} pisa ${c.id} con giro ${giro}`)
+      }
+    }
+  }
+})

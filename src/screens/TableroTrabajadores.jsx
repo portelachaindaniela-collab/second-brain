@@ -4,7 +4,8 @@ import { colorIdentidad, actividadPorHora } from '../tablero.mjs'
 
 const BARRAS = { ancho: 480, alto: 110 }
 
-export function Actividad({ trabajadores, corridasPor, ahora }) {
+// compacto: sin la nota ni la leyenda (en la grilla de paneles los colores ya se leen en los otros gráficos).
+export function Actividad({ trabajadores, corridasPor, ahora, compacto = false }) {
   // La hora cambia cada hora: no hace falta recalcular con cada tic del reloj.
   const hora = Math.floor(ahora / 3600_000)
   const horas = useMemo(() => actividadPorHora(trabajadores, corridasPor, hora * 3600_000), [trabajadores, corridasPor, hora])
@@ -12,7 +13,7 @@ export function Actividad({ trabajadores, corridasPor, ahora }) {
   const paso = BARRAS.ancho / horas.length
   const porClave = Object.fromEntries(trabajadores.map(t => [t.clave, t]))
   return <>
-    <p className="tablero-nota tenue">corridas por hora · máx {maximo}</p>
+    {!compacto && <p className="tablero-nota tenue">corridas por hora · máx {maximo}</p>}
     <svg className="tablero-barras" viewBox={`0 0 ${BARRAS.ancho} ${BARRAS.alto}`} preserveAspectRatio="none" role="img"
       aria-label={`Corridas por hora en las últimas 24 horas: ${horas.reduce((s, h) => s + h.total, 0)} en total`}>
       <line x1="0" x2={BARRAS.ancho} y1={BARRAS.alto - 0.5} y2={BARRAS.alto - 0.5} className="tablero-eje" />
@@ -32,9 +33,9 @@ export function Actividad({ trabajadores, corridasPor, ahora }) {
       })}
     </svg>
     <div className="consola-eje tenue"><span>-24h</span><span>now</span></div>
-    <div className="tablero-leyenda">
+    {!compacto && <div className="tablero-leyenda">
       {trabajadores.map(t => <span key={t.clave}><i style={{ background: colorIdentidad(t.color) }} />{t.nombre}</span>)}
-    </div>
+    </div>}
   </>
 }
 

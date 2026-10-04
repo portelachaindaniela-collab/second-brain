@@ -7,7 +7,9 @@ import { RECORRIDOS, REGISTRO, FUENTES } from './tablero.mjs'
 import { trabada } from './trabajadores.mjs'
 
 export const LIENZO = { ancho: 880, alto: 600, cx: 440, cy: 300, nucleo: 54, nodo: 18, tarjeta: { ancho: 152, alto: 44 } }
-const ORBITA_BASE = 124, ORBITA_PASO = 32, ACHATADO = 0.62
+// ORBITA_MAX: la órbita más grande nunca llega a las tarjetas de fuentes y destinos; con muchos trabajadores,
+// las órbitas se juntan en vez de crecer hacia afuera.
+const ORBITA_BASE = 124, ORBITA_PASO = 32, ORBITA_MAX = 246, ACHATADO = 0.62
 const EXTERIOR = { rx: 348, ry: 232 }
 // Vertical: 340 de ancho (lo que entra en un celular sin achicar la letra), órbitas más altas que anchas y tarjetas
 // en dos columnas. El alto y el centro dependen de cuántas fuentes y destinos hay: los calcula disposicion().
@@ -72,7 +74,7 @@ export function disposicion(trabajadores, { rotacion = 0, elegido = null, vertic
   const destinos = [...new Set([...recorridos.flatMap(r => r.destinos), REGISTRO])]
   const orbitaDe = vertical
     ? i => ({ rx: VERTICAL.base + i * VERTICAL.paso, ry: (VERTICAL.base + i * VERTICAL.paso) * VERTICAL.alargado })
-    : i => ({ rx: ORBITA_BASE + i * ORBITA_PASO, ry: (ORBITA_BASE + i * ORBITA_PASO) * ACHATADO })
+    : i => { const paso = n > 1 ? Math.min(ORBITA_PASO, (ORBITA_MAX - ORBITA_BASE) / (n - 1)) : ORBITA_PASO; return { rx: ORBITA_BASE + i * paso, ry: (ORBITA_BASE + i * paso) * ACHATADO } }
   let L = LIENZO
   if (vertical) {
     const { margen, aireOrbita } = VERTICAL
@@ -180,7 +182,8 @@ export function focoDe(clave, { enlaces }) {
 // ---------- Etiquetas de los trabajadores sin choques ----------
 // Ancho aproximado de un texto en letra común: alcanza para la pastilla de fondo de cada etiqueta.
 export const anchoTexto = (texto, px) => String(texto).length * px * 0.56
-export const ETIQUETA = { alto: 40, separacion: 10, aire: 4 }
+// Una línea: solo el nombre corto. Cuándo corrió y cuándo vuelve está en la ficha al pasar el mouse y en el panel.
+export const ETIQUETA = { alto: 24, separacion: 8, aire: 4 }
 
 const choca = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 

@@ -43,7 +43,7 @@
 .orbital-etiqueta rect { fill: var(--surface-inset); fill-opacity: .92; stroke: var(--gray-200); stroke-width: 1; }
 .orbital-trabajador.is-elegido .orbital-etiqueta rect { stroke: var(--id); stroke-opacity: .6; }
 .orbital-nombre, .orbital-dato { text-anchor: middle; }
-.orbital-nombre { font-size: 14px; font-weight: 600; fill: var(--gray-900); }
+.orbital-nombre { font-size: 13px; font-weight: 600; fill: var(--gray-900); }
 .orbital-dato { font-size: 12px; fill: var(--gray-500); }
 .orbital-icono-marca { fill: var(--gray-700); }
 .orbital-icono-trazo { fill: none; stroke: var(--gray-700); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }

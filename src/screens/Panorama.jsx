@@ -150,7 +150,7 @@ export function PanelesPanorama({ trabajadores, corridasPor, resumenes, ahora, s
   return <Bloques disposicion="tres">
     <Bloque titulo="Duración, últimas 40" accion={nota('por trabajador')}><Duraciones trabajadores={trabajadores} resumenes={resumenes} /></Bloque>
     <Bloque titulo="Qué trajo cada uno" accion={nota('resultados 24 h')}><QueTrajo trabajadores={trabajadores} resumenes={resumenes} /></Bloque>
-    <Bloque titulo="Actividad por hora" accion={nota('corridas 24 h')}><Actividad trabajadores={trabajadores} corridasPor={corridasPor} ahora={ahora} /></Bloque>
+    <Bloque titulo="Actividad por hora" accion={nota('corridas 24 h')}><Actividad compacto trabajadores={trabajadores} corridasPor={corridasPor} ahora={ahora} /></Bloque>
     <Bloque titulo="Canillita por tema" accion={nota(`${n(totalTemas)} notas 24 h`)}><Temas temas={temas} /></Bloque>
     <Bloque titulo="Canillita por canal" accion={nota('notas 24 h')}><Canales datos={datos} /></Bloque>
     <Bloque titulo="Dónde falla" accion={nota(datos ? `${datos.fallan.length} de ${datos.total} fuentes` : '…')}><Fallas datos={datos} /></Bloque>
