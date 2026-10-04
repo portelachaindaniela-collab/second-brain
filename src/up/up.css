@@ -157,6 +157,39 @@
 .up-btn-borrar:hover:not(:disabled) { background: var(--up-error); color: #fff; }
 @media (hover: none) { .up-dato .up-link { visibility: visible; } }
 
+/* Agentes: la redacción (una columna por agente) y el registro de corridas */
+.up-redaccion { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 44px; border-top: 3px double var(--up-tinta); }
+.up-agente { padding: 18px 24px 22px; border-bottom: 1px solid var(--up-filete); }
+.up-agente:not(:nth-child(3n + 1)) { border-left: 1px solid var(--up-filete); }
+.up-agente:nth-child(3n + 1) { padding-left: 0; }
+.up-agente:nth-child(3n) { padding-right: 0; }
+.up-agente.futuro { color: var(--up-tinta-3); }
+.up-agente .up-vol { position: relative; }
+.up-agente-rol { font: italic 400 14.5px/21px var(--up-serif); color: var(--up-tinta-2); margin-bottom: 14px; min-height: 63px; }
+.up-agente.futuro .up-agente-rol { color: var(--up-tinta-3); }
+.up-agente .up-cifra { font-size: 38px; line-height: 42px; }
+.up-agente-extra { font: 500 12px/17px var(--up-sans); color: var(--up-tinta-3); margin-top: 4px; }
+.up-agente-ultimo { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--up-filete); font: 400 13px/18px var(--up-sans); color: var(--up-tinta-2); }
+.up-latido { width: 8px; height: 8px; border-radius: 50%; background: var(--up-ok); margin-left: 4px; animation: up-latido 1.2s ease-in-out infinite; }
+@keyframes up-latido { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .up-latido { animation: none; } }
+.up-corridas { list-style: none; margin: 0; padding: 0; }
+.up-corrida { border-bottom: 1px solid var(--up-filete); }
+.up-corrida-fila { width: 100%; display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 16px; align-items: baseline; padding: 14px 0; background: none; border: 0; text-align: left; color: var(--up-tinta); }
+.up-corrida-fila:hover .up-corrida-titulo { text-decoration: underline; text-underline-offset: 3px; }
+.up-corrida-hora { font: 600 12px/18px var(--up-sans); color: var(--up-tinta-3); font-variant-numeric: tabular-nums; }
+.up-corrida-titulo { font: 600 17px/24px var(--up-serif); }
+.up-corrida-titulo small { display: block; font: 500 12px/17px var(--up-sans); color: var(--up-tinta-3); }
+.c-ok { color: var(--up-ok); } .c-cortado { color: var(--up-aviso); } .c-error { color: var(--up-error); } .c-corriendo { color: var(--up-link); }
+.up-pasos { list-style: none; margin: 0 0 16px 136px; padding: 0 0 0 16px; border-left: 2px solid var(--up-tinta); }
+.up-pasos li { display: grid; grid-template-columns: 48px 110px minmax(0, 1fr); gap: 12px; padding: 7px 0; font: 400 14.5px/21px var(--up-serif); }
+.up-paso-hora { font: 500 11.5px/21px var(--up-sans); color: var(--up-tinta-3); font-variant-numeric: tabular-nums; }
+.up-paso-agente { font: 700 10.5px/21px var(--up-sans); letter-spacing: .06em; text-transform: uppercase; }
+.up-paso-texto .up-logo { display: inline-block; vertical-align: -2px; margin-right: 6px; width: 14px; height: 14px; }
+.up-paso-texto b { font-weight: 600; }
+.up-paso-texto span { color: var(--up-tinta-2); }
+.up-paso-error { color: var(--up-error); }
+
 /* Breves: listas cortas del lateral */
 .up-breve { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--up-filete); }
 .up-breve:last-child { border-bottom: none; }
@@ -191,6 +224,10 @@
 
 @media (max-width: 1000px) {
   .up-ficha { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .up-redaccion { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .up-agente:nth-child(n) { padding: 18px 20px 22px; border-left: 1px solid var(--up-filete); }
+  .up-agente:nth-child(2n + 1) { padding-left: 0; border-left: 0; }
+  .up-agente:nth-child(2n) { padding-right: 0; }
   .up-portada { grid-template-columns: 1fr; }
   .up-portada-principal { padding-right: 0; border-right: none; padding-bottom: 28px; border-bottom: 3px double var(--up-tinta); margin-bottom: 28px; }
   .up-portada-lateral { padding-left: 0; }
@@ -213,4 +250,13 @@
   .up-caso-chequeos, .up-cal-detalle { padding-left: 0; }
   .up-cal-hueco, .up-cal-dia { min-height: 56px; }
   .up-cal-tema { display: none; }
+  .up-redaccion { grid-template-columns: 1fr; }
+  .up-agente, .up-agente:nth-child(n) { padding: 16px 0; border-left: 0; }
+  .up-agente-rol { min-height: 0; }
+  .up-corrida-fila { grid-template-columns: minmax(0, 1fr) auto; }
+  .up-corrida-hora { grid-column: 1 / -1; }
+  .up-pasos { margin-left: 0; }
+  .up-pasos li { grid-template-columns: 44px minmax(0, 1fr); }
+  .up-paso-agente { grid-column: 2; }
+  .up-paso-texto { grid-column: 2; }
 }

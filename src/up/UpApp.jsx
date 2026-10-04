@@ -5,6 +5,7 @@ import Preguntas from './Preguntas.jsx'
 import Revisor from './Revisor.jsx'
 import Calendario from './Calendario.jsx'
 import Ficha from './Ficha.jsx'
+import Agentes from './Agentes.jsx'
 
 const PANTALLAS = [
   { id: 'hoy', label: 'Hoy' },
@@ -12,6 +13,7 @@ const PANTALLAS = [
   { id: 'revisor', label: 'Revisor', cuenta: 'revision' },
   { id: 'calendario', label: 'Calendario' },
   { id: 'ficha', label: 'Ficha de datos' },
+  { id: 'agentes', label: 'Agentes' },
 ]
 
 function fechaConAnio() {
@@ -61,6 +63,7 @@ export default function UpApp({ email, volver }) {
           {pantalla === 'revisor' && <Revisor alCambiar={contar} />}
           {pantalla === 'calendario' && <Calendario />}
           {pantalla === 'ficha' && <Ficha />}
+          {pantalla === 'agentes' && <Agentes />}
         </main>
       </div>
     </div>

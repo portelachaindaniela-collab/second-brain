@@ -22,6 +22,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 // Gemini saturado o con error interno (503/500): se reintenta dos veces. Límite de cuota (429): si pide esperar poco se espera una vez;
 // si no, la corrida se corta con ErrorCuota y lo que falta queda para la próxima.
 const ESPERAS_SATURADO_MS = [3000, 8000];
+const NOMBRE_RED: Record<string, string> = { linkedin: "LinkedIn", x: "X", instagram: "Instagram" };
 const ESPERA_CUOTA_MAX_S = 20;
 
 async function gemini(geminiKey: string, modelo: string, prompt: { sistema: string; usuario: string }) {
@@ -57,9 +58,29 @@ async function gemini(geminiKey: string, modelo: string, prompt: { sistema: stri
   }
 }
 
+// Registro de la corrida en up_corridas: se abre recién cuando hay algo que trabajar, para que las corridas
+// del cron sin trabajo no llenen el historial. Cada paso se guarda al momento, así la pantalla Agentes lo ve en vivo.
+function crearRegistro(admin: any, dia: { owner_id: string; fecha: string }, origen: string) {
+  let id: string | null = null;
+  const pasos: any[] = [];
+  return {
+    async abrir() {
+      const { data } = await admin.from("up_corridas").insert({ owner_id: dia.owner_id, fecha: dia.fecha, origen }).select("id").single();
+      id = data?.id ?? null;
+    },
+    async paso(agente: string, accion: string, detalle: string | null = null, red: string | null = null) {
+      pasos.push({ agente, red, accion, detalle, at: new Date().toISOString() });
+      if (id) await admin.from("up_corridas").update({ pasos }).eq("id", id);
+    },
+    async cerrar(estado: string, error: string | null = null) {
+      if (id) await admin.from("up_corridas").update({ estado, error, pasos, finalizado_at: new Date().toISOString() }).eq("id", id);
+    },
+  };
+}
+
 type Dia = { id: string; owner_id: string; fecha: string; tema_semana: string; tema_dia: string; redes: string[]; formato_instagram: string; tema_instagram: string | null; fotos_propias: boolean };
 
-async function procesarDia(admin: any, llamar: (p: any) => Promise<any>, dia: Dia, regenerar: boolean) {
+async function procesarDia(admin: any, llamar: (p: any) => Promise<any>, dia: Dia, regenerar: boolean, origen: string) {
   const redes = planificar(dia);
   const { data: existentes, error } = await admin.from("up_piezas").select("id,red,estado,respuesta,texto").eq("owner_id", dia.owner_id).eq("fecha", dia.fecha);
   if (error) throw new Error(error.message);
@@ -76,8 +97,27 @@ async function procesarDia(admin: any, llamar: (p: any) => Promise<any>, dia: Di
   const aTrabajar: any[] = redes.map(r => porRed.get(r)).filter((p: any) => piezaParaTrabajar(p, regenerar));
   if (!aTrabajar.length) return { fecha: dia.fecha, piezas: [] };
 
+  const registro = crearRegistro(admin, dia, origen);
+  await registro.abrir();
+  await registro.paso("planificador", "planificó", `${redes.map(r => NOMBRE_RED[r]).join(", ")}. Trabaja: ${aTrabajar.map((p: any) => NOMBRE_RED[p.red]).join(", ")}.`);
+  try {
+    const resultados = await trabajarPiezas(admin, llamar, dia, aTrabajar, existentes ?? [], registro);
+    await registro.cerrar("ok");
+    return { fecha: dia.fecha, piezas: resultados };
+  } catch (e) {
+    if (e instanceof ErrorCuota) {
+      await registro.paso("sistema", "cortó", "Gemini llegó a su límite de consultas; sigue en la próxima corrida.");
+      await registro.cerrar("cortado");
+    } else {
+      await registro.cerrar("error", e instanceof Error ? e.message : String(e));
+    }
+    throw e;
+  }
+}
+
+async function trabajarPiezas(admin: any, llamar: (p: any) => Promise<any>, dia: Dia, aTrabajar: any[], existentes: any[], registro: ReturnType<typeof crearRegistro>) {
   // La respuesta de Daniela (pantalla "Necesito que me cuentes") vale para todo el día.
-  const respuesta = (existentes ?? []).map((p: any) => p.respuesta).find((r: string | null) => r && r.trim()) ?? null;
+  const respuesta = existentes.map((p: any) => p.respuesta).find((r: string | null) => r && r.trim()) ?? null;
   const { data: ficha, error: errorFicha } = await admin.from("up_ficha_datos").select("id,grupo,dato").eq("owner_id", dia.owner_id).order("grupo").order("orden");
   if (errorFicha) throw new Error(errorFicha.message);
 
@@ -85,9 +125,11 @@ async function procesarDia(admin: any, llamar: (p: any) => Promise<any>, dia: Di
   const investigacion = leerInvestigacion(await llamar(promptInvestigador({ dia, ficha, respuesta })), ficha);
   if (!investigacion.suficiente) {
     await admin.from("up_piezas").update({ estado: "falta_info", pregunta: investigacion.pregunta, texto: null, motivo_revision: null }).in("id", aTrabajar.map((p: any) => p.id));
-    return { fecha: dia.fecha, piezas: aTrabajar.map((p: any) => ({ red: p.red, estado: "falta_info" })) };
+    await registro.paso("investigador", "preguntó", investigacion.pregunta);
+    return aTrabajar.map((p: any) => ({ red: p.red, estado: "falta_info" }));
   }
   const datos = ficha.filter((d: any) => investigacion.datos.includes(d.id));
+  await registro.paso("investigador", `eligió ${datos.length} ${datos.length === 1 ? "dato" : "datos"}`, datos.map((d: any) => d.dato).join(" · ") || null);
 
   // Agentes 3 y 4 por red, de a una (la cuota gratuita de Gemini es de pocas consultas por minuto):
   // redactor, revisor y hasta MAX_VUELTAS_REVISION correcciones.
@@ -95,15 +137,19 @@ async function procesarDia(admin: any, llamar: (p: any) => Promise<any>, dia: Di
   for (const p of aTrabajar) {
     try {
       let pieza = armarPieza(p.red, dia, await llamar(promptRedactor({ red: p.red, dia, datos, respuesta })));
+      await registro.paso("redactor", "escribió", `${pieza.texto.length} caracteres.`, p.red);
       let vueltas = 0;
       let problemas: any[] = [];
       while (true) {
         problemas = chequearLargos(p.red, pieza);
         if (!problemas.length) problemas = leerRevision(await llamar(promptRevisor({ red: p.red, pieza, datos, respuesta }))).problemas;
+        await registro.paso("revisor", problemas.length ? "marcó" : "aprobó", problemas.length ? describirProblemas(problemas) : null, p.red);
         if (!problemas.length || vueltas >= MAX_VUELTAS_REVISION) break;
         vueltas++;
         pieza = armarPieza(p.red, dia, await llamar(promptRedactor({ red: p.red, dia, datos, respuesta, correccion: { motivos: describirProblemas(problemas), anterior: pieza.texto } })));
+        await registro.paso("redactor", `corrigió (vuelta ${vueltas})`, `${pieza.texto.length} caracteres.`, p.red);
       }
+      if (problemas.length) await registro.paso("revisor", "pasó a revisión", "Sigue marcado después de las correcciones; lo decidís vos.", p.red);
       const estado = problemas.length ? "revision" : "pendiente";
       await admin.from("up_piezas").update({
         texto: pieza.texto, contenido: pieza.contenido, estado, intentos_revision: vueltas,
@@ -115,10 +161,11 @@ async function procesarDia(admin: any, llamar: (p: any) => Promise<any>, dia: Di
       if (e instanceof ErrorCuota) throw e;
       const mensaje = e instanceof Error ? e.message : String(e);
       await admin.from("up_piezas").update({ estado: "error", motivo_revision: mensaje }).eq("id", p.id);
+      await registro.paso("sistema", "error", mensaje, p.red);
       resultados.push({ red: p.red, estado: "error", error: mensaje });
     }
   }
-  return { fecha: dia.fecha, piezas: resultados };
+  return resultados;
 }
 
 Deno.serve(async (req: Request) => {
@@ -160,7 +207,7 @@ Deno.serve(async (req: Request) => {
   const regenerar = body?.regenerar === true;
   try {
     const resultado: any[] = [];
-    for (const dia of dias) resultado.push(await procesarDia(admin, llamar, dia, regenerar));
+    for (const dia of dias) resultado.push(await procesarDia(admin, llamar, dia, regenerar, secreto ? "cron" : "app"));
     return json({ fecha, modelo, dias: resultado });
   } catch (e) {
     if (e instanceof ErrorCuota) {
