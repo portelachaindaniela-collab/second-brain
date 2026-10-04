@@ -8,41 +8,34 @@ const PANTALLAS = [
   { id: 'ficha', label: 'Ficha de datos' },
 ]
 
+function fechaLarga() {
+  const t = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
 export default function UpApp({ email, volver }) {
   const [pantalla, setPantalla] = useState('calendario')
-  const [menuAbierto, setMenuAbierto] = useState(false)
-  const actual = PANTALLAS.find(p => p.id === pantalla)
 
   return (
-    <div className="app-shell">
-      {menuAbierto && <div className="sidebar-backdrop" onClick={() => setMenuAbierto(false)} />}
-      <aside className={`sidebar${menuAbierto ? ' open' : ''}`} onClick={() => setMenuAbierto(false)}>
-        <div className="sidebar-brand">
-          <div className="brand-mark">UP</div>
-          <div className="brand-text">
-            <strong>UP</strong>
-            <span>{email}</span>
-          </div>
+    <div className="up">
+      <div className="up-pag">
+        <div className="up-tope">
+          <button onClick={volver}>‹ Inicio</button>
+          <span className="up-sp" />
+          <span className="up-tope-email">{email}</span>
+          <button onClick={() => supabase.auth.signOut()}>Salir</button>
         </div>
-        <div className="nav-group-label">Publicaciones</div>
-        <ul className="nav-list">
-          {PANTALLAS.map(p => (
-            <li key={p.id}><button className={`nav-item${pantalla === p.id ? ' active' : ''}`} onClick={() => setPantalla(p.id)}>{p.label}</button></li>
-          ))}
-        </ul>
-        <div className="sidebar-footer">
-          <button className="nav-item" onClick={volver} style={{ padding: '4px 0' }}>← Inicio</button>
-          <button className="nav-item" onClick={() => supabase.auth.signOut()} style={{ marginTop: 8, padding: '4px 0' }}>Salir</button>
-        </div>
-      </aside>
-
-      <div className="main-col">
-        <header className="topbar">
-          <button className="menu-toggle" aria-label="Abrir menú" onClick={() => setMenuAbierto(true)}>☰</button>
-          <div className="topbar-title">{actual.label}</div>
-          <div className="topbar-spacer" />
+        <header className="up-cab">
+          <div className="up-cab-izq">{fechaLarga()}</div>
+          <h1>UP</h1>
+          <div className="up-cab-lema">Publicaciones de LinkedIn, X e Instagram</div>
         </header>
-        <main className="content">
+        <nav className="up-secc">
+          {PANTALLAS.map(p => (
+            <button key={p.id} className={pantalla === p.id ? 'on' : ''} onClick={() => setPantalla(p.id)}>{p.label}</button>
+          ))}
+        </nav>
+        <main className="up-cuerpo">
           {pantalla === 'calendario' && <Calendario />}
           {pantalla === 'ficha' && <Ficha />}
         </main>

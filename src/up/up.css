@@ -1,4 +1,4 @@
-/* Inicio de Second Brain y app UP. Reusa los tokens y clases de styles.css. */
+/* Inicio de Second Brain. Reusa los tokens y clases de styles.css. */
 .inicio { width: 100%; max-width: 640px; padding: 24px 16px; text-align: center; }
 .inicio h1 { font-size: 22px; margin-bottom: 4px; }
 .inicio .sub { font-size: 12.5px; color: var(--gray-500); margin-bottom: 26px; }
@@ -10,15 +10,60 @@
 .inicio-app span:last-child { font-size: 12.5px; color: var(--gray-500); line-height: 1.45; }
 @media (max-width: 560px) { .inicio-apps { grid-template-columns: 1fr; } }
 
-.up-dia { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 11px 14px; border-bottom: 1px solid var(--gray-100); font-size: 13.5px; }
-.up-dia:last-child { border-bottom: none; }
-.up-dia.pasado { opacity: .55; }
-.up-dia-fecha { font-family: var(--font-mono); font-size: 12px; color: var(--gray-500); font-variant-numeric: tabular-nums; }
-.up-dia-ig { margin-top: 4px; font-size: 12.5px; color: var(--gray-500); }
-.up-semana { padding: 14px 14px 6px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--gray-500); font-family: var(--font-mono); }
-.up-ficha-grupo { margin-bottom: 14px; }
-.up-ficha-grupo h2 { font-size: 14px; padding: 12px 14px; border-bottom: 1px solid var(--gray-100); }
-@media (max-width: 700px) {
-  .up-dia { grid-template-columns: minmax(0, 1fr) auto; }
-  .up-dia-fecha { grid-column: 1 / -1; }
+/* UP: estética de diario, clara, independiente del tema oscuro de BS67. */
+.up {
+  --up-papel: #FFFFFF; --up-tinta: #121212; --up-tinta-2: #363636; --up-tinta-3: #727272;
+  --up-filete: #DFDFDF; --up-link: #326891; --up-ok: #3D6B4F; --up-aviso: #9A5B13; --up-error: #A3302A;
+  --up-serif: 'Source Serif 4', Georgia, serif; --up-titulo: 'Playfair Display', 'Source Serif 4', serif; --up-sans: 'Libre Franklin', Helvetica, Arial, sans-serif;
+  position: fixed; inset: 0; overflow-y: auto; background: var(--up-papel); color: var(--up-tinta); color-scheme: light;
+  font-family: var(--up-serif); -webkit-font-smoothing: antialiased;
+}
+.up button { font-family: var(--up-sans); cursor: pointer; }
+.up-pag { max-width: 1240px; margin: 0 auto; padding: 0 32px 64px; }
+.up-sp { flex: 1; }
+.up-tope { display: flex; align-items: center; gap: 18px; height: 44px; font: 500 12px/1 var(--up-sans); color: var(--up-tinta-2); }
+.up-tope button { background: none; border: none; padding: 0; font: inherit; color: inherit; }
+.up-tope button:hover { color: var(--up-tinta); text-decoration: underline; }
+.up-cab { position: relative; text-align: center; padding: 4px 0 14px; }
+.up-cab h1 { font-family: var(--up-titulo); font-weight: 800; font-size: 56px; line-height: 60px; letter-spacing: -.01em; }
+.up-cab-lema { font: italic 400 14px/20px var(--up-serif); color: var(--up-tinta-3); margin-top: 2px; }
+.up-cab-izq { position: absolute; left: 0; bottom: 18px; font: 600 11px/15px var(--up-sans); }
+.up-secc { display: flex; justify-content: center; gap: 28px; height: 40px; border-top: 1px solid var(--up-tinta); border-bottom: 3px double var(--up-tinta); }
+.up-secc button { background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -3px; padding: 0 2px; font: 600 12.5px/1 var(--up-sans); color: var(--up-tinta); white-space: nowrap; }
+.up-secc button.on { border-bottom-color: var(--up-tinta); }
+.up-cuerpo { padding-top: 28px; }
+.up-enc { max-width: 760px; margin-bottom: 28px; }
+.up-titular { font-family: var(--up-titulo); font-weight: 700; font-size: 38px; line-height: 44px; letter-spacing: -.01em; }
+.up-bajada { font: 400 17px/25px var(--up-serif); color: var(--up-tinta-2); margin-top: 8px; }
+.up-vol { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid var(--up-tinta); font: 700 11px/1 var(--up-sans); letter-spacing: .06em; text-transform: uppercase; }
+.up-vol span { margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--up-tinta-3); }
+.up-bloque { margin-bottom: 36px; }
+.up-vacio { padding: 24px 0; font: italic 400 15px/22px var(--up-serif); color: var(--up-tinta-3); }
+.up-error { padding: 16px 0; font: 600 13px/20px var(--up-sans); color: var(--up-error); }
+.up-logo { width: 16px; height: 16px; display: block; flex-shrink: 0; }
+.up-etiqueta { font: 700 10.5px/1 var(--up-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--up-aviso); margin-left: 6px; }
+
+.up-dia { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 20px; align-items: start; padding: 16px 0; border-bottom: 1px solid var(--up-filete); }
+.up-dia.pasado { opacity: .5; }
+.up-dia.hoy { box-shadow: inset 3px 0 var(--up-tinta); padding-left: 12px; }
+.up-dia-fecha { font: 700 10.5px/14px var(--up-sans); text-transform: uppercase; letter-spacing: .04em; text-align: center; }
+.up-dia-fecha b { display: block; font-family: var(--up-titulo); font-size: 26px; line-height: 30px; letter-spacing: 0; }
+.up-dia-texto h3 { font: 600 18px/25px var(--up-serif); }
+.up-dia-texto p { font: italic 400 14.5px/21px var(--up-serif); color: var(--up-tinta-3); margin-top: 4px; }
+.up-dia-redes { display: flex; align-items: center; gap: 5px; padding-top: 4px; }
+
+.up-ficha { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 48px; }
+.up-datos { list-style: none; margin: 0; padding: 0; }
+.up-datos li { padding: 12px 0; border-bottom: 1px solid var(--up-filete); font: 400 16px/24px var(--up-serif); }
+.up-datos li small { display: block; margin-top: 2px; font: 500 11px/15px var(--up-sans); color: var(--up-tinta-3); }
+
+@media (max-width: 760px) {
+  .up-pag { padding: 0 16px 48px; }
+  .up-tope-email, .up-cab-izq { display: none; }
+  .up-cab h1 { font-size: 44px; line-height: 48px; }
+  .up-secc { justify-content: flex-start; gap: 20px; overflow-x: auto; }
+  .up-titular { font-size: 30px; line-height: 36px; }
+  .up-dia { grid-template-columns: 48px minmax(0, 1fr); gap: 14px; }
+  .up-dia-redes { grid-column: 2; padding-top: 0; }
+  .up-ficha { grid-template-columns: 1fr; }
 }

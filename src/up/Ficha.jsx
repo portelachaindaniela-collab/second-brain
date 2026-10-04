@@ -16,31 +16,30 @@ export default function Ficha() {
       })
   }, [])
 
-  if (error) return <p role="alert" className="feedback-error">{error}</p>
-  if (!datos) return <p className="empty-state">Cargando…</p>
+  if (error) return <p role="alert" className="up-error">{error}</p>
+  if (!datos) return <p className="up-vacio">Cargando…</p>
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Ficha de datos</h1>
-          <div className="page-sub">Única fuente de hechos y números · {datos.length} datos</div>
-        </div>
+      <div className="up-enc">
+        <h2 className="up-titular">Ficha de datos</h2>
+        <p className="up-bajada">La única fuente de hechos y números. Si un dato no está acá, UP te lo pregunta antes de escribirlo.</p>
       </div>
-      {GRUPOS.map(g => {
-        const items = datos.filter(d => d.grupo === g)
-        return (
-          <div key={g} className="card up-ficha-grupo">
-            <h2>{g}</h2>
-            {items.length === 0 ? <p className="empty-state">Sin datos.</p> : items.map(d => (
-              <div key={d.id} className="list-item">
-                <div style={{ minWidth: 0 }}>{d.dato}</div>
-                {d.fuente && <div className="list-side">{d.fuente}</div>}
-              </div>
-            ))}
-          </div>
-        )
-      })}
+      <div className="up-ficha">
+        {GRUPOS.map(g => {
+          const items = datos.filter(d => d.grupo === g)
+          return (
+            <section key={g} className="up-bloque">
+              <div className="up-vol">{g}<span>{items.length} {items.length === 1 ? 'dato' : 'datos'}</span></div>
+              {items.length === 0 ? <p className="up-vacio">Sin datos.</p> : (
+                <ul className="up-datos">
+                  {items.map(d => <li key={d.id}>{d.dato}{d.fuente && <small>{d.fuente}</small>}</li>)}
+                </ul>
+              )}
+            </section>
+          )
+        })}
+      </div>
     </>
   )
 }
