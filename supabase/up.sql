@@ -196,3 +196,33 @@ alter table public.up_piezas add column error_publicacion text;
 
 -- Cada 15 minutos el publicador sube lo aprobado de hoy cuyo horario ya llegó.
 select cron.schedule('up-publicador', '*/15 * * * *', $c$select net.http_post(url := 'https://itultpcdafpxpgtblgfb.supabase.co/functions/v1/up-publicador', headers := jsonb_build_object('Content-Type', 'application/json', 'apikey', 'sb_publishable_jK_ebdVy29E9sKQA4sd3Qw_X4YJJ4Qu', 'x-trabajador-secreto', (select decrypted_secret from vault.decrypted_secrets where name = 'trabajadores_secreto')), timeout_milliseconds := 60000);$c$);
+
+-- ---------- Noruega, el agente madre (migraciones up_noruega y up_noruega_cron) ----------
+-- Cada 30 minutos chequea que el resto funcione (borradores del día, corridas, diseñador, publicador, conexiones,
+-- preguntas pendientes y crons) y guarda el resultado acá. La pantalla Agentes muestra la última revisión.
+create table public.up_chequeos (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  estado text not null check (estado in ('ok', 'aviso', 'falla')),
+  chequeos jsonb not null default '[]',
+  at timestamptz not null default now()
+);
+create index up_chequeos_owner_idx on public.up_chequeos (owner_id, at desc);
+alter table public.up_chequeos enable row level security;
+create policy "dueña lee sus chequeos" on public.up_chequeos for select to authenticated using (owner_id = auth.uid());
+alter publication supabase_realtime add table public.up_chequeos;
+
+-- Última corrida de cada cron de UP (solo para la Edge Function up-noruega).
+create function public.up_estado_crons()
+returns table (jobname text, ultimo_inicio timestamptz, ultimo_estado text)
+language sql stable security definer set search_path to ''
+as $$
+  select j.jobname::text, d.start_time, d.status::text
+  from cron.job j
+  left join lateral (select r.start_time, r.status from cron.job_run_details r where r.jobid = j.jobid order by r.start_time desc limit 1) d on true
+  where j.jobname like 'up-%'
+$$;
+revoke execute on function public.up_estado_crons() from public, anon, authenticated;
+grant execute on function public.up_estado_crons() to service_role;
+
+select cron.schedule('up-noruega', '5,35 * * * *', $c$select net.http_post(url := 'https://itultpcdafpxpgtblgfb.supabase.co/functions/v1/up-noruega', headers := jsonb_build_object('Content-Type', 'application/json', 'apikey', 'sb_publishable_jK_ebdVy29E9sKQA4sd3Qw_X4YJJ4Qu', 'x-trabajador-secreto', (select decrypted_secret from vault.decrypted_secrets where name = 'trabajadores_secreto')), timeout_milliseconds := 60000);$c$);
