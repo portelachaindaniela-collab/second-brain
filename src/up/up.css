@@ -12,8 +12,8 @@
 
 /* UP: estética de diario, clara, independiente del tema oscuro de BS67. */
 .up {
-  --up-papel: #FFFFFF; --up-tinta: #121212; --up-tinta-2: #363636; --up-tinta-3: #727272;
-  --up-filete: #DFDFDF; --up-link: #326891; --up-ok: #3D6B4F; --up-aviso: #9A5B13; --up-error: #A3302A;
+  --up-papel: #F7F4EC; --up-tinta: #121212; --up-tinta-2: #363636; --up-tinta-3: #727272;
+  --up-filete: #DDD8CC; --up-link: #326891; --up-ok: #3D6B4F; --up-aviso: #9A5B13; --up-error: #A3302A;
   --up-serif: 'Source Serif 4', Georgia, serif; --up-titulo: 'Playfair Display', 'Source Serif 4', serif; --up-sans: 'Libre Franklin', Helvetica, Arial, sans-serif;
   position: fixed; inset: 0; overflow-y: auto; background: var(--up-papel); color: var(--up-tinta); color-scheme: light;
   font-family: var(--up-serif); -webkit-font-smoothing: antialiased;
