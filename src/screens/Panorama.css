@@ -1,0 +1,77 @@
+/* Panorama de Trabajadores: el flujo y la grilla de paneles. Cada panel es un gráfico; el texto queda como etiqueta. */
+.pantalla-bloques.bloques-tres { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1180px) { .pantalla-bloques.bloques-tres { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .pantalla-bloques.bloques-tres { grid-template-columns: minmax(0, 1fr); } }
+.bloques-tres .bloque-cabecera h2, .pano-bloque .bloque-cabecera h2 { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gray-700); }
+
+.pano-flujo { display: block; width: 100%; height: auto; font-family: var(--font-mono); font-size: 10.5px; }
+.pano-hilo { fill: none; stroke-opacity: .55; stroke-linecap: round; }
+.pano-hilo-lee { fill: none; stroke: var(--id-violeta); stroke-opacity: .6; stroke-dasharray: 3 3; }
+.pano-nodo rect { fill: var(--surface-raised); stroke: var(--gray-300); }
+.pano-nodo text, .pano-trabajador text { fill: var(--gray-900); }
+.pano-tenue { fill: var(--gray-500) !important; font-size: 10px; }
+.pano-trabajador { cursor: pointer; }
+.pano-trabajador rect { fill: var(--surface-raised); stroke: var(--id); stroke-width: 1.4; }
+.pano-trabajador:hover rect, .pano-trabajador:focus-visible rect { fill: var(--surface-inset); stroke-width: 2.4; }
+.pano-trabajador:focus { outline: none; }
+.pano-bien { fill: var(--green-600); }
+.pano-mal { fill: var(--red-600); }
+.pano-pausa { fill: var(--gray-500); }
+.pano-destino rect { fill: var(--surface); stroke: var(--id); }
+.pano-destino .pano-destino-borde { fill: var(--id); stroke: none; }
+.pano-destino-nombre { fill: var(--gray-900); font-family: var(--font); font-size: 12px; }
+.pano-destino-num { fill: var(--id); font-size: 14px; font-weight: 700; }
+.pano-pie { fill: var(--gray-500); font-size: 9.5px; letter-spacing: .1em; }
+
+.pano-linea { display: block; overflow: visible; }
+.pano-fila { display: grid; grid-template-columns: minmax(0, 118px) minmax(0, 1fr) 58px; gap: 10px; align-items: center; height: 22px; font-family: var(--font-mono); font-size: 11px; color: var(--gray-700); }
+.pano-fila-baja { height: 20px; }
+.pano-fila .pano-linea { width: 100%; }
+.pano-quien { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pano-quien i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
+.pano-num { text-align: right; color: var(--gray-900); font-variant-numeric: tabular-nums; }
+.pano-barra { height: 6px; border-radius: 3px; background: var(--gray-200); overflow: hidden; }
+.pano-barra > div { height: 100%; border-radius: 3px; }
+.pano-vacio { margin: 0; font-family: var(--font-mono); font-size: 11px; color: var(--gray-500); }
+
+.pano-apilada { display: flex; gap: 2px; height: 22px; margin: 4px 0 18px; border-radius: 4px; overflow: hidden; }
+.pano-apilada > div { min-width: 3px; }
+.pano-trio { display: grid; grid-template-columns: repeat(3, 1fr); font-family: var(--font-mono); }
+.pano-trio small { display: block; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--gray-500); }
+.pano-trio b { display: block; margin: 4px 0 2px; font-size: 22px; color: var(--gray-900); }
+.pano-trio span { font-size: 10.5px; }
+
+.pano-lista { margin: 0; padding: 0; list-style: none; font-family: var(--font-mono); font-size: 11px; color: var(--gray-700); }
+.pano-lista li { display: flex; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--gray-200); }
+.pano-lista li span { width: 18px; color: var(--gray-500); }
+.pano-lista li em { margin-left: auto; font-style: normal; color: var(--red-600); }
+
+.pano-hora { display: block; width: 100%; height: auto; font-family: var(--font-mono); font-size: 10px; }
+.pano-eje { stroke: var(--gray-300); }
+.pano-sistema { margin: 10px 0 0; font-family: var(--font-mono); font-size: 10.5px; color: var(--gray-500); }
+
+.pano-regla { display: flex; flex-direction: column; gap: 12px; font-family: var(--font-mono); }
+.pano-regla small { display: block; font-size: 10.5px; color: var(--gray-500); }
+.pano-regla b { font-size: 17px; color: var(--gray-900); }
+.pano-regla .c2 { color: var(--id-violeta); }
+.pano-regla .c3 { color: var(--accent); }
+
+/* Cifras de la cabecera con su línea de 24 h. */
+.cifra-grafico { display: block; margin-top: 4px; }
+
+/* Tarjetas de robots en el mismo estilo: borde de identidad arriba, números grandes, líneas en vez de caracteres. */
+.robot-tarjeta { position: relative; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 14px; padding: 14px; border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--surface-inset); overflow: hidden; }
+.robot-tarjeta::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: var(--id); }
+.robot-tarjeta.is-corriendo { border-color: var(--id); }
+.robot-cuerpo { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.robot-titulo { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.robot-titulo strong { font-family: var(--font-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.robot-estado { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding: 1px 7px; border-radius: 9px; border: 1px solid currentColor; white-space: nowrap; }
+.robot-cifras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-family: var(--font-mono); }
+.robot-cifras small { display: block; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--gray-500); }
+.robot-cifras b { font-size: 18px; color: var(--gray-900); font-variant-numeric: tabular-nums; }
+.robot-graficos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.robot-graficos small { display: block; margin-bottom: 3px; font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--gray-500); }
+.robot-graficos .pano-linea { width: 100%; }
+.robot-error { margin: 0; font-family: var(--font-mono); font-size: 11px; color: var(--red-600); overflow-wrap: anywhere; }
+.robot-tarjeta .consola-eje { font-family: var(--font-mono); font-size: 9.5px; }

@@ -17,17 +17,31 @@ const VERTICAL = { base: 92, paso: 16, alargado: 1, margen: 6, hueco: 8, aireOrb
 export const GRADOS_POR_SEGUNDO = 0.3
 
 export const DESCRIPCION_FUENTE = {
-  github_pages: 'Documentación y reportes',
+  github_pages: 'Reporte del scraper',
   google: 'Calendario y mails',
-  sitios: 'Blogs y webs',
+  sitios: 'Webs que vigilás',
+  tareas: 'Tareas quietas',
   eventbrite: 'Eventos y actividades',
+  medios: 'Webs, X y Bluesky',
+}
+// Nombre de cada destino para la persona (la clave es la tabla adonde escribe).
+export const NOMBRE_DESTINO = {
+  eventos: 'Eventos',
+  calendar_events: 'Calendario',
+  emails: 'Mail',
+  process_reports: 'Avisos en Hoy',
+  noticias: 'Mi nicho',
+  empleos: 'Empleos',
+  [REGISTRO]: 'Registro',
 }
 export const DESCRIPCION_DESTINO = {
   eventos: 'Eventos encontrados',
-  calendar_events: 'Eventos de calendario',
-  emails: 'Emails procesados',
-  process_reports: 'Reportes de María',
-  [REGISTRO]: 'Registro de corridas',
+  calendar_events: 'Eventos de los 7 días',
+  emails: 'Mails sin leer',
+  process_reports: 'Lo que consolida María',
+  noticias: 'Notas y posts',
+  empleos: 'Ofertas publicadas',
+  [REGISTRO]: 'Todas las corridas',
 }
 
 const rad = g => (g * Math.PI) / 180
@@ -80,7 +94,7 @@ export function disposicion(trabajadores, { rotacion = 0, elegido = null, vertic
   ])
   const orbitas = nodos.map(x => ({ clave: x.clave, ...x.orbita }))
   const fuente = id => ({ id: `f:${id}`, tipo: 'fuente', etiqueta: FUENTES[id] ?? id, descripcion: DESCRIPCION_FUENTE[id] ?? '' })
-  const destino = id => ({ id: `d:${id}`, tipo: 'destino', etiqueta: id, descripcion: DESCRIPCION_DESTINO[id] ?? '', registro: id === REGISTRO })
+  const destino = id => ({ id: `d:${id}`, tipo: 'destino', etiqueta: NOMBRE_DESTINO[id] ?? id, descripcion: DESCRIPCION_DESTINO[id] ?? '', registro: id === REGISTRO })
   if (vertical) {
     grilla(fuentes.length, L, VERTICAL.margen).forEach((p, i) => nodos.push({ ...fuente(fuentes[i]), ...p }))
     grilla(destinos.length, L, L.alto - VERTICAL.margen - alturaGrilla(destinos.length, L)).forEach((p, i) => nodos.push({ ...destino(destinos[i]), ...p }))

@@ -107,7 +107,7 @@ test('filtros y sus cantidades', () => {
 })
 
 test('búsqueda por trabajador, fuente o destino, sin tildes', () => {
-  assert.equal(coincideBusqueda('google_sync', 'emails', d), true)
+  assert.equal(coincideBusqueda('google_sync', 'mail', d), true)
   assert.equal(coincideBusqueda('maria', 'maria', d), true)
   assert.equal(coincideBusqueda('maria', 'eventbrite', d), false)
   assert.equal(coincideBusqueda('buscador_eventos', 'EVENTBRITE', d), true)

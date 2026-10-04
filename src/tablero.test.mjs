@@ -49,7 +49,7 @@ test('alertas: error de la última corrida terminada y horas sin correr', () => 
 test('grafo: tres columnas y trabajos_corridas abajo, adonde llegan todos', () => {
   const g = grafoFlujo(trabajadores)
   const ids = g.nodos.map(n => n.id)
-  assert.deepEqual(ids.filter(i => i.startsWith('f:')), ['f:google', 'f:sitios', 'f:github_pages'])
+  assert.deepEqual(ids.filter(i => i.startsWith('f:')), ['f:google'])
   assert.deepEqual(ids.filter(i => i.startsWith('d:')), ['d:calendar_events', 'd:emails', 'd:process_reports', 'd:trabajos_corridas'])
   const registro = g.nodos.find(n => n.id === 'd:trabajos_corridas')
   assert.ok(g.nodos.filter(n => n.tipo === 'destino' && !n.registro).every(n => n.y < registro.y))
@@ -60,7 +60,7 @@ test('grafo: tres columnas y trabajos_corridas abajo, adonde llegan todos', () =
 test('camino: un trabajador resalta sus fuentes y destinos; un destino, solo quien le escribe', () => {
   const g = grafoFlujo(trabajadores)
   const deMaria = caminoDe('t:maria', g)
-  assert.deepEqual([...deMaria.nodos].sort(), ['d:process_reports', 'd:trabajos_corridas', 'f:github_pages', 'f:sitios', 't:maria'])
+  assert.deepEqual([...deMaria.nodos].sort(), ['d:process_reports', 'd:trabajos_corridas', 't:maria'])
   const deEmails = caminoDe('d:emails', g)
   assert.deepEqual([...deEmails.nodos].sort(), ['d:emails', 'f:google', 't:google_sync'])
   assert.equal(caminoDe(null, g), null)

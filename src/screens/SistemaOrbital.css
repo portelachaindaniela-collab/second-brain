@@ -8,8 +8,8 @@
 .orbital-orbita { fill: none; stroke: var(--gray-300); stroke-width: 1; opacity: .6; transition: stroke .3s, opacity .3s; }
 .orbital-orbita.is-foco { stroke: var(--id); stroke-width: 1.3; opacity: .55; }
 
-.orbital-enlace path { fill: none; stroke: var(--gray-300); stroke-width: 1.1; stroke-linecap: round; opacity: .75; transition: stroke .3s, opacity .3s, stroke-width .3s; }
-.orbital-enlace.is-foco path, .orbital-enlace.is-corriendo path { stroke: var(--id); stroke-width: 1.6; opacity: 1; }
+.orbital-enlace path { fill: none; stroke: var(--id, var(--gray-300)); stroke-width: var(--grosor, 1.1); stroke-linecap: round; opacity: .38; transition: stroke .3s, opacity .3s, stroke-width .3s; }
+.orbital-enlace.is-foco path, .orbital-enlace.is-corriendo path { stroke: var(--id); stroke-width: calc(var(--grosor, 1.1) + .5px); opacity: .95; }
 .orbital-flecha { fill: context-stroke; }
 .orbital-particula { fill: var(--id); }
 
@@ -23,6 +23,7 @@
 .orbital-tarjeta.is-foco rect { stroke: var(--gray-500); }
 .orbital-tarjeta-titulo { font-size: 13.5px; font-weight: 600; fill: var(--gray-900); }
 .orbital-tarjeta-desc { font-size: 11px; fill: var(--gray-500); }
+.orbital-tarjeta-cifra { font-size: 11.5px; font-weight: 700; fill: var(--accent); font-family: var(--font-mono); }
 
 .orbital-trabajador { cursor: pointer; outline: none; transition: transform 1s linear, opacity .3s; }
 .orbital-trabajador-cuerpo { transition: transform .2s ease-out; }

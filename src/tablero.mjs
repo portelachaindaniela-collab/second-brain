@@ -55,19 +55,22 @@ export function alertas({ trabajadores, corridasPor, ahora = Date.now(), salud =
 // De dónde lee y adónde escribe cada trabajador. Un trabajador que no está acá igual aparece, con su hilo
 // a trabajos_corridas. Sumar uno = sumar una entrada.
 export const FUENTES = {
-  github_pages: 'GitHub Pages',
-  google: 'API de Google',
-  sitios: 'Sitios propios',
+  github_pages: 'Radar Laboral',
+  google: 'Google',
+  sitios: 'Tus sitios',
+  tareas: 'Tus tareas',
   eventbrite: 'Eventbrite',
-  medios: 'Webs de medios',
-  x: 'X (FxTwitter)',
+  medios: 'Fuentes de noticias',
 }
+// María no lee una fuente de afuera: consolida lo que dejan Sitios, Tareas y Google en trabajos_corridas.
 export const RECORRIDOS = {
-  scraper_empleo: { fuentes: ['github_pages'], destinos: [] },
+  scraper_empleo: { fuentes: ['github_pages'], destinos: ['empleos'] },
   google_sync: { fuentes: ['google'], destinos: ['calendar_events', 'emails'] },
-  maria: { fuentes: ['sitios', 'github_pages'], destinos: ['process_reports'] },
+  maria: { fuentes: [], destinos: ['process_reports'] },
+  monitor_sitios: { fuentes: ['sitios'], destinos: ['process_reports'] },
+  tareas_estancadas: { fuentes: ['tareas'], destinos: ['process_reports'] },
   buscador_eventos: { fuentes: ['eventbrite'], destinos: ['eventos'] },
-  canillita: { fuentes: ['medios', 'x'], destinos: ['noticias'] },
+  canillita: { fuentes: ['medios'], destinos: ['noticias'] },
 }
 export const REGISTRO = 'trabajos_corridas'
 

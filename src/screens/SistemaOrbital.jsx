@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { haceCuanto } from '../trabajadores.mjs'
-import { colorIdentidad, vidaDeTrabajador, enCuanto } from '../tablero.mjs'
+import { colorIdentidad, vidaDeTrabajador, enCuanto, REGISTRO } from '../tablero.mjs'
 import { ETIQUETA, GRADOS_POR_SEGUNDO, disposicion, trazo, estadoTrabajador, pasaFiltro, coincideBusqueda, focoDe, ubicarEtiquetas, anchoTexto } from '../orbital.mjs'
 import { MARCAS } from '../iconosMarcas.mjs'
 import './SistemaOrbital.css'
@@ -67,7 +67,7 @@ function useAngosta() {
 
 const TEXTO_ESTADO = { ok: 'activo', corriendo: 'corriendo', trabado: 'trabado', error: 'con error', pausado: 'pausado', sin_corridas: 'sin corridas' }
 
-export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onElegir, filtro = 'todos', busqueda = '' }) {
+export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onElegir, filtro = 'todos', busqueda = '', resumenes = {} }) {
   const reducido = useMovimientoReducido()
   const vertical = useAngosta()
   const [encima, setEncima] = useState(null)
@@ -97,6 +97,17 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
   const conColor = clave => ({ '--id': colorIdentidad(porClave[clave]?.color) })
   const elegir = clave => e => { e.stopPropagation(); onElegir(elegido === clave ? null : clave) }
   const teclado = clave => e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); elegir(clave)(e) } }
+
+  // Volumen de 24 h: el grosor de cada hilo es lo que movió su trabajador; cada destino suma lo que le llegó.
+  const resultados = clave => resumenes[clave]?.resultados ?? 0
+  const grosor = e => (e.hasta === `d:${REGISTRO}` ? 1.1 : Math.max(1.1, Math.min(9, Math.sqrt(resultados(e.clave)) / 4.5)))
+  const llegada = id => id === `d:${REGISTRO}`
+    ? d.enlaces.filter(e => e.hasta === id).reduce((s, e) => s + (resumenes[e.clave]?.corridas ?? 0), 0)
+    : d.enlaces.filter(e => e.hasta === id).reduce((s, e) => s + resultados(e.clave), 0)
+  const textoLlegada = id => {
+    const n = llegada(id).toLocaleString('es-AR')
+    return id === `d:${REGISTRO}` ? `${n} corridas en 24 h` : `+${n} en 24 h`
+  }
 
   const datoDe = n => {
     const estado = estados[n.clave], vida = vidas[n.clave]
@@ -132,7 +143,7 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
         const enFoco = foco?.enlaces.has(e.id)
         const corriendo = estados[e.clave] === 'corriendo'
         const particulas = !reducido && (enFoco || corriendo)
-        return <g key={e.id} style={conColor(e.clave)} className={`orbital-enlace${enFoco ? ' is-foco' : ''}${corriendo ? ' is-corriendo' : ''}${(foco ? !enFoco : !visibles.has(e.clave)) ? ' is-tenue' : ''}`}>
+        return <g key={e.id} style={{ ...conColor(e.clave), '--grosor': grosor(e) }} className={`orbital-enlace${enFoco ? ' is-foco' : ''}${corriendo ? ' is-corriendo' : ''}${(foco ? !enFoco : !visibles.has(e.clave)) ? ' is-tenue' : ''}`}>
           <path d={camino} markerEnd={enFoco ? 'url(#orbital-flecha)' : undefined} />
           {particulas && [0, 1, 2].map(i => <circle key={i} r="2.2" className="orbital-particula">
             <animateMotion dur="3.6s" begin={`${i * 1.2}s`} repeatCount="indefinite" path={camino} />
@@ -157,7 +168,9 @@ export function SistemaOrbital({ trabajadores, corridasPor, ahora, elegido, onEl
           {vertical
             ? <text x={-ancho / 2 + 30} y="4.5" className="orbital-tarjeta-titulo">{n.etiqueta}</text>
             : <><text x={-ancho / 2 + 34} y="-2" className="orbital-tarjeta-titulo">{n.etiqueta}</text>
-              <text x={-ancho / 2 + 34} y="13" className="orbital-tarjeta-desc">{n.descripcion}</text></>}
+              {n.tipo === 'destino'
+                ? <text x={-ancho / 2 + 34} y="13" className="orbital-tarjeta-cifra">{textoLlegada(n.id)}</text>
+                : <text x={-ancho / 2 + 34} y="13" className="orbital-tarjeta-desc">{n.descripcion}</text>}</>}
         </g>
       })}
 

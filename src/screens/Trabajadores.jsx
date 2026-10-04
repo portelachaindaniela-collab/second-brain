@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabase.js'
 import {
   PRESETS_FRECUENCIA, describirFrecuencia, frecuenciaValida, duracionLegible, aplicarCorrida, parsearParametros,
   horaAR, fechaAR, haceCuanto, franjaHoras, franjasPorDia, resumenFranja, trabada, contadores24h, sparkline, barraBloques, programaDe,
 } from '../trabajadores.mjs'
-import { colorIdentidad, alertas as calcularAlertas, RECORRIDOS, REGISTRO, FUENTES, vidaDeTrabajador, enCuanto } from '../tablero.mjs'
+import { colorIdentidad, alertas as calcularAlertas, RECORRIDOS, REGISTRO, FUENTES, vidaDeTrabajador, enCuanto, actividadPorHora } from '../tablero.mjs'
+import { duracionCorta, resumenTrabajador } from '../panorama.mjs'
 import { detalleCorrida } from '../detalleCorrida.mjs'
 import { estadoTrabajador, pasaFiltro, coincideBusqueda, contarFiltros, disposicion, FILTROS, DESCRIPCION_FUENTE, DESCRIPCION_DESTINO } from '../orbital.mjs'
-import { Actividad, Salud } from './TableroTrabajadores.jsx'
+import { PanelesPanorama, Linea } from './Panorama.jsx'
 import { SistemaOrbital, IconoTrabajador } from './SistemaOrbital.jsx'
 import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
 import './Trabajadores.css'
@@ -30,6 +31,12 @@ function guardarTailAbierto(abierto) {
   try { localStorage.setItem(CLAVE_TAIL_ABIERTO, abierto ? '1' : '0') } catch { /* sin almacenamiento: no se recuerda */ }
 }
 const ESTADO_TEXTO = { ok: 'ok', error: 'error', corriendo: 'corriendo', hueco: 'le tocaba correr y no corrió', libre: 'no le tocaba correr' }
+
+// Resumen de 24 h de cada trabajador; se recalcula una vez por minuto, no con cada tic del reloj.
+function useResumenes(trabajadores, corridasPor, ahora) {
+  const minuto = Math.floor(ahora / 60_000)
+  return useMemo(() => Object.fromEntries(trabajadores.map(t => [t.clave, resumenTrabajador(corridasPor[t.clave] || [], minuto * 60_000)])), [trabajadores, corridasPor, minuto])
+}
 
 function useCorridasEnVivo(canal, alCambiar) {
   useEffect(() => {
@@ -296,6 +303,40 @@ function FilaTrabajador({ trabajador, corridas, ahora, actualizado, abrirDetalle
   </section>
 }
 
+// Tarjeta del tablero, en el estilo del panorama: borde de identidad arriba, cifras grandes y líneas reales.
+function TarjetaRobot({ trabajador, corridas, resumen, ahora, actualizado, abrirDetalle, abrirCorrida }) {
+  const ultima = corridas[0]
+  const ultimaTerminada = corridas.find(c => c.estado !== 'corriendo')
+  const cara = estadoCara(trabajador, ultima)
+  const estado = !trabajador.activo ? 'pausado' : ultima ? (trabada(ultima, ahora, trabajador.minutos_trabado) ? 'trabado' : ESTADO_TEXTO[ultima.estado]) : 'sin corridas'
+  const bloques = franjaHoras(corridas, ahora, programaDe(trabajador))
+  const color = colorIdentidad(trabajador.color)
+  const filas = corridas.filter(c => c.estado !== 'corriendo').slice(0, ULTIMAS).map(c => c.cantidad_resultados).reverse()
+  return <section className={`robot-tarjeta${ultima?.estado === 'corriendo' ? ' is-corriendo' : ''}`} style={{ '--id': color }}>
+    <Cara estado={cara} color={trabajador.color} nombre={trabajador.nombre} />
+    <div className="robot-cuerpo">
+      <div className="robot-titulo">
+        <strong>{trabajador.nombre}</strong>
+        <span className={`robot-estado txt-${cara === 'pausado' ? 'vacio' : ultima?.estado}`}>{estado}
+          {ultima?.estado === 'corriendo' && ` ${duracionLegible(ahora - Date.parse(ultima.iniciado_at))}`}</span>
+      </div>
+      <div className="robot-cifras">
+        <div><small>corridas 24 h</small><b>{resumen?.corridas ?? 0}</b></div>
+        <div><small>resultados</small><b>{(resumen?.resultados ?? 0).toLocaleString('es-AR')}</b></div>
+        <div><small>duración</small><b>{duracionCorta(resumen?.duracionPromedio)}</b></div>
+      </div>
+      <Franja bloques={bloques} abrirCorrida={abrirCorrida} />
+      <div className="consola-eje tenue"><span>-24h</span><span>{textoResumen(resumenFranja(bloques))}</span><span>ahora</span></div>
+      <div className="robot-graficos">
+        <div><small>resultados por corrida</small><Linea valores={filas} color={color} ancho={160} alto={22} relleno /></div>
+        <div><small>duración, últimas 40</small><Linea valores={resumen?.duraciones ?? []} color={color} ancho={160} alto={22} /></div>
+      </div>
+      {ultimaTerminada?.estado === 'error' && <p className="robot-error">{ultimaTerminada.error || 'falló sin mensaje'}</p>}
+      <BarraAcciones trabajador={trabajador} actualizado={actualizado} abrirDetalle={abrirDetalle} />
+    </div>
+  </section>
+}
+
 function LineaTail({ corrida, nombre, ahora, abrir }) {
   const detalle = corrida.estado === 'error' ? corrida.error
     : corrida.estado === 'corriendo' ? `lleva ${duracionLegible(ahora - Date.parse(corrida.iniciado_at))}`
@@ -549,11 +590,17 @@ export default function Trabajadores() {
   useCorridasEnVivo('trabajos-corridas-panel', alCambiar)
 
   const actualizado = useCallback(t => setTrabajadores(prev => prev.map(x => x.id === t.id ? t : x)), [])
+  const resumenes = useResumenes(trabajadores, corridasPor, ahora)
 
   const detalle = trabajadores.find(t => t.clave === seleccionado)
   if (detalle) return <DetalleTrabajador trabajador={detalle} volver={() => setSeleccionado(null)} actualizado={actualizado} ahora={ahora} />
 
   const c = contadores24h(trabajadores, corridasPor, ahora)
+  const porHora = actividadPorHora(trabajadores, corridasPor, Math.floor(ahora / 3600_000) * 3600_000)
+  const resultadosPorHora = porHora.map(h => trabajadores.reduce((s, t) => s + (corridasPor[t.clave] || [])
+    .filter(x => { const i = Date.parse(x.iniciado_at); return i >= h.inicio && i < h.inicio + 3600_000 })
+    .reduce((a, x) => a + (Number(x.cantidad_resultados) || 0), 0), 0))
+  const resultados24 = Object.values(resumenes).reduce((s, r) => s + r.resultados, 0)
   const pendientes = calcularAlertas({ trabajadores, corridasPor, ahora, salud: salud.datos })
   const recargar = () => { cargar(); cargarSalud() }
   const estados = Object.fromEntries(trabajadores.map(t => [t.clave, estadoTrabajador(t, corridasPor[t.clave] || [], ahora)]))
@@ -567,20 +614,20 @@ export default function Trabajadores() {
     <CabeceraPantalla sobretitulo="Sistema" titulo="Trabajadores" cargando={cargando}
       subtitulo={<>Automatiza, conecta y da vida a tus ideas. · <Reloj ahora={ahora} recargar={recargar} /></>}
       cifras={[
-        { valor: cuenta.todos, etiqueta: 'trabajadores' },
-        { valor: cuenta.activos, etiqueta: 'activos' },
-        { valor: cuenta.pausados, etiqueta: 'pausados' },
-        { valor: cuenta.errores, etiqueta: 'con errores', nivel: cuenta.errores ? 'error' : undefined },
+        { valor: c.ok + c.error, etiqueta: 'corridas 24 h', grafico: <Linea valores={porHora.map(h => h.total)} color="var(--accent)" ancho={96} alto={18} relleno /> },
+        { valor: resultados24.toLocaleString('es-AR'), etiqueta: 'resultados 24 h', grafico: <Linea valores={resultadosPorHora} color="var(--id-azul)" ancho={96} alto={18} relleno /> },
+        { valor: c.error, etiqueta: 'fallas 24 h', nivel: c.error ? 'error' : undefined },
+        { valor: `${cuenta.activos}/${cuenta.todos}`, etiqueta: 'activos', nivel: cuenta.errores ? 'error' : undefined },
       ]} />
 
     {error && <p className="txt-error">{error}</p>}
     {cargando && <p className="tenue">cargando…</p>}
     <div ref={bloqueSistema}>
       <Bloques>
-        <Bloque titulo="Sistema" ancho="completo" accion={<span className="bloque-nota">{elegidoT ? 'tocá el fondo para volver a ver todo' : 'tocá un trabajador para ver su detalle'} · {c.ok} corridas ok en 24 h{c.trabados > 0 && <span className="txt-corriendo"> · {c.trabados} trabado{c.trabados === 1 ? '' : 's'}</span>}</span>}>
+        <Bloque titulo="Sistema" ancho="completo" accion={<span className="bloque-nota">fuentes → trabajadores → destinos · el grosor es lo que movió en 24 h · {elegidoT ? 'tocá el fondo para volver a ver todo' : 'tocá un trabajador para ver su detalle'} · {c.ok} corridas ok{c.trabados > 0 && <span className="txt-corriendo"> · {c.trabados} trabado{c.trabados === 1 ? '' : 's'}</span>}</span>}>
           {!cargando && !error && trabajadores.length === 0 && <p className="tenue">no hay trabajadores configurados.</p>}
           {trabajadores.length > 0 && <div className={`sistema-cuerpo${elegidoT ? ' con-panel' : ''}`}>
-            <SistemaOrbital trabajadores={trabajadores} corridasPor={corridasPor} ahora={ahora} elegido={elegido} onElegir={setElegido} filtro={filtro} busqueda={busqueda} />
+            <SistemaOrbital trabajadores={trabajadores} corridasPor={corridasPor} resumenes={resumenes} ahora={ahora} elegido={elegido} onElegir={setElegido} filtro={filtro} busqueda={busqueda} />
             {elegidoT && <aside className="sistema-panel" aria-label={`Detalle de ${elegidoT.nombre}`}>
               <PanelTrabajador key={elegidoT.clave} trabajador={elegidoT} corridas={corridasPor[elegidoT.clave] || []} ahora={ahora} actualizado={actualizado}
                 abrirCorrida={setAbierta} verHistorial={() => setSeleccionado(elegidoT.clave)} cerrar={() => setElegido(null)} />
@@ -590,19 +637,17 @@ export default function Trabajadores() {
       </Bloques>
     </div>
 
+    {trabajadores.length > 0 && <>
+      <PanelesPanorama trabajadores={trabajadores} corridasPor={corridasPor} resumenes={resumenes} ahora={ahora} salud={salud} alertas={pendientes} />
+    </>}
+
     <Bloques>
       <Bloque titulo="Trabajadores" ancho="completo" accion={filtrados.length < trabajadores.length && <span className="bloque-nota">{filtrados.length} de {trabajadores.length}</span>}>
         {!cargando && filtrados.length === 0 && trabajadores.length > 0 && <p className="tenue">ningún trabajador coincide con el filtro.</p>}
         <div className="tablero-grilla">
-          {filtrados.map(t => <FilaTrabajador key={t.id} tarjeta trabajador={t} corridas={corridasPor[t.clave] || []} ahora={ahora}
+          {filtrados.map(t => <TarjetaRobot key={t.id} trabajador={t} corridas={corridasPor[t.clave] || []} resumen={resumenes[t.clave]} ahora={ahora}
             actualizado={actualizado} abrirDetalle={() => setSeleccionado(t.clave)} abrirCorrida={setAbierta} />)}
         </div>
-      </Bloque>
-      <Bloque titulo="Actividad 24h">
-        <Actividad trabajadores={trabajadores} corridasPor={corridasPor} ahora={ahora} />
-      </Bloque>
-      <Bloque titulo="Salud del sistema">
-        <Salud salud={salud} alertas={pendientes} />
       </Bloque>
       <Bloque titulo="Actividad reciente" ancho="completo" accion={<span className="actividad-vivo">en tiempo real</span>}>
         <ActividadReciente tail={tail} trabajadores={trabajadores} ahora={ahora} abrirCorrida={setAbierta} cargando={cargando}

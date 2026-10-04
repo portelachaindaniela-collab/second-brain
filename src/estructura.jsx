@@ -6,8 +6,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 // 3. Pie: configuración y ajustes al final, en una línea con un botón que despliega el detalle.
 // Una pantalla nueva arma su estructura con estos componentes; no copia estilos.
 
-// cifra: { valor, etiqueta, nivel?: 'aviso' | 'error' }. Sin nivel va en el color normal: solo lo que pide
-// atención cambia de color.
+// cifra: { valor, etiqueta, nivel?: 'aviso' | 'error', grafico? }. Sin nivel va en el color normal: solo lo que pide
+// atención cambia de color. grafico: un gráfico chico (una línea) que va debajo del número.
 export function CabeceraPantalla({ sobretitulo, titulo, subtitulo, cifras = [], cargando = false }) {
   return <header className="pantalla-cabecera">
     <div className="pantalla-titulos">
@@ -18,7 +18,7 @@ export function CabeceraPantalla({ sobretitulo, titulo, subtitulo, cifras = [], 
     {cifras.length > 0 && <dl className="pantalla-cifras" style={{ '--columnas': Math.min(cifras.length, 4) }}>
       {cifras.slice(0, 4).map(c => <div key={c.etiqueta} className={c.nivel ? `cifra-${c.nivel}` : undefined}>
         <dt>{c.etiqueta}</dt>
-        <dd>{cargando ? '—' : c.valor}</dd>
+        <dd>{cargando ? '—' : c.valor}{!cargando && c.grafico && <span className="cifra-grafico">{c.grafico}</span>}</dd>
       </div>)}
     </dl>}
   </header>
