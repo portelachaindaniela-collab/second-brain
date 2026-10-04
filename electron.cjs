@@ -6,6 +6,10 @@ const { clasificarCambio } = require('./electron-updates.cjs')
 
 const raiz = path.join(__dirname, 'dist')
 const PUERTO = 3000
+// La app de escritorio abre la misma versión que la web y el celular (GitHub Pages), así las tres se actualizan
+// juntas con cada merge. Sin internet abre la copia local de dist/.
+const URL_WEB = 'https://portelachaindaniela-collab.github.io/second-brain/'
+const URL_LOCAL = 'http://localhost:' + PUERTO
 
 const tipos = {
   '.html': 'text/html; charset=utf-8',
@@ -34,9 +38,8 @@ function servidor() {
   })
 }
 
-// Actualización automática sin preguntar: acá se edita el código directo en el disco de la usuaria
-// (no hay un servidor de builds aparte), así que "actualizarse sola" significa notar que `dist/`
-// cambió y refrescarse — no hace falta descargar nada de internet.
+// Si se edita el código en el disco y cambia `dist/` (o electron.cjs), la ventana se refresca sola. Con la versión
+// web abierta, refrescar trae lo último publicado.
 function observarActualizaciones(win) {
   let pendiente = null
   fs.watch(__dirname, { recursive: true }, (_evento, nombre) => {
@@ -65,7 +68,10 @@ async function ventana() {
     shell.openExternal(url)
     return { action: 'deny' }
   })
-  win.loadURL('http://localhost:' + PUERTO)
+  win.webContents.on('did-fail-load', (_evento, _codigo, _descripcion, url, esPrincipal) => {
+    if (esPrincipal && url.startsWith(URL_WEB)) win.loadURL(URL_LOCAL)
+  })
+  win.loadURL(URL_WEB)
   observarActualizaciones(win)
 }
 
