@@ -1,11 +1,29 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
 import { HEADER_SECRETO } from "../_shared/trabajador.mjs";
-import { FIRMA, BUCKET, MAX_PLACAS, placasDeTexto, necesitaDiseno, rutaDeAsset } from "./logic.mjs";
+import { FIRMA, BUCKET, MAX_PLACAS, OIDC, oidcValido, placasDeTexto, necesitaDiseno, rutaDeAsset } from "./logic.mjs";
 
-// Diseñador de UP. Lo llama la GitHub Action up-disenador (con x-trabajador-secreto = UP_DISENADOR_SECRETO):
+// Diseñador de UP. Lo llama la GitHub Action up-disenador con su token OIDC en x-github-oidc (o, a mano, con
+// x-trabajador-secreto = up_disenador_secreto de Vault):
 // - GET: los carruseles que hay que armar, con sus placas ya leídas del texto.
 // - POST { id, texto, placas: [png en base64] }: sube las placas al bucket público y las guarda en la pieza.
+
+const llavesGitHub = createRemoteJWKSet(new URL(`${OIDC.emisor}/.well-known/jwks`));
+
+async function autorizado(admin: any, req: Request) {
+  const token = req.headers.get("x-github-oidc");
+  if (token) {
+    try {
+      const { payload } = await jwtVerify(token, llavesGitHub, { issuer: OIDC.emisor, audience: OIDC.audiencia });
+      return oidcValido(payload);
+    } catch {
+      return false;
+    }
+  }
+  const { data } = await admin.rpc("up_disenador_secreto_valido", { p_secreto: req.headers.get(HEADER_SECRETO) ?? "" });
+  return data === true;
+}
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
@@ -30,8 +48,7 @@ Deno.serve(async (req: Request) => {
   if (!supabaseUrl || !serviceKey) return json({ error: "Falta la conexión a la base." }, 503);
   const admin = createClient(supabaseUrl, serviceKey);
 
-  const { data: valido } = await admin.rpc("up_disenador_secreto_valido", { p_secreto: req.headers.get(HEADER_SECRETO) ?? "" });
-  if (valido !== true) return json({ error: "Secreto inválido." }, 401);
+  if (!(await autorizado(admin, req))) return json({ error: "No autorizado." }, 401);
 
   if (req.method === "GET") {
     const { data, error } = await admin.from("up_piezas")

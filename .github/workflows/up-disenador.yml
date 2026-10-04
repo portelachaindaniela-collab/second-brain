@@ -7,6 +7,11 @@ on:
     - cron: '7-59/15 * * * *'
   workflow_dispatch:
 
+# id-token: la Action se identifica ante up-disenador con un token OIDC de GitHub; no hay secretos que cargar.
+permissions:
+  contents: read
+  id-token: write
+
 concurrency:
   group: up-disenador
   cancel-in-progress: false
@@ -15,18 +20,12 @@ jobs:
   disenar:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      UP_DISENADOR_SECRETO: ${{ secrets.UP_DISENADOR_SECRETO }}
     steps:
       - name: Buscar carruseles para armar
         id: pendientes
         run: |
-          if [ -z "$UP_DISENADOR_SECRETO" ]; then
-            echo "::warning::Falta el secret UP_DISENADOR_SECRETO; el diseñador no puede correr."
-            echo "cantidad=0" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          n=$(curl -sSf -H "apikey: sb_publishable_jK_ebdVy29E9sKQA4sd3Qw_X4YJJ4Qu" -H "x-trabajador-secreto: $UP_DISENADOR_SECRETO" \
+          token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=up-disenador" | jq -r '.value')
+          n=$(curl -sSf -H "apikey: sb_publishable_jK_ebdVy29E9sKQA4sd3Qw_X4YJJ4Qu" -H "x-github-oidc: $token" \
             https://itultpcdafpxpgtblgfb.supabase.co/functions/v1/up-disenador | jq '.piezas | length')
           echo "$n carrusel(es) para armar."
           echo "cantidad=$n" >> "$GITHUB_OUTPUT"

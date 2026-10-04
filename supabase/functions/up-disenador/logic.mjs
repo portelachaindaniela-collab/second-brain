@@ -7,6 +7,19 @@ export const FIRMA = '@danielachain'
 export const BUCKET = 'up-assets'
 export const MAX_PLACAS = 10
 
+// La GitHub Action se identifica con su token OIDC (firmado por GitHub): no hace falta guardar ningún secreto en el repo.
+// Solo vale el workflow del diseñador corriendo desde master de este repo.
+export const OIDC = {
+  emisor: 'https://token.actions.githubusercontent.com',
+  audiencia: 'up-disenador',
+  repositorio: 'portelachaindaniela-collab/second-brain',
+  workflow: 'portelachaindaniela-collab/second-brain/.github/workflows/up-disenador.yml@refs/heads/master',
+}
+
+export function oidcValido(claims) {
+  return claims?.repository === OIDC.repositorio && claims?.workflow_ref === OIDC.workflow
+}
+
 export function placasDeTexto(texto) {
   const [cuerpo, ...resto] = String(texto ?? '').split(/^Caption:[ \t]*$/m)
   const caption = resto.join('').trim()
