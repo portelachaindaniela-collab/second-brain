@@ -81,3 +81,16 @@ create trigger up_ficha_datos_updated_at before update on public.up_ficha_datos
   for each row execute function public.tocar_updated_at();
 create trigger up_piezas_updated_at before update on public.up_piezas
   for each row execute function public.tocar_updated_at();
+
+-- ---------- Pipeline de texto (migración up_pipeline) ----------
+-- contenido: estructura que arma el redactor (posts del hilo, placas, escenas) para el diseñador.
+-- problemas: lo que marcó el revisor ({fragmento, motivo}); datos_usados: ids de la ficha que eligió el investigador.
+alter table public.up_piezas
+  add column contenido jsonb,
+  add column problemas jsonb,
+  add column datos_usados uuid[];
+
+-- Cada mañana genera los borradores del día. Corre cada 10 minutos entre las 06:02 y las 07:52 de Buenos Aires
+-- (09:02–10:52 UTC) porque la cuota gratuita de Gemini corta la corrida a las pocas consultas: cada corrida sigue
+-- donde quedó la anterior y, cuando ya está todo, no consulta al modelo (migración up_pipeline_cada_10_min).
+select cron.schedule('up-pipeline', '2-59/10 9-10 * * *', $c$select net.http_post(url := 'https://itultpcdafpxpgtblgfb.supabase.co/functions/v1/up-pipeline', headers := jsonb_build_object('Content-Type', 'application/json', 'apikey', 'sb_publishable_jK_ebdVy29E9sKQA4sd3Qw_X4YJJ4Qu', 'x-trabajador-secreto', (select decrypted_secret from vault.decrypted_secrets where name = 'trabajadores_secreto')), timeout_milliseconds := 120000);$c$);
