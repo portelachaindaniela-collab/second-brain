@@ -2,17 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { LogoRed } from './logos.jsx'
 import { hoyIso, partesFecha, fechaLarga } from './fechas.js'
+import { correrPipeline, ESTADOS, NOMBRE_RED } from './pipeline.js'
+import { conResaltados } from './resaltar.jsx'
 
-const ESTADOS = { pendiente: 'Pendiente', falta_info: 'Falta info', revision: 'En revisión', aprobado: 'Aprobado', publicado: 'Publicado', error: 'Error' }
-const NOMBRE_RED = { linkedin: 'LinkedIn', x: 'X', instagram: 'Instagram' }
-
-// Marca en el texto los fragmentos que el revisor señaló.
-function conResaltados(texto, problemas) {
-  const fragmentos = (problemas || []).map(p => p.fragmento).filter(f => f && texto.includes(f))
-  if (!fragmentos.length) return texto
-  const partes = texto.split(new RegExp(`(${fragmentos.map(f => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`))
-  return partes.map((parte, i) => (fragmentos.includes(parte) ? <mark key={i}>{parte}</mark> : parte))
-}
 
 // Una pieza del día con sus acciones: editar el texto, aprobar y marcar como publicada.
 function Pieza({ red, pieza, principal, titulo, guardar }) {
@@ -68,7 +60,7 @@ function Pieza({ red, pieza, principal, titulo, guardar }) {
   )
 }
 
-export default function Hoy({ abrirCalendario }) {
+export default function Hoy({ abrirCalendario, abrirPreguntas, alCambiar }) {
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
   const [generando, setGenerando] = useState(false)
@@ -91,19 +83,18 @@ export default function Hoy({ abrirCalendario }) {
     if (error) { setAviso('No se pudo guardar: ' + error.message); return false }
     setAviso('')
     setDatos(d => ({ ...d, piezas: d.piezas.map(p => (p.id === id ? data : p)) }))
+    alCambiar?.()
     return true
   }
 
   // Corre los agentes para hoy. "Generar" completa lo que falta; "Volver a generar" reescribe lo que todavía no aprobaste.
   async function generar(regenerar) {
     setGenerando(true); setAviso('')
-    const { data, error } = await supabase.functions.invoke('up-pipeline', { body: { fecha: hoyIso(), regenerar } })
-    let respuesta = data
-    if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error genérico */ } }
+    const mensaje = await correrPipeline(hoyIso(), regenerar)
     setGenerando(false)
-    if (error || respuesta?.error) setAviso(respuesta?.error || 'No se pudieron generar los borradores.')
-    else if (respuesta?.cortado) setAviso(respuesta.mensaje)
+    setAviso(mensaje)
     await cargar()
+    alCambiar?.()
   }
 
   if (error) return <p role="alert" className="up-error">{error}</p>
@@ -147,10 +138,10 @@ export default function Hoy({ abrirCalendario }) {
 
       <aside className="up-portada-lateral">
         <section className="up-recuadro">
-          <div className="up-vol">Necesito que me cuentes</div>
+          <div className="up-vol">Necesito que me cuentes{preguntas.length > 0 && <button className="up-link" onClick={abrirPreguntas}>Responder</button>}</div>
           {preguntas.length === 0
             ? <p className="up-vacio">No hay preguntas pendientes.</p>
-            : preguntas.map(p => <p key={p.id} className="up-pregunta"><b>{fechaLarga(p.fecha)}.</b> {p.pregunta}</p>)}
+            : [...new Map(preguntas.map(p => [p.fecha, p])).values()].map(p => <p key={p.id} className="up-pregunta"><b>{fechaLarga(p.fecha)}.</b> {p.pregunta}</p>)}
         </section>
         <section className="up-recuadro">
           <div className="up-vol">Avance del calendario</div>

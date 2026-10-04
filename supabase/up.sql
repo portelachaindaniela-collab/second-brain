@@ -94,3 +94,7 @@ alter table public.up_piezas
 -- (09:02–10:52 UTC) porque la cuota gratuita de Gemini corta la corrida a las pocas consultas: cada corrida sigue
 -- donde quedó la anterior y, cuando ya está todo, no consulta al modelo (migración up_pipeline_cada_10_min).
 select cron.schedule('up-pipeline', '2-59/10 9-10 * * *', $c$select net.http_post(url := 'https://itultpcdafpxpgtblgfb.supabase.co/functions/v1/up-pipeline', headers := jsonb_build_object('Content-Type', 'application/json', 'apikey', 'sb_publishable_jK_ebdVy29E9sKQA4sd3Qw_X4YJJ4Qu', 'x-trabajador-secreto', (select decrypted_secret from vault.decrypted_secrets where name = 'trabajadores_secreto')), timeout_milliseconds := 120000);$c$);
+
+-- ---------- Saltear un día (migración up_saltear_dia) ----------
+-- Desde "Necesito que me cuentes" se puede saltear un día: el pipeline no lo trabaja más.
+alter table public.up_calendario add column salteado boolean not null default false;

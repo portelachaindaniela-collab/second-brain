@@ -102,3 +102,10 @@ test('esperaPedida lee el retryDelay o el texto del error de cuota', () => {
   assert.equal(esperaPedida({ error: { message: 'Quota exceeded. Please retry in 12.5s.' } }), 12.5)
   assert.equal(esperaPedida({ error: { message: 'otra cosa' } }), null)
 })
+
+test('los problemas llevan tipo: formato (código), dato o cámara (revisor)', () => {
+  const largo = armarPieza('linkedin', dia, { texto: 'a'.repeat(LIMITES.linkedin + 1) })
+  assert.equal(chequearLargos('linkedin', largo)[0].tipo, 'formato')
+  const r = leerRevision({ ok: false, problemas: [{ tipo: 'camara', fragmento: 'en el video', motivo: 'sugiere cámara' }, { fragmento: '9', motivo: 'no está' }] })
+  assert.deepEqual(r.problemas.map(p => p.tipo), ['camara', 'dato'])
+})

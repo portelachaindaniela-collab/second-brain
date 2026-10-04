@@ -1,11 +1,15 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 import Hoy from './Hoy.jsx'
+import Preguntas from './Preguntas.jsx'
+import Revisor from './Revisor.jsx'
 import Calendario from './Calendario.jsx'
 import Ficha from './Ficha.jsx'
 
 const PANTALLAS = [
   { id: 'hoy', label: 'Hoy' },
+  { id: 'preguntas', label: 'Necesito que me cuentes', cuenta: 'falta_info' },
+  { id: 'revisor', label: 'Revisor', cuenta: 'revision' },
   { id: 'calendario', label: 'Calendario' },
   { id: 'ficha', label: 'Ficha de datos' },
 ]
@@ -17,6 +21,18 @@ function fechaConAnio() {
 
 export default function UpApp({ email, volver }) {
   const [pantalla, setPantalla] = useState('hoy')
+  const [cuentas, setCuentas] = useState({})
+
+  // Cuántos días esperan una respuesta y cuántas piezas quedaron en revisión, para el menú.
+  const contar = useCallback(async () => {
+    const { data } = await supabase.from('up_piezas').select('fecha,estado').in('estado', ['falta_info', 'revision'])
+    setCuentas({
+      falta_info: new Set((data || []).filter(p => p.estado === 'falta_info').map(p => p.fecha)).size,
+      revision: (data || []).filter(p => p.estado === 'revision').length,
+    })
+  }, [])
+
+  useEffect(() => { contar() }, [contar])
 
   return (
     <div className="up">
@@ -34,11 +50,15 @@ export default function UpApp({ email, volver }) {
         </header>
         <nav className="up-secc">
           {PANTALLAS.map(p => (
-            <button key={p.id} className={pantalla === p.id ? 'on' : ''} onClick={() => setPantalla(p.id)}>{p.label}</button>
+            <button key={p.id} className={pantalla === p.id ? 'on' : ''} onClick={() => setPantalla(p.id)}>
+              {p.label}{p.cuenta && cuentas[p.cuenta] > 0 && <span className="up-cuenta">{cuentas[p.cuenta]}</span>}
+            </button>
           ))}
         </nav>
         <main className="up-cuerpo">
-          {pantalla === 'hoy' && <Hoy abrirCalendario={() => setPantalla('calendario')} />}
+          {pantalla === 'hoy' && <Hoy abrirCalendario={() => setPantalla('calendario')} abrirPreguntas={() => setPantalla('preguntas')} alCambiar={contar} />}
+          {pantalla === 'preguntas' && <Preguntas alCambiar={contar} />}
+          {pantalla === 'revisor' && <Revisor alCambiar={contar} />}
           {pantalla === 'calendario' && <Calendario />}
           {pantalla === 'ficha' && <Ficha />}
         </main>

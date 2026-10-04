@@ -149,7 +149,7 @@ Deno.serve(async (req: Request) => {
     ownerId = data.user.id;
   }
 
-  let consulta = admin.from("up_calendario").select("id,owner_id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,fotos_propias").eq("fecha", fecha);
+  let consulta = admin.from("up_calendario").select("id,owner_id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,fotos_propias").eq("fecha", fecha).eq("salteado", false);
   if (ownerId) consulta = consulta.eq("owner_id", ownerId);
   const { data: dias, error } = await consulta;
   if (error) return json({ error: error.message }, 500);
