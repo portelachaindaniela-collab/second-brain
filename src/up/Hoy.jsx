@@ -25,7 +25,9 @@ function Pieza({ red, pieza, principal, titulo, guardar }) {
   const [borrador, setBorrador] = useState('')
   const [ocupada, setOcupada] = useState(false)
   const texto = pieza?.texto || ''
-  const parrafos = texto.split(/\n{2,}/).filter(Boolean)
+  // Con las placas armadas, el texto de cada placa ya se lee en las imágenes: abajo va solo el caption.
+  const placasListas = pieza?.formato === 'carrusel' && pieza.assets?.length > 0 && pieza.assets_texto === texto && !pieza.problemas?.length
+  const parrafos = (placasListas ? texto.split(/^Caption:[ \t]*$/m)[1] || '' : texto).split(/\n{2,}/).filter(Boolean)
 
   async function cambiar(cambios) {
     setOcupada(true)
