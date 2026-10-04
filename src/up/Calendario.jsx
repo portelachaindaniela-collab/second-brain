@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { LogoRed } from './logos.jsx'
 import { hoyIso, fechaLarga } from './fechas.js'
-import { ESTADOS, NOMBRE_RED, estadoVisible } from './pipeline.js'
+import { ESTADOS, NOMBRE_RED, estadoVisible, correrPipeline } from './pipeline.js'
+import EditorDia from './EditorDia.jsx'
 
 // Estado de un día, a partir de sus piezas: manda lo que necesita atención.
 const ESTADOS_DIA = {
@@ -28,6 +29,12 @@ const NOMBRES_DIA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 function claveMes(iso) { return iso.slice(0, 7) }
 
+function sumarDia(iso, n) {
+  const d = new Date(`${iso}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
 function nombreMes(clave) {
   const [a, m] = clave.split('-').map(Number)
   const t = new Date(a, m - 1, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
@@ -51,20 +58,23 @@ export default function Calendario() {
   const [error, setError] = useState('')
   const [mes, setMes] = useState(claveMes(hoyIso()))
   const [elegido, setElegido] = useState(hoyIso())
+  const [editando, setEditando] = useState(null) // 'nuevo' | 'editar' | null
+  const [generando, setGenerando] = useState(false)
+  const [aviso, setAviso] = useState('')
 
-  useEffect(() => {
-    Promise.all([
+  const cargar = useCallback(async () => {
+    const [cal, pie] = await Promise.all([
       supabase.from('up_calendario').select('id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,fotos_propias,salteado').order('fecha'),
       supabase.from('up_piezas').select('id,fecha,red,estado,texto,url_publicada,error_publicacion'),
-    ]).then(([cal, pie]) => {
-      if (cal.error || pie.error) { setError('No se pudo cargar el calendario: ' + (cal.error || pie.error).message); return }
-      setDatos({ dias: cal.data || [], piezas: pie.data || [] })
-    })
+    ])
+    if (cal.error || pie.error) { setError('No se pudo cargar el calendario: ' + (cal.error || pie.error).message); return }
+    setDatos({ dias: cal.data || [], piezas: pie.data || [] })
   }, [])
+
+  useEffect(() => { cargar() }, [cargar])
 
   if (error) return <p role="alert" className="up-error">{error}</p>
   if (!datos) return <p className="up-vacio">Cargando…</p>
-  if (datos.dias.length === 0) return <p className="up-vacio">Todavía no hay días cargados.</p>
 
   const hoy = hoyIso()
   const porFecha = new Map(datos.dias.map(d => [d.fecha, d]))
@@ -75,11 +85,41 @@ export default function Calendario() {
   const i = meses.indexOf(mes)
   const dia = porFecha.get(elegido)
   const conInstagram = datos.dias.filter(d => d.redes.includes('instagram')).length
+  const semanas = [...new Set(datos.dias.map(d => d.tema_semana))]
+  const piezasElegido = piezasDe(elegido)
+  const conTexto = piezasElegido.some(p => p.texto && ['pendiente', 'error', 'falta_info'].includes(p.estado))
+
+  function elegir(fecha) { setElegido(fecha); setEditando(null); setAviso('') }
+
+  // "Nueva idea": el día elegido si está libre y no pasó; si no, el próximo día libre desde hoy.
+  function nuevaIdea() {
+    let f = !porFecha.has(elegido) && elegido >= hoy ? elegido : hoy
+    while (porFecha.has(f)) f = sumarDia(f, 1)
+    setElegido(f); setMes(claveMes(f)); setEditando('nuevo'); setAviso('')
+  }
+
+  async function guardado(fila) {
+    const habiaBorradores = editando === 'editar' && piezasDe(fila.fecha).some(p => p.texto)
+    setEditando(null)
+    await cargar()
+    setElegido(fila.fecha); setMes(claveMes(fila.fecha))
+    setAviso(habiaBorradores ? 'Guardado. Los borradores que ya estaban no cambian solos: tocá Volver a generar para rehacerlos con la idea nueva.' : 'Guardado. Los agentes la toman la mañana de ese día, o tocá Generar ahora.')
+  }
+
+  async function generar() {
+    setGenerando(true); setAviso('')
+    const mensaje = await correrPipeline(elegido, conTexto)
+    setGenerando(false)
+    await cargar()
+    setAviso(mensaje || 'Listo: los borradores están en Hoy (o en «Necesito que me cuentes» si falta un dato).')
+  }
 
   return (
     <>
       <div className="up-enc">
-        <div className="up-antetitulo">Calendario editorial · {datos.dias.length} días · {conInstagram} con Instagram</div>
+        <div className="up-antetitulo up-antetitulo-acciones">Calendario editorial · {datos.dias.length} días · {conInstagram} con Instagram
+          <button className="up-btn up-btn-p" onClick={nuevaIdea}>+ Nueva idea</button>
+        </div>
       </div>
       <div className="up-cal">
         <section className="up-cal-mes">
@@ -95,9 +135,9 @@ export default function Calendario() {
               const d = porFecha.get(fecha)
               const estado = d ? estadoDelDia(d, piezasDe(fecha)) : null
               return (
-                <button key={fecha} role="gridcell" disabled={!d}
+                <button key={fecha} role="gridcell"
                   className={`up-cal-dia${d ? ` d-${estado}` : ' vacio'}${fecha === hoy ? ' hoy' : ''}${fecha === elegido ? ' elegido' : ''}`}
-                  onClick={() => setElegido(fecha)} aria-label={d ? `${fechaLarga(fecha)}: ${ESTADOS_DIA[estado]}` : fechaLarga(fecha)}>
+                  onClick={() => elegir(fecha)} aria-label={d ? `${fechaLarga(fecha)}: ${ESTADOS_DIA[estado]}` : fechaLarga(fecha)}>
                   <span className="up-cal-num">{Number(fecha.slice(8))}</span>
                   {d?.redes.includes('instagram') && <span className="up-cal-ig" title={`Instagram: ${d.formato_instagram}`}><LogoRed red="instagram" /></span>}
                   {d && <span className="up-cal-tema">{d.tema_dia}</span>}
@@ -112,7 +152,10 @@ export default function Calendario() {
         </section>
 
         <aside className="up-cal-detalle">
-          {dia ? (
+          {aviso && <p role="status" className="up-aviso-nota up-aviso-ok">{aviso}</p>}
+          {editando ? (
+            <EditorDia key={`${editando}-${elegido}`} dia={editando === 'editar' ? dia : null} fecha={elegido} semanas={semanas} cerrar={() => setEditando(null)} guardado={guardado} />
+          ) : dia ? (
             <>
               <div className="up-vol">{fechaLarga(dia.fecha)}<span>Semana «{dia.tema_semana}»</span></div>
               <h3 className="up-titular-2">{dia.tema_dia}</h3>
@@ -127,8 +170,20 @@ export default function Calendario() {
                 ))}
               </ul>
               {!piezasDe(dia.fecha).length && !dia.salteado && <p className="up-vacio">{dia.fecha < hoy ? 'Este día no tuvo borradores.' : 'Los agentes escriben los borradores la mañana de ese día.'}</p>}
+              {dia.fecha >= hoy && !dia.salteado && (
+                <div className="up-acciones up-acciones-izq">
+                  <button className="up-btn" disabled={generando} onClick={() => { setEditando('editar'); setAviso('') }}>Editar</button>
+                  <button className="up-btn up-btn-p" disabled={generando} onClick={generar}>{generando ? 'Generando…' : conTexto ? 'Volver a generar' : 'Generar ahora'}</button>
+                </div>
+              )}
             </>
-          ) : <p className="up-vacio">Elegí un día del calendario.</p>}
+          ) : (
+            <>
+              <div className="up-vol">{fechaLarga(elegido)}</div>
+              <p className="up-vacio">Este día no tiene publicación.</p>
+              {elegido >= hoy && <div className="up-acciones up-acciones-izq"><button className="up-btn up-btn-p" onClick={() => { setEditando('nuevo'); setAviso('') }}>Nueva idea para este día</button></div>}
+            </>
+          )}
         </aside>
       </div>
     </>
