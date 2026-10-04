@@ -19,7 +19,7 @@ const cors = {
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-// Gemini saturado (503): se reintenta dos veces. Límite de cuota (429): si pide esperar poco se espera una vez;
+// Gemini saturado o con error interno (503/500): se reintenta dos veces. Límite de cuota (429): si pide esperar poco se espera una vez;
 // si no, la corrida se corta con ErrorCuota y lo que falta queda para la próxima.
 const ESPERAS_SATURADO_MS = [3000, 8000];
 const ESPERA_CUOTA_MAX_S = 20;
@@ -39,7 +39,7 @@ async function gemini(geminiKey: string, modelo: string, prompt: { sistema: stri
       signal: AbortSignal.timeout(60000),
     });
     const data = await r.json();
-    if (r.status === 503 && intento < ESPERAS_SATURADO_MS.length) {
+    if ((r.status === 503 || r.status === 500) && intento < ESPERAS_SATURADO_MS.length) {
       await new Promise(res => setTimeout(res, ESPERAS_SATURADO_MS[intento]));
       continue;
     }
