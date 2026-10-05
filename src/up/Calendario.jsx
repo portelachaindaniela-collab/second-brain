@@ -179,8 +179,8 @@ export default function Calendario({ abrirEdicion }) {
                   </li>
                 ))}
               </ul>
-              {piezasDe(dia.fecha).some(p => p.estado === 'publicado') && (
-                <Publicacion key={dia.fecha} piezas={piezasDe(dia.fecha).filter(p => p.estado === 'publicado')}
+              {piezasDe(dia.fecha).some(marcaCalendario) && (
+                <Publicacion key={dia.fecha} piezas={piezasDe(dia.fecha).filter(marcaCalendario)}
                   metricas={datos.metricas} todasLasPiezas={datos.piezas} abrirEdicion={abrirEdicion}
                   alCargar={m => setDatos(d => ({ ...d, metricas: [...d.metricas.filter(x => !(x.pieza_id === m.pieza_id && x.dia === m.dia)), m] }))} />
               )}
