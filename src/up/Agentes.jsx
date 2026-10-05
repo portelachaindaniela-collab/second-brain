@@ -112,10 +112,13 @@ function Anillo({ activo, girando, noruega, revisando }) {
   const cx = 220, cy = 160, R = 108
   const pos = AGENTES_ORDEN.map((_, i) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / AGENTES_ORDEN.length; return [cx + R * Math.cos(a), cy + R * Math.sin(a)] })
   const color = { ok: '#7FB08E', aviso: '#E3B23C', falla: '#E08B7F' }[noruega?.estado] || '#8A857A'
+  const k = AGENTES_ORDEN.indexOf(activo)
   return (
     <svg viewBox="0 0 440 320" className="up-anillo" role="img" aria-label="Cadena de agentes con Noruega en el centro">
-      <circle cx={cx} cy={cy} r={R} fill="none" stroke="#2F2F2F" strokeWidth="1.5" strokeDasharray="3 5" />
-      <path d={`M ${pos[2][0] - 18} ${pos[2][1] + 2} Q ${cx + 20} ${cy + 40} ${pos[3][0] + 18} ${pos[3][1] + 2}`} fill="none" stroke="#E3B23C" strokeWidth="1.2" strokeDasharray="4 4" />
+      {/* La pista gira siempre en el sentido de la cadena; cuando los agentes corren, se pone ámbar y acelera. */}
+      <circle cx={cx} cy={cy} r={R} fill="none" strokeWidth="1.5" className={`up-anillo-pista${girando ? ' corriendo' : ''}`} />
+      <path d={`M ${pos[2][0] - 18} ${pos[2][1] + 2} Q ${cx + 20} ${cy + 40} ${pos[3][0] + 18} ${pos[3][1] + 2}`} fill="none" stroke="#E3B23C" strokeWidth="1.2" strokeDasharray="4 4" className="up-anillo-bucle" />
+      {k > 0 && <path d={`M ${pos[k - 1][0]} ${pos[k - 1][1]} A ${R} ${R} 0 0 1 ${pos[k][0]} ${pos[k][1]}`} fill="none" className="up-anillo-tramo" />}
       <text x={cx + 62} y={cy + 100} textAnchor="start" className="up-anillo-chico" fill="#E3B23C">corrige ×2</text>
       {girando && !REDUCIR_MOVIMIENTO && (
         <g className="up-anillo-giro" style={{ transformOrigin: `${cx}px ${cy}px` }}><circle cx={cx} cy={cy - R} r="4" fill="#E3B23C" /></g>
@@ -130,6 +133,7 @@ function Anillo({ activo, girando, noruega, revisando }) {
         const dx = x - cx, ancla = Math.abs(dx) < 10 ? 'middle' : dx > 0 ? 'start' : 'end'
         return (
           <g key={id}>
+            {on && <circle cx={x} cy={y} r="17" fill="none" stroke="#E3B23C" strokeWidth="2" className="up-anillo-halo" />}
             <circle cx={x} cy={y} r="17" fill={on ? '#E3B23C' : '#141414'} stroke={on ? '#E3B23C' : '#E9E4D8'} strokeWidth="1.5" />
             <text x={x} y={y + 4} textAnchor="middle" className="up-anillo-num" fill={on ? '#141414' : '#E9E4D8'}>{String(i + 1).padStart(2, '0')}</text>
             <text x={x + (ancla === 'start' ? 24 : ancla === 'end' ? -24 : 0)} y={y + (ancla === 'middle' ? (y < cy ? -24 : 32) : 4)} textAnchor={ancla} className="up-anillo-nombre">{AGENTES[id].nombre.toLowerCase()}</text>
