@@ -4,6 +4,8 @@ import { LogoRed } from './logos.jsx'
 import { hoyIso, fechaLarga } from './fechas.js'
 import { ESTADOS, NOMBRE_RED, estadoVisible, correrPipeline } from './pipeline.js'
 import EditorDia from './EditorDia.jsx'
+import Publicacion from './Publicacion.jsx'
+import { marcaCalendario } from './edicion.mjs'
 
 // Estado de un día, a partir de sus piezas: manda lo que necesita atención.
 const ESTADOS_DIA = {
@@ -26,6 +28,8 @@ function estadoDelDia(dia, piezas) {
 }
 
 const NOMBRES_DIA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const SIGLA = { linkedin: 'IN', x: 'X', instagram: 'IG' }
+const ORDEN_RED = ['linkedin', 'x', 'instagram']
 
 function claveMes(iso) { return iso.slice(0, 7) }
 
@@ -53,7 +57,7 @@ function celdasDelMes(clave) {
   return celdas
 }
 
-export default function Calendario() {
+export default function Calendario({ abrirEdicion }) {
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
   const [mes, setMes] = useState(claveMes(hoyIso()))
@@ -63,12 +67,13 @@ export default function Calendario() {
   const [aviso, setAviso] = useState('')
 
   const cargar = useCallback(async () => {
-    const [cal, pie] = await Promise.all([
+    const [cal, pie, met] = await Promise.all([
       supabase.from('up_calendario').select('id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,fotos_propias,salteado').order('fecha'),
-      supabase.from('up_piezas').select('id,fecha,red,estado,texto,url_publicada,error_publicacion'),
+      supabase.from('up_piezas').select('id,fecha,red,estado,texto,assets,url_publicada,error_publicacion'),
+      supabase.from('up_metricas').select('pieza_id,dia,impresiones,reacciones,comentarios,compartidos,fuente,updated_at'),
     ])
     if (cal.error || pie.error) { setError('No se pudo cargar el calendario: ' + (cal.error || pie.error).message); return }
-    setDatos({ dias: cal.data || [], piezas: pie.data || [] })
+    setDatos({ dias: cal.data || [], piezas: pie.data || [], metricas: met.data || [] })
   }, [])
 
   useEffect(() => { cargar() }, [cargar])
@@ -78,7 +83,7 @@ export default function Calendario() {
 
   const hoy = hoyIso()
   const porFecha = new Map(datos.dias.map(d => [d.fecha, d]))
-  const piezasDe = fecha => datos.piezas.filter(p => p.fecha === fecha)
+  const piezasDe = fecha => datos.piezas.filter(p => p.fecha === fecha).sort((a, b) => ORDEN_RED.indexOf(a.red) - ORDEN_RED.indexOf(b.red))
   const meses = [...new Set(datos.dias.map(d => claveMes(d.fecha)))]
   if (!meses.includes(mes)) meses.push(mes)
   meses.sort()
@@ -141,6 +146,7 @@ export default function Calendario() {
                   <span className="up-cal-num">{Number(fecha.slice(8))}</span>
                   {d?.redes.includes('instagram') && <span className="up-cal-ig" title={`Instagram: ${d.formato_instagram}`}><LogoRed red="instagram" /></span>}
                   {d && <span className="up-cal-tema">{d.tema_dia}</span>}
+                  <span className="up-cal-marcas">{piezasDe(fecha).filter(marcaCalendario).map(p => <i key={p.id} className={`m-${marcaCalendario(p)}`} title={`${NOMBRE_RED[p.red]}: ${ESTADOS[p.estado]}`}>{SIGLA[p.red]}</i>)}</span>
                 </button>
               )
             })}
@@ -148,6 +154,10 @@ export default function Calendario() {
           <ul className="up-cal-leyenda">
             {Object.entries(ESTADOS_DIA).map(([k, v]) => <li key={k}><i className={`d-${k}`} />{v}</li>)}
             <li><LogoRed red="instagram" />Con Instagram</li>
+          </ul>
+          <ul className="up-cal-leyenda up-cal-leyenda-redes">
+            {ORDEN_RED.map(r => <li key={r}><i className={`m-${r}`} />{NOMBRE_RED[r]} publicado</li>)}
+            <li><i className="m-aprobado" />Aprobado, sin publicar</li>
           </ul>
         </section>
 
@@ -169,6 +179,11 @@ export default function Calendario() {
                   </li>
                 ))}
               </ul>
+              {piezasDe(dia.fecha).some(p => p.estado === 'publicado') && (
+                <Publicacion key={dia.fecha} piezas={piezasDe(dia.fecha).filter(p => p.estado === 'publicado')}
+                  metricas={datos.metricas} todasLasPiezas={datos.piezas} abrirEdicion={abrirEdicion}
+                  alCargar={m => setDatos(d => ({ ...d, metricas: [...d.metricas.filter(x => !(x.pieza_id === m.pieza_id && x.dia === m.dia)), m] }))} />
+              )}
               {!piezasDe(dia.fecha).length && !dia.salteado && <p className="up-vacio">{dia.fecha < hoy ? 'Este día no tuvo borradores.' : 'Los agentes escriben los borradores la mañana de ese día.'}</p>}
               {dia.fecha >= hoy && !dia.salteado && (
                 <div className="up-acciones up-acciones-izq">

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { proveedor, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo, HERRAMIENTAS, ACCIONES } from './logic.mjs'
+import { proveedor, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo, HERRAMIENTAS, ACCIONES, validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente } from './logic.mjs'
 
 test('usa Groq si hay clave y si no, Gemini', () => {
   assert.equal(proveedor({ GROQ_API_KEY: 'g', GEMINI_API_KEY: 'x' }).nombre, 'groq')
@@ -48,4 +48,28 @@ test('historial: solo texto, últimos 20', () => {
   const h = historialParaModelo([...muchos, { rol: 'sistema', texto: 'ignorar' }, { rol: 'usuario', texto: '' }])
   assert.equal(h.length, 20)
   assert.deepEqual(h.at(-1), { role: 'assistant', content: 'm29' })
+})
+
+test('redacción: valida el pedido', () => {
+  assert.equal(validarRedaccion({ red: 'x', pedido: ' ' }).ok, false)
+  assert.equal(validarRedaccion({ red: 'tiktok', pedido: 'a' }).ok, false)
+  assert.deepEqual(validarRedaccion({ red: 'x', pedido: 'acortalo', texto: 't', fecha: 'mal' }), { ok: true, args: { red: 'x', fecha: null, texto: 't', pedido: 'acortalo' } })
+})
+
+test('redacción: la Ficha y la forma de la red van en el sistema', () => {
+  const m = mensajesRedactar({ red: 'x', texto: 'hola', pedido: 'hilo', tema: 'Caso', ficha: [{ grupo: 'AFA', dato: 'Copa 2024' }] })
+  assert.match(m[0].content, /\(AFA\) Copa 2024/)
+  assert.match(m[0].content, /1\/ texto/)
+  assert.match(m[1].content, /Tema del día: Caso/)
+})
+
+test('redacción: limpia la respuesta del modelo', () => {
+  assert.equal(limpiarPropuesta('```\n**Hola** mundo\n```'), 'Hola mundo')
+  assert.equal(limpiarPropuesta('Acá tenés una versión:\n«Texto»'), 'Texto')
+})
+
+test('redacción: marca números que no están ni en el texto ni en la Ficha', () => {
+  const fuentes = ['El alcance creció 170%, hasta 165.400.', 'Copa Federal 2024']
+  assert.deepEqual(numerosSinFuente('1/ Creció 170% hasta 165400.\n\n2/ En 2024.', fuentes), [])
+  assert.deepEqual(numerosSinFuente('Llegamos a 200.000 personas en 3 meses.', fuentes), ['200.000', '3'])
 })

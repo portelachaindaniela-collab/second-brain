@@ -2,10 +2,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   MAX_VUELTAS, HERRAMIENTAS, ACCIONES, proveedor, sistema, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo,
+  validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente,
 } from "./logic.mjs";
 
-// Asistente de UP. La app manda { mensajes } (la conversación) o { ejecutar: { nombre, args } } (una acción que la
-// dueña confirmó). Lee y escribe con la sesión de la dueña (RLS), nunca con permisos de servicio.
+// Asistente de UP. La app manda { mensajes } (la conversación), { ejecutar: { nombre, args } } (una acción que la
+// dueña confirmó) o { redactar: { fecha, red, texto, pedido } } (una versión para la mesa de trabajo).
+// Lee y escribe con la sesión de la dueña (RLS), nunca con permisos de servicio.
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -180,6 +182,25 @@ Deno.serve(async (req: Request) => {
 
   const prov = proveedor(env);
   if (!prov) return json({ error: "Falta configurar la IA (GROQ_API_KEY o GEMINI_API_KEY)." }, 503);
+  if (body?.redactar) {
+    const v: any = validarRedaccion(body.redactar);
+    if (!v.ok) return json({ error: v.error }, 400);
+    const [f, d] = await Promise.all([
+      db.from("up_ficha_datos").select("grupo,dato").order("grupo").order("orden"),
+      v.args.fecha ? db.from("up_calendario").select("tema_dia,tema_instagram").eq("fecha", v.args.fecha).maybeSingle() : Promise.resolve({ data: null }),
+    ]);
+    const ficha = f.data || [];
+    const tema = v.args.red === "instagram" && d.data?.tema_instagram ? d.data.tema_instagram : d.data?.tema_dia;
+    try {
+      const m = await modelo(prov, mensajesRedactar({ ...v.args, tema, ficha }), false);
+      const propuesta = limpiarPropuesta(m.content || "");
+      if (!propuesta) return json({ error: "La IA no devolvió una versión. Probá de nuevo." }, 502);
+      return json({ propuesta, numeros_sin_fuente: numerosSinFuente(propuesta, [v.args.texto, ...ficha.map((x: any) => x.dato)]), ia: prov.nombre });
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : String(e) }, 502);
+    }
+  }
+
   const mensajes: any[] = [{ role: "system", content: sistema(hoyAR()) }, ...historialParaModelo(body?.mensajes)];
   const usadas: string[] = [];
   try {

@@ -27,6 +27,7 @@ function fechaConAnio() {
 export default function UpApp({ email, volver }) {
   const [pantalla, setPantalla] = useState(() => (new URLSearchParams(window.location.search).has('up_redes') ? 'redes' : 'hoy'))
   const [cuentas, setCuentas] = useState({})
+  const [foco, setFoco] = useState(null) // { fecha, red } que abre la mesa de trabajo en Redes
 
   // Cuántos días esperan una respuesta y cuántas piezas quedaron en revisión, para el menú.
   const contar = useCallback(async () => {
@@ -55,7 +56,7 @@ export default function UpApp({ email, volver }) {
         </header>
         <nav className="up-secc">
           {PANTALLAS.map(p => (
-            <button key={p.id} className={pantalla === p.id ? 'on' : ''} onClick={() => setPantalla(p.id)}>
+            <button key={p.id} className={pantalla === p.id ? 'on' : ''} onClick={() => { setFoco(null); setPantalla(p.id) }}>
               {p.label}{p.cuenta && cuentas[p.cuenta] > 0 && <span className="up-cuenta">{cuentas[p.cuenta]}</span>}
             </button>
           ))}
@@ -64,9 +65,9 @@ export default function UpApp({ email, volver }) {
           {pantalla === 'hoy' && <Hoy abrirCalendario={() => setPantalla('calendario')} abrirPreguntas={() => setPantalla('preguntas')} alCambiar={contar} />}
           {pantalla === 'preguntas' && <Preguntas alCambiar={contar} />}
           {pantalla === 'revisor' && <Revisor alCambiar={contar} />}
-          {pantalla === 'calendario' && <Calendario />}
+          {pantalla === 'calendario' && <Calendario abrirEdicion={(fecha, red) => { setFoco({ fecha, red }); setPantalla('redes') }} />}
           {pantalla === 'ficha' && <Ficha />}
-          {pantalla === 'redes' && <Redes />}
+          {pantalla === 'redes' && <Redes foco={foco} />}
           {pantalla === 'agentes' && <Agentes />}
         </main>
       </div>

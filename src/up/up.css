@@ -385,3 +385,120 @@ h4.up-mono-k { color: var(--up-tinta-2); font-weight: 600; margin-bottom: 8px; }
   .up-paso-agente { grid-column: 2; }
   .up-paso-texto { grid-column: 2; }
 }
+
+/* Redes · mesa de trabajo: editor a la izquierda, simulación por red a la derecha */
+.up-mesa { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 28px; align-items: start; margin-bottom: 44px; padding-bottom: 32px; border-bottom: 3px double var(--up-tinta); }
+.up-mesa-barra { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.up-mesa-dia { flex: 1 1 260px; min-width: 0; margin-top: 0; height: 36px; border-color: var(--up-tinta); }
+.up-mesa-redes { display: flex; border: 1px solid var(--up-tinta); border-radius: 3px; overflow: hidden; }
+.up-mesa-redes button { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 0; border-left: 1px solid var(--up-tinta); background: transparent; color: var(--up-tinta); font: 700 11px/1 var(--up-sans); letter-spacing: .06em; text-transform: uppercase; }
+.up-mesa-redes button:first-child { border-left: 0; }
+.up-mesa-redes button.on { background: var(--up-tinta); color: var(--up-papel); }
+.up-mesa-redes .up-logo { width: 14px; height: 14px; }
+.up-mesa-redes i { width: 6px; height: 6px; border-radius: 50%; background: var(--up-aviso); }
+.up-mesa-hoja { padding: 26px 34px 16px; background: #FFFDF8; border: 1px solid var(--up-filete); box-shadow: 0 1px 2px rgba(0, 0, 0, .06); }
+.up-mesa-hoja-cab { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.up-mesa-hoja-cab h3 { flex: 1; font: 700 24px/30px var(--up-titulo); }
+.up-mesa-hoja-cab .up-estado { margin-top: 8px; }
+.up-mesa-texto { display: block; width: 100%; min-height: 340px; field-sizing: content; padding: 0; border: 0; background: transparent; color: var(--up-tinta); font: 400 17px/28px var(--up-serif); resize: vertical; }
+.up-mesa-texto:focus { outline: none; }
+.up-mesa-texto[readonly] { color: var(--up-tinta-2); }
+.up-mesa-hoja:focus-within { border-color: var(--up-tinta-3); }
+.up-mesa-pie { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--up-filete); font: 400 11.5px/16px var(--up-mono); color: var(--up-tinta-3); }
+.up-mesa-cuenta { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.up-mesa-cuenta b { color: var(--up-tinta); font-weight: 600; }
+.up-mesa-cuenta .excede, .up-mesa-cuenta .excede b { color: var(--up-error); }
+.up-mesa-pedido, .up-mesa-propuesta { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--up-tinta); border-left: 3px solid var(--up-aviso); background: #FFFDF8; }
+.up-mesa-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.up-mesa-chips .up-btn { height: 30px; text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 12.5px; }
+.up-mesa-pedido-fila { display: flex; gap: 8px; }
+.up-mesa-pedido-fila .up-campo { margin-top: 0; flex: 1; min-width: 0; }
+.up-mesa-propuesta p:not(.up-aviso-nota) { margin: 8px 0; white-space: pre-wrap; font: 400 16px/25px var(--up-serif); }
+.up-mesa-acciones { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.up-mesa-pedir { margin-bottom: 14px; height: 30px; }
+.up-btn-a { display: inline-flex; align-items: center; text-decoration: none; }
+.up-mesa-sim { padding: 14px; background: #EDE9DE; border: 1px solid var(--up-filete); display: flex; flex-direction: column; gap: 12px; }
+.up-mesa-sim-cab { display: flex; justify-content: space-between; }
+.up-mesa-sim-cab span { color: var(--up-ok); }
+
+/* Simulación: tarjetas con la tipografía de sistema de las redes */
+.up-sim { background: #fff; border: 1px solid #DCD8CE; border-radius: 8px; padding: 12px 14px; font: 400 14px/20px -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1D1D1B; }
+.up-sim header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.up-sim header > div { flex: 1; min-width: 0; }
+.up-sim header small, .up-sim-tuit-cab small { display: block; color: #6B6A66; font-size: 12px; line-height: 16px; }
+.up-sim-tuit-cab small { display: inline; }
+.up-sim-avatar { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--up-tinta); color: var(--up-papel); display: flex; align-items: center; justify-content: center; font: 700 12px/1 var(--up-sans); }
+.up-sim-texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.up-sim-vacio { margin: 4px 0; color: #8A8780; font-style: italic; }
+.up-sim-mas { padding: 0; border: 0; background: none; color: #6B6A66; font: inherit; }
+.up-sim footer { display: flex; gap: 18px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #ECEAE4; color: #6B6A66; font-size: 12.5px; font-weight: 600; }
+.up-sim-tuit { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; position: relative; padding-bottom: 12px; }
+.up-sim-tuit:last-child { padding-bottom: 0; }
+.up-sim-tuit.sigue::before { content: ''; position: absolute; left: 17px; top: 40px; bottom: 2px; width: 2px; background: #DCD8CE; }
+.up-sim-tuit-cab { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.up-sim-tuit-cab .up-logo { margin-left: auto; align-self: center; }
+.up-sim-excede { display: block; margin-top: 4px; color: var(--up-error); font-weight: 600; }
+.up-sim-ig { width: min(100%, 320px); align-self: center; padding: 0 0 12px; overflow: hidden; }
+.up-sim-ig header { padding: 10px 12px 0; }
+.up-sim-ig .up-sim-texto, .up-sim-ig .up-sim-vacio { padding: 0 12px; }
+.up-sim-foto { position: relative; aspect-ratio: 4 / 5; margin-bottom: 10px; background: #F1EEE6; display: flex; align-items: center; justify-content: center; }
+.up-sim-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.up-sim-foto p { margin: 0; padding: 0 28px; text-align: center; color: #8A8780; font-size: 13px; }
+.up-sim-pasar { position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; align-items: center; gap: 10px; }
+.up-sim-pasar span { padding: 2px 8px; border-radius: 10px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 11px; }
+.up-sim-pasar button { width: 26px; height: 26px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .9); font-size: 16px; line-height: 1; }
+.up-sim-pasar button:disabled { opacity: .35; }
+.up-redes-enc { margin-top: 8px; }
+
+/* Calendario: el color de cada red en lo publicado */
+.up-cal-marcas { display: flex; flex-wrap: wrap; gap: 3px; margin-top: auto; }
+.up-cal-marcas i, .up-cal-leyenda-redes i { font: 700 9px/14px var(--up-sans); font-style: normal; letter-spacing: .04em; color: #fff; padding: 0 4px; border-radius: 2px; }
+.up i.m-linkedin { background: #0A66C2; }
+.up i.m-x { background: #0F0F0F; }
+.up i.m-instagram { background: #C13584; }
+.up i.m-aprobado { background: #B9B4A8; }
+.up-cal-leyenda-redes { margin-top: 6px; }
+.up-cal-leyenda-redes i { width: 14px; height: 8px; padding: 0; outline: 0; }
+
+/* Ficha de una publicación (Calendario) */
+.up-pub { margin-top: 18px; }
+.up-pub-redes { display: flex; border-bottom: 1px solid var(--up-tinta); margin-bottom: 12px; }
+.up-pub-redes button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 34px; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; background: none; color: var(--up-tinta-2); font: 700 10.5px/1 var(--up-sans); letter-spacing: .06em; text-transform: uppercase; }
+.up-pub-redes button.on.r-linkedin { border-bottom-color: #0A66C2; color: var(--up-tinta); }
+.up-pub-redes button.on.r-x { border-bottom-color: #0F0F0F; color: var(--up-tinta); }
+.up-pub-redes button.on.r-instagram { border-bottom-color: #C13584; color: var(--up-tinta); }
+.up-pub-redes .up-logo { width: 13px; height: 13px; }
+.up-pub .up-acciones { flex-wrap: wrap; }
+.up-pub .up-btn { padding: 0 10px; white-space: nowrap; }
+.up-pub-texto { margin: 10px 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 15px/22px var(--up-serif); color: var(--up-tinta-2); }
+.up-pub-foto { display: block; margin: 10px 0 4px; line-height: 0; border: 1px solid var(--up-filete); }
+.up-pub-foto img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
+.up-pub-vol { margin-top: 22px; }
+.up-pub-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.up-pub-kpis > div { padding: 10px 0; border-bottom: 1px solid var(--up-filete); }
+.up-pub-kpis > div:nth-child(odd) { padding-right: 10px; border-right: 1px solid var(--up-filete); }
+.up-pub-kpis > div:nth-child(even) { padding-left: 12px; }
+.up-pub-kpis dt { font: 500 10.5px/1.3 var(--up-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--up-tinta-3); }
+.up-pub-kpis dd { margin: 2px 0 0; font: 700 26px/32px var(--up-titulo); font-variant-numeric: tabular-nums; }
+.up-pub-kpis small { display: block; font: 500 10.5px/14px var(--up-mono); color: var(--up-tinta-3); }
+.up-pub-kpis small.sube { color: var(--up-ok); }
+.up-pub-kpis small.baja { color: var(--up-error); }
+.up-pub-curva { margin: 14px 0 0; }
+.up-pub-curva svg { display: block; width: 100%; height: 74px; margin-top: 6px; }
+.up-pub-curva polygon { fill: rgba(50, 104, 145, .1); }
+.up-pub-curva polyline { fill: none; stroke: var(--up-link); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.up-pub-curva-ejes { display: flex; justify-content: space-between; font: 400 10.5px/14px var(--up-mono); color: var(--up-tinta-3); }
+.up-pub-form { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.up-pub-form-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+@media (max-width: 1000px) {
+  .up-mesa { grid-template-columns: 1fr; }
+  .up-mesa-hoja { padding: 18px 16px 12px; }
+  .up-mesa-texto { min-height: 260px; font-size: 16px; line-height: 26px; }
+  .up-mesa-redes { width: 100%; }
+  .up-mesa-redes button { flex: 1; justify-content: center; padding: 0 6px; }
+  .up-mesa-pedido-fila { flex-wrap: wrap; }
+  .up-mesa-pedido-fila .up-campo { flex-basis: 100%; }
+  .up-cal-marcas i { font-size: 0; width: 100%; height: 4px; padding: 0; }
+  .up-cal-marcas { width: 100%; flex-direction: column; gap: 2px; }
+}
