@@ -7,6 +7,7 @@ import Calendario from './Calendario.jsx'
 import Ficha from './Ficha.jsx'
 import Agentes from './Agentes.jsx'
 import Redes from './Redes.jsx'
+import Asistente from './Asistente.jsx'
 
 const PANTALLAS = [
   { id: 'hoy', label: 'Hoy' },
@@ -69,6 +70,7 @@ export default function UpApp({ email, volver }) {
           {pantalla === 'agentes' && <Agentes />}
         </main>
       </div>
+      <Asistente />
     </div>
   )
 }
