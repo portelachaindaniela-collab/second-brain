@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase, hora, fechaCorta } from '../supabase.js'
+import { supabase } from '../supabase.js'
 import ResumenDiario from './ResumenDiario.jsx'
 import { unirRepetidos, diasDelEvento } from '../eventosUnicos.mjs'
 import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
 import { mailsImportantes, resumenDiarioLinea } from '../hoyCifras.mjs'
 import { AGENTES_MARIA, avisosDeMaria, tareasEstancadasIds, haceCuantoConsolidado } from '../avisos.mjs'
+import { inicioDelDia, porDia, sitiosRevisados, contarTemas, corridasPorHora } from '../hoyGraficos.mjs'
+import { Linea } from './Panorama.jsx'
+import { TuDia, ProximosDias, Sitios, MailSinLeer, Tareas, NichoHoy, TrabajadoresHoy, ProximosEventos } from './HoyGraficos.jsx'
+import './Panorama.css'
+
+const DIA_MS = 86_400_000
 
 function inicioDia() {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
   return d
 }
-function finDia() {
+function finDia(masDias = 0) {
   const d = new Date()
   d.setHours(23, 59, 59, 999)
-  return d
+  return new Date(d.getTime() + masDias * DIA_MS)
 }
 
 const PUSH_SOPORTADO = typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
@@ -38,6 +44,9 @@ function Avisos({ avisos, enOrden, cargando }) {
 
 export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrirMail, abrirBandeja, abrirCalendario }) {
   const [eventos, setEventos] = useState([])
+  const [semana, setSemana] = useState([])
+  const [noticias, setNoticias] = useState([])
+  const [corridas, setCorridas] = useState([])
   const [tareas, setTareas] = useState([])
   const [tareasTotal, setTareasTotal] = useState(0)
   const [mails, setMails] = useState([])
@@ -53,19 +62,26 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
     let vivo = true
     async function cargar() {
       setCargando(true)
-      const [ev, ta, ma, ag] = await Promise.all([
+      const hace24 = new Date(Date.now() - DIA_MS).toISOString()
+      const [ev, ta, ma, ag, no, co] = await Promise.all([
         supabase.from('calendar_events').select('id,title,starts_at,ends_at,project_id,all_day')
-          .gte('starts_at', new Date(inicioDia().getTime() - 86400000).toISOString()).lte('starts_at', finDia().toISOString())
+          .gte('starts_at', new Date(inicioDia().getTime() - 86400000).toISOString()).lte('starts_at', finDia(6).toISOString())
           .order('starts_at', { ascending: true }),
-        supabase.from('tasks').select('id,title,project_id,status', { count: 'exact' }).eq('done', false).order('touched_at', { ascending: true }).limit(20),
+        supabase.from('tasks').select('id,title,project_id,status', { count: 'exact' }).eq('done', false).order('touched_at', { ascending: true }).limit(300),
         supabase.from('emails').select('id,gmail_id,subject,from_name,from_addr,received_at,is_unread').eq('is_unread', true).order('received_at', { ascending: false }).limit(200),
         supabase.from('process_reports').select('id,agente,estado,resumen,detalle,iniciado_at').in('agente', AGENTES_MARIA).order('iniciado_at', { ascending: false }).limit(15),
+        supabase.from('noticias').select('temas').gte('created_at', hace24).limit(1000),
+        supabase.from('trabajos_corridas').select('trabajador,estado,iniciado_at').gte('iniciado_at', hace24).limit(2000),
       ])
       if (!vivo) return
       const fallos = [ev, ta, ma, ag].filter(r => r.error)
       if (fallos.length) setError('No se pudo cargar parte del resumen. Entrá a Mail o Calendario para reintentar.')
       const hoy = inicioDia().toLocaleDateString('sv-SE')
-      setEventos(unirRepetidos(ev.data || []).filter(e => { const [desde, hasta] = diasDelEvento(e); return desde <= hoy && hoy <= hasta }))
+      const unidos = unirRepetidos(ev.data || [])
+      setEventos(unidos.filter(e => { const [desde, hasta] = diasDelEvento(e); return desde <= hoy && hoy <= hasta }))
+      setSemana(unidos.filter(e => diasDelEvento(e)[0] > hoy))
+      setNoticias(no.data || [])
+      setCorridas(co.data || [])
       setTareas(ta.data || [])
       setTareasTotal(ta.count ?? (ta.data || []).length)
       setMails(ma.data || [])
@@ -104,17 +120,20 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
   function colorDe(projectId) {
     return proyectos.find(p => p.id === projectId)?.color || '#71717a'
   }
-  function nombreDe(projectId) {
-    return proyectos.find(p => p.id === projectId)?.name || 'Sin proyecto'
-  }
 
   const hoyTexto = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
   const importantes = mailsImportantes(mails, reglas)
   const { avisos, enOrden, consolidado_at } = avisosDeMaria(reportes, { proyectoDeTarea, proyectos, ahora })
+  const hoyMs = inicioDelDia(ahora)
+  const diasQueVienen = porDia([...eventos, ...semana], e => e.starts_at, hoyMs, 7)
+  diasQueVienen[0].n = eventos.length
+  const mailsPorDia = porDia(mails, m => m.received_at, hoyMs - 6 * DIA_MS, 7)
+  const quietas = tareasEstancadasIds(reportes).length
+  const horas = corridasPorHora(corridas, ahora)
   const cifras = [
-    { valor: eventos.length, etiqueta: 'eventos hoy' },
-    { valor: tareasTotal, etiqueta: 'tareas pendientes' },
-    { valor: importantes.length, etiqueta: 'mails importantes', nivel: importantes.length ? 'aviso' : undefined },
+    { valor: eventos.length, etiqueta: 'eventos hoy', grafico: <Linea valores={diasQueVienen.map(d => d.n)} color="var(--accent)" ancho={96} alto={18} relleno /> },
+    { valor: tareasTotal, etiqueta: 'tareas pendientes', nivel: quietas ? 'aviso' : undefined },
+    { valor: mails.length, etiqueta: 'mails sin leer', nivel: importantes.length ? 'aviso' : undefined, grafico: <Linea valores={mailsPorDia.map(d => d.n)} color="var(--id-azul)" ancho={96} alto={18} relleno /> },
     { valor: avisos.length, etiqueta: 'avisos', nivel: avisos.some(a => a.nivel === 'error') ? 'error' : avisos.length ? 'aviso' : undefined },
   ]
 
@@ -123,47 +142,40 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
       <CabeceraPantalla sobretitulo="Resumen del día" titulo={hoyTexto[0].toUpperCase() + hoyTexto.slice(1)} cifras={cifras} cargando={cargando} />
 
       {error && <p className="feedback-error" role="alert">{error}</p>}
-      <Bloques>
+      {(avisos.length > 0 || (!cargando && enOrden.length === 0)) && <Bloques>
         <Bloque titulo="Avisos" ancho="completo" accion={consolidado_at && <span className="bloque-nota">{haceCuantoConsolidado(consolidado_at, ahora)}</span>}>
           <Avisos avisos={avisos} enOrden={enOrden} cargando={cargando} />
         </Bloque>
+      </Bloques>}
 
-        <Bloque titulo="Calendario · hoy" accion={<button className="btn btn-sm" onClick={abrirCalendario}>Ver calendario</button>}>
-          {!cargando && eventos.length === 0 && <p className="empty-state">Sin eventos para hoy.</p>}
-          {eventos.slice(0, 3).map(e => (
-            <button className="task-item mail-row" key={e.id} onClick={abrirCalendario}>
-              <span className="task-dot" style={{ background: colorDe(e.project_id) }} />
-              <div className="task-main">
-                <div className="task-title">{e.title}</div>
-                <div className="task-sub">{hora(e.starts_at)}{e.ends_at ? ` – ${hora(e.ends_at)}` : ''} · {nombreDe(e.project_id)}</div>
-              </div>
-            </button>
-          ))}
+      <Bloques disposicion="principal">
+        <Bloque titulo="Tu día" accion={<button className="btn btn-sm" onClick={abrirCalendario}>Ver calendario</button>}>
+          <TuDia eventos={eventos} ahora={ahora} colorDe={colorDe} abrir={abrirCalendario} />
         </Bloque>
-
-        <Bloque titulo="Mail · sin leer" accion={<button className="btn btn-sm" onClick={abrirBandeja}>Ver todos los mails</button>}>
-          {!cargando && mails.length === 0 && <p className="empty-state">Todo leído.</p>}
-          {mails.slice(0, 4).map(m => (
-            <button className="list-item mail-row" key={m.id} disabled={!m.gmail_id} onClick={() => abrirMail(m.gmail_id)}>
-              <span className="list-main">{m.from_name || '(desconocido)'} — {m.subject || '(sin asunto)'}</span>
-              <span className="list-side">{fechaCorta(m.received_at)}</span>
-            </button>
-          ))}
+        <Bloque titulo="Próximos 7 días" accion={<span className="bloque-nota">eventos por día</span>}>
+          <ProximosDias dias={diasQueVienen} />
         </Bloque>
+      </Bloques>
 
-        <Bloque titulo="Tareas pendientes" ancho="completo">
-          {!cargando && tareas.length === 0 && <p className="empty-state">No hay tareas abiertas.</p>}
-          {tareas.slice(0, 8).map(t => (
-            <div className="task-item clickable" key={t.id} onClick={() => t.project_id && abrirProyecto(t.project_id)} style={{ cursor: t.project_id ? 'pointer' : 'default' }}>
-              <span className="task-dot" style={{ background: colorDe(t.project_id) }} />
-              <div className="task-main">
-                <div className="task-title">{t.title}</div>
-                <div className="task-sub">{nombreDe(t.project_id)}</div>
-              </div>
-            </div>
-          ))}
+      <Bloques disposicion="tres">
+        <Bloque titulo="Sitios" accion={consolidado_at && <span className="bloque-nota">{haceCuantoConsolidado(consolidado_at, ahora)}</span>}>
+          <Sitios sitios={sitiosRevisados(reportes)} enOrden={avisos.length ? [] : enOrden.filter(e => !/sitio/i.test(e))} />
         </Bloque>
-
+        <Bloque titulo="Mail sin leer" accion={<button className="btn btn-sm" onClick={abrirBandeja}>Ver todos</button>}>
+          <MailSinLeer mails={mails} dias={mailsPorDia} importantes={importantes} abrirMail={abrirMail} />
+        </Bloque>
+        <Bloque titulo="Tareas">
+          <Tareas tareas={tareas} total={tareasTotal} proyectos={proyectos} abrirProyecto={abrirProyecto} quietas={quietas} />
+        </Bloque>
+        <Bloque titulo="Mi nicho · 24 h" accion={<span className="bloque-nota">{noticias.length.toLocaleString('es-AR')} notas</span>}>
+          <NichoHoy temas={contarTemas(noticias)} />
+        </Bloque>
+        <Bloque titulo="Trabajadores · 24 h">
+          <TrabajadoresHoy horas={horas} />
+        </Bloque>
+        <Bloque titulo="Próximos eventos" accion={<button className="btn btn-sm" onClick={abrirCalendario}>Calendario</button>}>
+          <ProximosEventos eventos={semana} colorDe={colorDe} abrir={abrirCalendario} />
+        </Bloque>
       </Bloques>
 
       <Pie titulo="Resumen diario" resumen={resumenDiarioLinea({ soportado: PUSH_SOPORTADO, suscripcion, reglas })}>

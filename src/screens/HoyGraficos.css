@@ -1,0 +1,44 @@
+/* Gráficos de Hoy. Usa las filas, barras y tríos del panorama (Panorama.css); acá lo propio de esta pantalla. */
+.hoy-dia { display: block; width: 100%; height: auto; font-family: var(--font-mono); }
+.hoy-eje { stroke: var(--gray-200); }
+.hoy-eje-texto { font-size: 11px; fill: var(--gray-500); }
+.hoy-evento { cursor: pointer; }
+.hoy-evento rect { opacity: .85; }
+.hoy-evento:hover rect, .hoy-evento:focus-visible rect { opacity: 1; }
+.hoy-evento:focus { outline: none; }
+.hoy-evento-texto { font-family: var(--font); font-size: 12px; font-weight: 600; fill: var(--ink-900); pointer-events: none; }
+.hoy-ahora line { stroke: var(--accent); stroke-width: 1.5; }
+.hoy-ahora circle { fill: var(--accent); }
+.hoy-todo-el-dia { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.hoy-todo-el-dia button { padding: 3px 9px; border: 0; border-left: 3px solid var(--c); border-radius: 4px; background: var(--surface-raised); color: var(--gray-900); font: inherit; font-size: 12px; cursor: pointer; }
+
+.hoy-columnas { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; align-items: end; height: 130px; }
+.hoy-col { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; min-width: 0; }
+.hoy-col-num { font-family: var(--font-mono); font-size: 11px; color: var(--gray-900); min-height: 14px; }
+.hoy-col-barra { flex: 1; width: 100%; max-width: 30px; display: flex; align-items: flex-end; border-radius: 4px; background: var(--gray-200); overflow: hidden; }
+.hoy-col-barra > div { width: 100%; background: var(--gray-500); border-radius: 4px 4px 0 0; }
+.hoy-col-hoy .hoy-col-barra > div { background: var(--accent); }
+.hoy-col-dia { font-family: var(--font-mono); font-size: 10px; line-height: 1.25; text-align: center; color: var(--gray-500); }
+.hoy-col-hoy .hoy-col-dia { color: var(--accent); }
+
+.hoy-subtitulo { margin: 12px 0 4px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--gray-500); }
+.hoy-trio { margin-bottom: 10px; }
+.hoy-trio b { font-size: 20px; }
+.hoy-fila-boton { display: block; width: 100%; margin-top: 4px; padding: 6px 8px; border: 1px solid var(--gray-200); border-radius: 5px; background: none; color: var(--gray-900); font: inherit; font-size: 12.5px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.hoy-fila-boton:hover:not(:disabled) { border-color: var(--gray-300); background: var(--surface-raised); }
+.hoy-fila-boton:disabled { cursor: default; }
+
+.hoy-horas { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 2px; height: 70px; align-items: end; }
+.hoy-horas > div { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; background: var(--gray-200); border-radius: 2px; overflow: hidden; }
+.hoy-horas-ok { background: var(--green-600); }
+.hoy-horas-error { background: var(--red-600); }
+
+.hoy-eje-pie { display: flex; justify-content: space-between; margin-top: 4px; font-family: var(--font-mono); font-size: 10px; color: var(--gray-500); }
+.pantalla-bloques + .pantalla-bloques { margin-top: 16px; }
+.pantalla-bloques.bloques-principal { align-items: stretch; }
+
+.hoy-proximo { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; padding: 7px 0; border: 0; border-top: 1px solid var(--gray-200); background: none; color: var(--gray-900); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
+.hoy-proximo:first-child { border-top: 0; padding-top: 0; }
+.hoy-proximo-dia { padding-left: 7px; border-left: 3px solid var(--c); font-family: var(--font-mono); font-size: 11px; color: var(--gray-700); }
+.hoy-proximo-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hoy-proximo-hora { font-family: var(--font-mono); font-size: 11px; color: var(--gray-500); }

@@ -24,7 +24,7 @@ export function Linea({ valores, color, ancho = 120, alto = 18, relleno = false 
   </svg>
 }
 
-function Barra({ valor, maximo, color, raiz = false }) {
+export function Barra({ valor, maximo, color, raiz = false }) {
   const p = maximo > 0 ? (raiz ? Math.sqrt(valor / maximo) : valor / maximo) * 100 : 0
   return <div className="pano-barra"><div style={{ width: `${valor > 0 ? Math.max(p, 1.5) : 0}%`, background: color }} /></div>
 }
