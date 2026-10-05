@@ -5,7 +5,7 @@ import { hoyIso } from './fechas.js'
 import { NOMBRE_RED } from './pipeline.js'
 import { resumenMetricas, versusMedia, leerCifra, recorte, captionDe, postsDeX } from './edicion.mjs'
 
-// Ficha de lo publicado un día: una pestaña por red con el texto, la foto, el link y las métricas.
+// Ficha de lo aprobado y publicado un día: una pestaña por red con el texto, la foto, el link y, si ya salió, las métricas.
 // Las métricas se cargan a mano hasta que cada red habilite leerlas (LinkedIn necesita aprobar un permiso; X es pago).
 const KPIS = [['impresiones', 'Impresiones'], ['reacciones', 'Reacciones'], ['comentarios', 'Comentarios'], ['compartidos', 'Compartidos']]
 const miles = v => (Number.isFinite(v) ? v.toLocaleString('es-AR') : '—')
@@ -94,11 +94,12 @@ export default function Publicacion({ piezas, metricas, todasLasPiezas, alCargar
 
   return (
     <div className="up-pub">
-      {piezas.length > 1 && (
-        <div className="up-pub-redes" role="tablist">
-          {piezas.map(p => <button key={p.id} role="tab" aria-selected={p.id === pieza.id} className={`r-${p.red}${p.id === pieza.id ? ' on' : ''}`} onClick={() => { setRed(p.red); setCargando(false) }}><LogoRed red={p.red} />{NOMBRE_RED[p.red]}</button>)}
-        </div>
-      )}
+      <div className="up-pub-redes" role="tablist">
+        {piezas.map(p => <button key={p.id} role="tab" aria-selected={p.id === pieza.id} className={`r-${p.red}${p.id === pieza.id ? ' on' : ''}`} onClick={() => { setRed(p.red); setCargando(false) }}><LogoRed red={p.red} />{NOMBRE_RED[p.red]}</button>)}
+      </div>
+      {pieza.estado === 'aprobado' && (pieza.error_publicacion
+        ? <p className="up-aviso-nota up-aviso-error"><b>No se pudo publicar.</b> {pieza.error_publicacion}</p>
+        : <p className="up-aviso-nota">Aprobado, todavía no salió. Las métricas se cargan cuando se publique.</p>)}
       <Vista key={pieza.id} pieza={pieza} />
       <div className="up-acciones up-acciones-izq">
         {pieza.url_publicada && <a className="up-btn up-btn-a" href={pieza.url_publicada} target="_blank" rel="noreferrer">Ver post</a>}
@@ -106,6 +107,7 @@ export default function Publicacion({ piezas, metricas, todasLasPiezas, alCargar
         <button className="up-btn" onClick={() => abrirEdicion(pieza.fecha, pieza.red)}>Ir a la mesa</button>
       </div>
 
+      {pieza.estado === 'publicado' && <>
       <div className="up-vol up-pub-vol">Métricas{res && <span>al {res.ultima.dia.slice(5).split('-').reverse().join('/')} · {res.ultima.fuente === 'manual' ? 'carga manual' : res.ultima.fuente}</span>}</div>
       {res ? (
         <>
@@ -123,6 +125,7 @@ export default function Publicacion({ piezas, metricas, todasLasPiezas, alCargar
       {cargando
         ? <CargarMetricas key={pieza.id} pieza={pieza} ultima={res?.ultima} cancelar={() => setCargando(false)} guardado={m => { setCargando(false); alCargar(m) }} />
         : <div className="up-acciones up-acciones-izq"><button className="up-btn up-btn-p" onClick={() => setCargando(true)}>Cargar métricas</button></div>}
+      </>}
     </div>
   )
 }
