@@ -16,8 +16,30 @@ export function piezaParaTrabajar(pieza, regenerar = false) {
   return pieza.estado === 'error' || !pieza.texto
 }
 
-// Error de cuota de Gemini (429): no es un problema de la pieza, se reintenta en la próxima corrida.
+// Error de cuota (429): no es un problema de la pieza, se reintenta en la próxima corrida.
 export class ErrorCuota extends Error {}
+// La IA siguió saturada (503/500) después de los reintentos.
+export class ErrorSaturado extends Error {}
+
+export const MODELO_GROQ_DEFAULT = 'openai/gpt-oss-120b'
+
+// Gemini es la IA principal y Groq el respaldo (si hay GROQ_API_KEY). Si Gemini se queda sin cuota o sigue
+// saturado, la corrida sigue con Groq hasta el final, sin volver a probar Gemini en cada consulta.
+export function conRespaldo(principal, respaldo, alCambiar = () => {}) {
+  let actual = principal
+  const llamar = async prompt => {
+    try {
+      return await actual.llamar(prompt)
+    } catch (e) {
+      if (!respaldo || actual === respaldo || !(e instanceof ErrorCuota || e instanceof ErrorSaturado)) throw e
+      actual = respaldo
+      await alCambiar(`${principal.nombre} ${e instanceof ErrorCuota ? 'llegó a su límite de consultas' : 'está saturado'}: sigue con ${respaldo.nombre}.`)
+      return await actual.llamar(prompt)
+    }
+  }
+  llamar.usada = () => actual.nombre
+  return llamar
+}
 
 // Segundos que Gemini pide esperar ("Please retry in 47.1s" o RetryInfo.retryDelay "47s").
 export function esperaPedida(data) {

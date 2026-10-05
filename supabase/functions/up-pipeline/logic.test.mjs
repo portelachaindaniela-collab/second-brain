@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   hoyAR, leerFecha, planificar, leerInvestigacion, formatoDe, armarPieza, chequearLargos,
   leerRevision, describirProblemas, parsearJson, promptRedactor, LIMITES, piezaParaTrabajar, esperaPedida,
+  conRespaldo, ErrorCuota, ErrorSaturado,
 } from './logic.mjs'
 
 const dia = { tema_semana: 'Quién soy', tema_dia: 'Colegiales', tema_instagram: null, redes: ['linkedin', 'x'], formato_instagram: 'ninguno', fotos_propias: false }
@@ -108,4 +109,29 @@ test('los problemas llevan tipo: formato (código), dato o cámara (revisor)', (
   assert.equal(chequearLargos('linkedin', largo)[0].tipo, 'formato')
   const r = leerRevision({ ok: false, problemas: [{ tipo: 'camara', fragmento: 'en el video', motivo: 'sugiere cámara' }, { fragmento: '9', motivo: 'no está' }] })
   assert.deepEqual(r.problemas.map(p => p.tipo), ['camara', 'dato'])
+})
+
+test('conRespaldo pasa a Groq cuando Gemini se queda sin cuota o sigue saturado, y no vuelve', async () => {
+  const llamadas = []
+  const gemini = { nombre: 'Gemini', llamar: async p => { llamadas.push(`g:${p}`); throw new ErrorCuota('sin cuota') } }
+  const groq = { nombre: 'Groq', llamar: async p => { llamadas.push(`q:${p}`); return { ok: p } } }
+  const avisos = []
+  const llamar = conRespaldo(gemini, groq, m => avisos.push(m))
+  assert.deepEqual(await llamar(1), { ok: 1 })
+  assert.deepEqual(await llamar(2), { ok: 2 })
+  assert.deepEqual(llamadas, ['g:1', 'q:1', 'q:2'])
+  assert.deepEqual(avisos, ['Gemini llegó a su límite de consultas: sigue con Groq.'])
+  assert.equal(llamar.usada(), 'Groq')
+
+  const saturado = conRespaldo({ nombre: 'Gemini', llamar: async () => { throw new ErrorSaturado('503') } }, groq)
+  assert.deepEqual(await saturado(3), { ok: 3 })
+})
+
+test('conRespaldo sin Groq o con otro error deja pasar el error', async () => {
+  const cuota = { nombre: 'Gemini', llamar: async () => { throw new ErrorCuota('sin cuota') } }
+  await assert.rejects(conRespaldo(cuota, null)(1), ErrorCuota)
+  const roto = { nombre: 'Gemini', llamar: async () => { throw new Error('JSON inválido') } }
+  await assert.rejects(conRespaldo(roto, { nombre: 'Groq', llamar: async () => 'no' })(1), /JSON inválido/)
+  const ambos = conRespaldo(cuota, { nombre: 'Groq', llamar: async () => { throw new ErrorCuota('groq sin cuota') } })
+  await assert.rejects(ambos(1), /groq sin cuota/)
 })

@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { HEADER_SECRETO } from "../_shared/trabajador.mjs";
 import {
-  MODELO_DEFAULT, MAX_VUELTAS_REVISION, piezaParaTrabajar, ErrorCuota, esperaPedida,
+  MODELO_DEFAULT, MODELO_GROQ_DEFAULT, MAX_VUELTAS_REVISION, piezaParaTrabajar, ErrorCuota, ErrorSaturado, esperaPedida, conRespaldo,
   hoyAR, leerFecha, planificar,
   promptInvestigador, leerInvestigacion,
   promptRedactor, armarPieza, chequearLargos,
@@ -19,8 +19,9 @@ const cors = {
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-// Gemini saturado o con error interno (503/500): se reintenta dos veces. Límite de cuota (429): si pide esperar poco se espera una vez;
-// si no, la corrida se corta con ErrorCuota y lo que falta queda para la próxima.
+// Gemini saturado o con error interno (503/500): se reintenta dos veces y después ErrorSaturado. Límite de cuota (429): si pide
+// esperar poco se espera una vez; si no, ErrorCuota. Con GROQ_API_KEY, ante cualquiera de los dos la corrida sigue con Groq;
+// sin Groq (o si Groq también se queda sin cuota), se corta y lo que falta queda para la próxima.
 const ESPERAS_SATURADO_MS = [3000, 8000];
 const NOMBRE_RED: Record<string, string> = { linkedin: "LinkedIn", x: "X", instagram: "Instagram" };
 const ESPERA_CUOTA_MAX_S = 20;
@@ -53,8 +54,34 @@ async function gemini(geminiKey: string, modelo: string, prompt: { sistema: stri
       }
       throw new ErrorCuota(data?.error?.message || "Gemini llegó al límite de consultas.");
     }
+    if (r.status === 503 || r.status === 500) throw new ErrorSaturado(data?.error?.message || `Gemini respondió HTTP ${r.status}.`);
     if (!r.ok) throw new Error(data?.error?.message || `Gemini respondió HTTP ${r.status}.`);
     return parsearJson(data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "");
+  }
+}
+
+// Respaldo: Groq por su API compatible con OpenAI, con salida JSON.
+async function groq(groqKey: string, modelo: string, prompt: { sistema: string; usuario: string }) {
+  for (let intento = 0; ; intento++) {
+    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${groqKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: modelo,
+        messages: [{ role: "system", content: prompt.sistema }, { role: "user", content: prompt.usuario }],
+        temperature: 0.4, max_tokens: 8192, response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const data = await r.json().catch(() => null);
+    if ((r.status === 503 || r.status === 500) && intento < ESPERAS_SATURADO_MS.length) {
+      await new Promise(res => setTimeout(res, ESPERAS_SATURADO_MS[intento]));
+      continue;
+    }
+    if (r.status === 429) throw new ErrorCuota(data?.error?.message || "Groq llegó al límite de consultas.");
+    if (r.status === 503 || r.status === 500) throw new ErrorSaturado(data?.error?.message || `Groq respondió HTTP ${r.status}.`);
+    if (!r.ok) throw new Error(data?.error?.message || `Groq respondió HTTP ${r.status}.`);
+    return parsearJson(data?.choices?.[0]?.message?.content ?? "");
   }
 }
 
@@ -80,7 +107,7 @@ function crearRegistro(admin: any, dia: { owner_id: string; fecha: string }, ori
 
 type Dia = { id: string; owner_id: string; fecha: string; tema_semana: string; tema_dia: string; redes: string[]; formato_instagram: string; tema_instagram: string | null; fotos_propias: boolean };
 
-async function procesarDia(admin: any, llamar: (p: any) => Promise<any>, dia: Dia, regenerar: boolean, origen: string) {
+async function procesarDia(admin: any, crearLlamar: (alCambiar: (m: string) => Promise<void>) => any, dia: Dia, regenerar: boolean, origen: string) {
   const redes = planificar(dia);
   const { data: existentes, error } = await admin.from("up_piezas").select("id,red,estado,respuesta,texto").eq("owner_id", dia.owner_id).eq("fecha", dia.fecha);
   if (error) throw new Error(error.message);
@@ -99,6 +126,8 @@ async function procesarDia(admin: any, llamar: (p: any) => Promise<any>, dia: Di
 
   const registro = crearRegistro(admin, dia, origen);
   await registro.abrir();
+  // Si la IA principal se queda sin cuota, el cambio a la de respaldo queda anotado en la corrida.
+  const llamar = crearLlamar(m => registro.paso("sistema", "cambió de IA", m));
   await registro.paso("planificador", "planificó", `${redes.map(r => NOMBRE_RED[r]).join(", ")}. Trabaja: ${aTrabajar.map((p: any) => NOMBRE_RED[p.red]).join(", ")}.`);
   try {
     const resultados = await trabajarPiezas(admin, llamar, dia, aTrabajar, existentes ?? [], registro);
@@ -106,7 +135,7 @@ async function procesarDia(admin: any, llamar: (p: any) => Promise<any>, dia: Di
     return { fecha: dia.fecha, piezas: resultados };
   } catch (e) {
     if (e instanceof ErrorCuota) {
-      await registro.paso("sistema", "cortó", "Gemini llegó a su límite de consultas; sigue en la próxima corrida.");
+      await registro.paso("sistema", "cortó", "La IA llegó a su límite de consultas; sigue en la próxima corrida.");
       await registro.cerrar("cortado");
     } else {
       await registro.cerrar("error", e instanceof Error ? e.message : String(e));
@@ -173,9 +202,10 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Método no permitido." }, 405);
 
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  const groqKey = Deno.env.get("GROQ_API_KEY");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!geminiKey || !supabaseUrl || !serviceKey) return json({ error: "UP no está configurado: falta GEMINI_API_KEY o la conexión a la base." }, 503);
+  if ((!geminiKey && !groqKey) || !supabaseUrl || !serviceKey) return json({ error: "UP no está configurado: falta GEMINI_API_KEY (o GROQ_API_KEY) o la conexión a la base." }, 503);
   const admin = createClient(supabaseUrl, serviceKey);
 
   let body: any = {};
@@ -203,15 +233,24 @@ Deno.serve(async (req: Request) => {
   if (!dias?.length) return json({ fecha, dias: [], mensaje: "No hay publicación en el calendario para esa fecha." });
 
   const modelo = Deno.env.get("UP_MODEL") || MODELO_DEFAULT;
-  const llamar = (p: any) => gemini(geminiKey, modelo, p);
+  const modeloGroq = Deno.env.get("UP_MODEL_GROQ") || MODELO_GROQ_DEFAULT;
+  const iaGemini = geminiKey ? { nombre: "Gemini", llamar: (p: any) => gemini(geminiKey, modelo, p) } : null;
+  const iaGroq = groqKey ? { nombre: "Groq", llamar: (p: any) => groq(groqKey, modeloGroq, p) } : null;
+  const crearLlamar = (alCambiar: (m: string) => Promise<void>) => conRespaldo(iaGemini ?? iaGroq, iaGemini ? iaGroq : null, alCambiar);
   const regenerar = body?.regenerar === true;
   try {
     const resultado: any[] = [];
-    for (const dia of dias) resultado.push(await procesarDia(admin, llamar, dia, regenerar, secreto ? "cron" : "app"));
+    for (const dia of dias) resultado.push(await procesarDia(admin, crearLlamar, dia, regenerar, secreto ? "cron" : "app"));
     return json({ fecha, modelo, dias: resultado });
   } catch (e) {
     if (e instanceof ErrorCuota) {
-      return json({ fecha, modelo, cortado: true, mensaje: "Gemini llegó a su límite de consultas. Lo que falta se completa en la próxima corrida (o probá de nuevo en un minuto)." });
+      const mensaje = iaGemini && iaGroq
+        ? "Gemini y Groq llegaron a su límite de consultas. Lo que falta se completa en la próxima corrida."
+        : `${iaGemini ? "Gemini" : "Groq"} llegó a su límite de consultas. Lo que falta se completa en la próxima corrida (o probá de nuevo en un rato).`;
+      return json({ fecha, modelo, cortado: true, mensaje });
+    }
+    if (e instanceof ErrorSaturado) {
+      return json({ error: "La IA está saturada en este momento. Probá de nuevo en unos minutos." }, 503);
     }
     console.error("up-pipeline:", e instanceof Error ? e.message : String(e));
     return json({ error: `No se pudieron generar los borradores (${e instanceof Error ? e.message : "error desconocido"}).` }, 500);
