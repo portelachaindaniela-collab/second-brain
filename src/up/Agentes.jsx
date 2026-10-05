@@ -108,7 +108,7 @@ function Consola({ corrida }) {
 }
 
 // ---------- Loop: la cadena en anillo, con Noruega en el centro ----------
-function Anillo({ activo, girando, noruega }) {
+function Anillo({ activo, girando, noruega, revisando }) {
   const cx = 220, cy = 160, R = 108
   const pos = AGENTES_ORDEN.map((_, i) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / AGENTES_ORDEN.length; return [cx + R * Math.cos(a), cy + R * Math.sin(a)] })
   const color = { ok: '#7FB08E', aviso: '#E3B23C', falla: '#E08B7F' }[noruega?.estado] || '#8A857A'
@@ -122,7 +122,8 @@ function Anillo({ activo, girando, noruega }) {
       )}
       <circle cx={cx} cy={cy} r="46" fill="none" stroke={color} strokeWidth="1.2" />
       <text x={cx} y={cy - 4} textAnchor="middle" className="up-anillo-centro">Noruega</text>
-      <text x={cx} y={cy + 14} textAnchor="middle" className="up-anillo-chico" fill={color}>{noruega ? ESTADO_NORUEGA[noruega.estado].toLowerCase() : 'sin revisar'}</text>
+      {revisando && <circle cx={cx} cy={cy} r="46" fill="none" stroke="#E3B23C" strokeWidth="2" className="up-anillo-revisando" />}
+      <text x={cx} y={cy + 14} textAnchor="middle" className="up-anillo-chico" fill={revisando ? '#E3B23C' : color}>{revisando ? 'revisando…' : noruega ? ESTADO_NORUEGA[noruega.estado].toLowerCase() : 'sin revisar'}</text>
       {AGENTES_ORDEN.map((id, i) => {
         const [x, y] = pos[i]
         const on = id === activo
@@ -231,6 +232,7 @@ export default function Agentes() {
   const [abierta, setAbierta] = useState(null)
   const [revisando, setRevisando] = useState(false)
   const [aviso, setAviso] = useState('')
+  const [resultado, setResultado] = useState(null) // { estado, texto } de la revisión pedida a mano
   const [ahora, setAhora] = useState(() => Date.now())
 
   const cargar = useCallback(async () => {
@@ -261,12 +263,18 @@ export default function Agentes() {
     return () => { supabase.removeChannel(canal); clearInterval(reloj) }
   }, [])
 
+  // Revisión a pedido: se ve en el loop mientras corre y al terminar dice qué encontró (aunque todo siga en verde).
   async function revisarAhora() {
-    setRevisando(true); setAviso('')
+    setRevisando(true); setAviso(''); setResultado(null)
     const { data, error } = await supabase.functions.invoke('up-noruega', { body: {} })
+    if (error || data?.error) { setRevisando(false); setAviso(data?.error || 'Noruega no pudo revisar ahora. Probá de nuevo en un rato.'); return }
+    await cargar()
     setRevisando(false)
-    if (error || data?.error) setAviso(data?.error || 'Noruega no pudo revisar ahora. Probá de nuevo en un rato.')
-    else await cargar()
+    const r = data?.resultados?.[0]
+    if (!r) return
+    const bien = r.chequeos.filter(c => c.estado === 'ok').length
+    const otros = r.chequeos.filter(c => c.estado !== 'ok').map(c => c.nombre.toLowerCase())
+    setResultado({ estado: r.estado, texto: `Revisó a las ${hora(new Date().toISOString())}: ${r.estado === 'ok' ? 'todo en orden' : `mirá ${otros.join(', ')}`} (${bien} de ${r.chequeos.length} chequeos bien).` })
   }
 
   if (error) return <p role="alert" className="up-error">{error}</p>
@@ -308,13 +316,13 @@ export default function Agentes() {
         </div>
         <div className="up-consola-loop">
           <div className="up-consola-cab"><span>loop de agentes</span><span>{activo ? <>trabajando · <b>{AGENTES[activo]?.nombre.toLowerCase()}</b></> : 'en espera'}</span></div>
-          <Anillo activo={activo} girando={Boolean(enCurso)} noruega={noruega} />
+          <Anillo activo={activo} girando={Boolean(enCurso)} noruega={noruega} revisando={revisando} />
         </div>
       </section>
 
       <div className="up-vol up-vol-sala">Noruega · agente madre<span>{noruega ? `revisó ${haceCuanto(noruega.at, ahora)} · cada 30 min` : 'todavía no revisó'}</span></div>
       <section className="up-noruega">
-        <ul className="up-chequeos-sala">
+        <ul key={resultado?.texto || 'chequeos'} className={`up-chequeos-sala${resultado ? ' recien' : ''}`}>
           {(noruega?.chequeos || []).map(c => (
             <li key={c.id}><span className={`up-led l-${c.estado}`} /><b>{c.nombre}</b><span>{c.detalle}</span></li>
           ))}
@@ -326,6 +334,7 @@ export default function Agentes() {
             {[...chequeos].reverse().map(c => <i key={c.id} className={`l-${c.estado}`} title={`${hora(c.at)} · ${ESTADO_NORUEGA[c.estado]}`} />)}
           </div>
           <button className="up-btn" disabled={revisando} onClick={revisarAhora}>{revisando ? 'Revisando…' : 'Revisar ahora'}</button>
+          {resultado && <p role="status" className={`up-aviso-nota ${resultado.estado === 'ok' ? 'up-aviso-ok' : resultado.estado === 'falla' ? 'up-aviso-error' : ''}`}>{resultado.texto}</p>}
           {aviso && <p role="alert" className="up-error">{aviso}</p>}
         </aside>
       </section>
