@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { proveedor, validarPedido, urlPermitida, htmlATexto, armarMensajes } from "./logic.mjs";
+import { proveedor, validarPedido, urlPermitida, htmlATexto, armarMensajes, MAX_TEXTO_WEB } from "./logic.mjs";
 
 // Corre un agente comercial de PDG con la sesión de la dueña (RLS) y guarda lo que escribe como borrador.
 
@@ -9,18 +9,28 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const env = Deno.env.toObject();
 const hoyAR = () => new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
 
+// Primero la página tal cual; si casi no tiene texto (sitios armados con JavaScript), la lee el lector de Jina,
+// que la abre en un navegador y devuelve el texto.
 async function leerWeb(web: string) {
   const url = urlPermitida(web);
   if (!url) return { aviso: "la dirección no es una web pública" };
+  let aviso = "no respondió a tiempo";
   try {
-    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (PDG comercial)", Accept: "text/html" }, redirect: "follow", signal: AbortSignal.timeout(12000) });
-    if (!r.ok) return { aviso: `la web respondió ${r.status}` };
-    if (!(r.headers.get("content-type") || "").includes("html")) return { aviso: "la dirección no es una página web" };
-    const texto = htmlATexto(await r.text());
-    return texto.length < 80 ? { aviso: "la página casi no tiene texto (puede armarse con JavaScript)" } : { texto };
-  } catch {
-    return { aviso: "no respondió a tiempo" };
-  }
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (PDG comercial)", Accept: "text/html" }, redirect: "follow", signal: AbortSignal.timeout(10000) });
+    if (!r.ok) aviso = `la web respondió ${r.status}`;
+    else if (!(r.headers.get("content-type") || "").includes("html")) return { aviso: "la dirección no es una página web" };
+    else {
+      const texto = htmlATexto(await r.text());
+      if (texto.length >= 300) return { texto };
+      aviso = "la página casi no tiene texto (se arma con JavaScript)";
+    }
+  } catch { /* se prueba con el lector */ }
+  try {
+    const r = await fetch(`https://r.jina.ai/${url}`, { headers: { "X-Return-Format": "text" }, signal: AbortSignal.timeout(30000) });
+    const texto = r.ok ? (await r.text()).replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n\n").trim().slice(0, MAX_TEXTO_WEB) : "";
+    if (texto.length >= 80) return { texto };
+  } catch { /* queda el aviso */ }
+  return { aviso };
 }
 
 async function llamarModelo(prov: any, messages: unknown[]) {
