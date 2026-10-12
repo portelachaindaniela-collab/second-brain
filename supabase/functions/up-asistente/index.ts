@@ -2,10 +2,9 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   MAX_VUELTAS, HERRAMIENTAS, ACCIONES, proveedor, sistema, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo,
-  validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente,
-} from "./logic.mjs";
+  validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente, buscarPlan, bloqueoDeDia } from "./logic.mjs";
 
-// Asistente de UP. La app manda { mensajes } (la conversación), { ejecutar: { nombre, args } } (una acción que la
+// BS67 en UP. La app manda { mensajes } (la conversación), { ejecutar: { nombre, args } } (una acción que la
 // dueña confirmó) o { redactar: { fecha, red, texto, pedido } } (una versión para la mesa de trabajo).
 // Lee y escribe con la sesión de la dueña (RLS), nunca con permisos de servicio.
 
@@ -102,10 +101,20 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
       const desde = /^\d{4}-\d{2}-\d{2}$/.test(a?.desde) ? a.desde : hoy;
       const hasta = /^\d{4}-\d{2}-\d{2}$/.test(a?.hasta) ? a.hasta : masDias(desde, 14);
       const [d, p] = await Promise.all([
-        db.from("up_calendario").select("fecha,tema_semana,tema_dia,redes,formato_instagram,salteado").gte("fecha", desde).lte("fecha", hasta).order("fecha"),
+        db.from("up_calendario").select("fecha,tema_semana,tema_dia,redes,formato_instagram,salteado,plan_id").gte("fecha", desde).lte("fecha", hasta).order("fecha"),
         db.from("up_piezas").select("fecha,red,estado").gte("fecha", desde).lte("fecha", hasta),
       ]);
-      return { desde, hasta, dias: (d.data || []).map((x: any) => ({ ...x, piezas: (p.data || []).filter((q: any) => q.fecha === x.fecha).map((q: any) => `${q.red}: ${q.estado}`) })) };
+      const planes = (await db.from("up_planes").select("id,nombre")).data || [];
+      return { desde, hasta, dias: (d.data || []).map(({ plan_id, ...x }: any) => ({ ...x, plan: planes.find((pl: any) => pl.id === plan_id)?.nombre ?? "Sin plan", piezas: (p.data || []).filter((q: any) => q.fecha === x.fecha).map((q: any) => `${q.red}: ${q.estado}`) })) };
+    }
+    case "ver_planes": {
+      const [pl, d] = await Promise.all([
+        db.from("up_planes").select("id,nombre,visible").order("orden").order("created_at"),
+        db.from("up_calendario").select("plan_id,fecha"),
+      ]);
+      const dias = d.data || [];
+      return { planes: (pl.data || []).map((x: any) => ({ nombre: x.nombre, visible: x.visible, dias: dias.filter((y: any) => y.plan_id === x.id).length, proximos: dias.filter((y: any) => y.plan_id === x.id && y.fecha >= hoy).length })),
+        sin_plan: dias.filter((y: any) => !(pl.data || []).some((x: any) => x.id === y.plan_id)).length };
     }
     case "ver_borrador": {
       const { data } = await db.from("up_piezas").select("fecha,red,estado,texto,problemas").eq("fecha", a?.fecha).eq("red", a?.red).maybeSingle();
@@ -137,9 +146,52 @@ async function ejecutar(db: any, jwt: string, nombre: string, a: any) {
         const { data } = await db.from("up_calendario").select("tema_semana").lte("fecha", a.fecha).order("fecha", { ascending: false }).limit(1).maybeSingle();
         semana = data?.tema_semana ?? "Ideas";
       }
-      const { error } = await db.from("up_calendario").insert({ fecha: a.fecha, tema_semana: semana, tema_dia: a.tema_dia, redes: a.redes, formato_instagram: a.formato_instagram, tema_instagram: a.tema_instagram });
+      let plan_id = null;
+      if (a.plan) {
+        const plan = buscarPlan((await db.from("up_planes").select("id,nombre")).data || [], a.plan);
+        if (!plan) return `No encontré el plan «${a.plan}». Crealo en el Calendario (Planes de trabajo) o decime otro.`;
+        plan_id = plan.id;
+      }
+      const { error } = await db.from("up_calendario").insert({ fecha: a.fecha, tema_semana: semana, tema_dia: a.tema_dia, redes: a.redes, formato_instagram: a.formato_instagram, tema_instagram: a.tema_instagram, ...(plan_id ? { plan_id } : {}) });
       if (error) return error.code === "23505" ? "Ya hay una publicación ese día: elegí otra fecha o editala desde el Calendario." : `No se pudo cargar: ${error.message}`;
       return "Listo, la idea quedó en el calendario. Los agentes la escriben la mañana de ese día (o pedime que genere ahora).";
+    }
+    case "editar_dia": {
+      const { data: dia } = await db.from("up_calendario").select("id,fecha,redes").eq("fecha", a.fecha).maybeSingle();
+      if (!dia) return "Ese día no tiene publicación en el calendario.";
+      const cambios: any = {};
+      for (const k of ["tema_dia", "tema_semana", "redes", "formato_instagram", "tema_instagram", "salteado"]) if (a[k] !== undefined) cambios[k] = a[k];
+      if (cambios.formato_instagram && !cambios.redes && !dia.redes.includes("instagram")) delete cambios.formato_instagram;
+      if (cambios.redes && !cambios.redes.includes("instagram")) cambios.tema_instagram = null;
+      if (a.plan) {
+        const plan = buscarPlan((await db.from("up_planes").select("id,nombre")).data || [], a.plan);
+        if (!plan) return `No encontré el plan «${a.plan}». Crealo en el Calendario (Planes de trabajo) o decime otro.`;
+        cambios.plan_id = plan.id;
+      }
+      const { data: piezas } = await db.from("up_piezas").select("estado").eq("fecha", a.fecha);
+      if (a.nueva_fecha) {
+        const b = bloqueoDeDia(piezas || []);
+        if (b) return `${b} No se puede mover.`;
+        cambios.fecha = a.nueva_fecha;
+      }
+      const { error } = await db.from("up_calendario").update(cambios).eq("id", dia.id);
+      if (error) return error.code === "23505" ? "Ya hay una publicación en la fecha nueva: elegí otra o mové primero esa." : `No se pudo cambiar: ${error.message}`;
+      if (a.nueva_fecha && piezas?.length) {
+        const { error: eP } = await db.from("up_piezas").update({ fecha: a.nueva_fecha }).eq("fecha", a.fecha);
+        if (eP) return `El día se movió, pero los borradores no: ${eP.message}`;
+      }
+      return "Listo, el día quedó cambiado en el calendario.";
+    }
+    case "borrar_dia": {
+      const { data: dia } = await db.from("up_calendario").select("id").eq("fecha", a.fecha).maybeSingle();
+      if (!dia) return "Ese día no tiene publicación en el calendario.";
+      const { data: piezas } = await db.from("up_piezas").select("estado").eq("fecha", a.fecha);
+      const b = bloqueoDeDia(piezas || []);
+      if (b) return `${b} No se puede borrar; si querés, lo salteo.`;
+      const { error: eP } = await db.from("up_piezas").delete().eq("fecha", a.fecha);
+      if (eP) return `No se pudo borrar: ${eP.message}`;
+      const { error } = await db.from("up_calendario").delete().eq("id", dia.id);
+      return error ? `No se pudo borrar: ${error.message}` : "Listo, borré el día. Quedó libre para otra idea.";
     }
     case "aprobar_pieza": {
       const { data, error } = await db.from("up_piezas").update({ estado: "aprobado" }).eq("fecha", a.fecha).eq("red", a.red).in("estado", ["pendiente", "revision"]).not("texto", "is", null).select("id");

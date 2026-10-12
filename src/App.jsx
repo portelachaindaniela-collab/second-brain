@@ -46,6 +46,7 @@ export default function App() {
   const [errorProyecto, setErrorProyecto] = useState('')
   const [errorGeneral, setErrorGeneral] = useState('')
   const [revisionGoogle, setRevisionGoogle] = useState(0)
+  const [revisionBot, setRevisionBot] = useState(0) // sube cuando BS67 cambia algo: las pantallas vuelven a leer
   const [proyectos, setProyectos] = useState([])
   const [cargandoProyectos, setCargandoProyectos] = useState(true)
   const [pantallasWeb, setPantallasWeb] = useState([])
@@ -305,14 +306,14 @@ export default function App() {
           {pantallasVisitadas.has('hoy') && <div hidden={pantalla !== 'hoy'}><Hoy revision={revisionGoogle} ownerId={session.user.id} abrirBandeja={() => { setMailCalTab('mail'); setPantalla('mailcal') }} abrirCalendario={() => { setMailCalTab('calendario'); setPantalla('mailcal') }} proyectos={proyectos} abrirProyecto={abrirProyecto} abrirMail={abrirMail} /></div>}
           {pantallasVisitadas.has('mailcal') && <div hidden={pantalla !== 'mailcal'}><MailCalendario tab={mailCalTab} setTab={setMailCalTab} revision={revisionGoogle} proyectos={proyectos} google={google} conectarGoogle={conectarGoogle} abrirMail={abrirMail}
             sincronizar={() => sincronizarGoogle('app_manual')} sincronizando={sincronizando} errorSync={errorSync} /></div>}
-          {pantallasVisitadas.has('flujo') && <div hidden={pantalla !== 'flujo'}><Flujo proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} abrirHtml={() => htmlInput.current?.click()} /></div>}
+          {pantallasVisitadas.has('flujo') && <div hidden={pantalla !== 'flujo'}><Flujo key={revisionBot} proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} abrirHtml={() => htmlInput.current?.click()} /></div>}
           {pantallasVisitadas.has('trabajadores') && <div hidden={pantalla !== 'trabajadores'}><Trabajadores /></div>}
           {pantallasVisitadas.has('eventos') && <div hidden={pantalla !== 'eventos'}><Eventos /></div>}
           {pantallasVisitadas.has('nicho') && <div hidden={pantalla !== 'nicho'}><MiNicho /></div>}
           {pantallasVisitadas.has('metricas') && <div hidden={pantalla !== 'metricas'}><Metricas key={session.user.id} ownerId={session.user.id} /></div>}
-          {pantallasVisitadas.has('cursos') && <div hidden={pantalla !== 'cursos'}><Cursos /></div>}
+          {pantallasVisitadas.has('cursos') && <div hidden={pantalla !== 'cursos'}><Cursos key={revisionBot} /></div>}
           {pantallasVisitadas.has('escribir') && <div hidden={pantalla !== 'escribir'}><Suspense fallback={<p className="empty-state">Abriendo el editor…</p>}><Escritor key={session.user.id} ownerId={session.user.id} /></Suspense></div>}
-          {pantalla === 'proyecto' && proyectoActual && <ProyectoShell hoja={hojaProyecto} setHoja={setHojaProyecto} key={proyectoActual.id} abrirMail={abrirMail} proyecto={proyectoActual} recargarProyectos={cargarProyectos} />}
+          {pantalla === 'proyecto' && proyectoActual && <ProyectoShell hoja={hojaProyecto} setHoja={setHojaProyecto} key={`${proyectoActual.id}-${revisionBot}`} abrirMail={abrirMail} proyecto={proyectoActual} recargarProyectos={cargarProyectos} />}
           {pantalla === 'pantalla' && pantallaWebActual && <Pantalla pantalla={pantallaWebActual} volver={() => setPantalla(pantallaOrigen)} />}
           {pantalla === 'mail' && mailId && <Mail gmailId={mailId} volver={() => setPantalla(mailOrigen)} />}
         </main>
@@ -323,7 +324,8 @@ export default function App() {
       <BotFlotante key={session.user.id} abierto={botAbierto} setAbierto={setBotAbierto}
         texto={botTexto} setTexto={setBotTexto} mensajes={botMensajes} setMensajes={setBotMensajes}
         consultando={botConsultando} setConsultando={setBotConsultando}
-        pantalla={pantalla} proyectoId={pantalla === 'proyecto' ? proyectoId : null} />
+        pantalla={pantalla} proyectoId={pantalla === 'proyecto' ? proyectoId : null}
+        alCambiar={() => { setRevisionBot(r => r + 1); setRevisionGoogle(r => r + 1); cargarProyectos() }} />
 
       {nuevoProyectoAbierto && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && !creando && setNuevoProyectoAbierto(false)}>

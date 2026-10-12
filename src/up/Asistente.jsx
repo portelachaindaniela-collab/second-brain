@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase.js'
+import Mascota from '../Mascota.jsx'
+import '../BotFlotante.css'
 
-// Asistente de UP: chat con el agente de IA (Edge Function up-asistente). Conversa, busca en internet, lee links y
+// BS67 dentro de UP: el mismo bot de Second Brain, conectado al agente de IA (Edge Function up-asistente). Conversa, busca en internet, lee links y
 // opera UP; las acciones que cambian algo llegan como propuesta y solo se ejecutan si la dueña toca Confirmar.
 const CLAVE = 'up-asistente-conversacion'
-const SUGERENCIAS = ['¿Qué tengo pendiente?', '¿Qué se publica esta semana?', '¿Cómo cargo una idea?', 'Buscá ideas de posts sobre comunicación deportiva']
+const SUGERENCIAS = ['¿Qué tengo pendiente?', '¿Qué se publica esta semana?', '¿Qué planes de trabajo tengo?', 'Pasá la idea del jueves al viernes', 'Buscá ideas de posts sobre comunicación deportiva']
 
 function leerGuardada() {
   try { return JSON.parse(localStorage.getItem(CLAVE)) || [] } catch { return [] }
@@ -24,7 +26,7 @@ async function llamar(body) {
   return r
 }
 
-export default function Asistente() {
+export default function Asistente({ alCambiar }) {
   const [abierto, setAbierto] = useState(false)
   const [mensajes, setMensajes] = useState(leerGuardada)
   const [texto, setTexto] = useState('')
@@ -54,22 +56,24 @@ export default function Asistente() {
     setOcupado(true)
     const r = await llamar({ ejecutar: { nombre: p.nombre, args: p.args } })
     setOcupado(false)
+    if (!r.error) alCambiar?.()
     setMensajes(m => [...m.map((x, j) => (j === i ? { ...x, decision: 'confirmada' } : x)), r.error ? { rol: 'error', texto: r.error } : { rol: 'asistente', texto: r.respuesta }])
   }
 
-  if (!abierto) return <button className="up-chat-boton" onClick={() => setAbierto(true)} aria-label="Abrir el asistente"><span>✦</span> Asistente</button>
+  if (!abierto) return <button className="up-bs67-boton" onClick={() => setAbierto(true)} aria-label="Conversar con BS67" title="Conversar con BS67"><Mascota /><span>BS67</span></button>
 
   return (
-    <aside className="up-chat" aria-label="Asistente de UP">
+    <aside className="up-chat" aria-label="BS67 en UP">
       <header className="up-chat-cab">
-        <div><div className="up-antetitulo">Asistente</div><small>Conversa, busca en internet y hace cosas en UP con tu OK.</small></div>
+        <span className="up-chat-mascota"><Mascota /></span>
+        <div><div className="up-antetitulo">BS67</div><small>Tu bot de Second Brain, acá en UP. Conversa, busca en internet y edita el calendario con tu OK.</small></div>
         {mensajes.length > 0 && <button className="up-link" onClick={() => setMensajes([])}>Nueva charla</button>}
         <button className="up-chat-cerrar" onClick={() => setAbierto(false)} aria-label="Cerrar">×</button>
       </header>
       <div className="up-chat-cuerpo">
         {mensajes.length === 0 && (
           <div className="up-chat-vacio">
-            <p>Preguntame lo que quieras: sobre UP, tus publicaciones o cualquier tema.</p>
+            <p>¡Hola! Soy BS67. Preguntame lo que quieras sobre UP, tus planes de trabajo, tus publicaciones o cualquier tema.</p>
             <div className="up-chat-sugerencias">{SUGERENCIAS.map(s => <button key={s} className="up-btn" onClick={() => enviar(s)}>{s}</button>)}</div>
           </div>
         )}
@@ -91,8 +95,8 @@ export default function Asistente() {
         <div ref={fin} />
       </div>
       <form className="up-chat-pie" onSubmit={e => { e.preventDefault(); enviar() }}>
-        <textarea className="up-editor" rows={2} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribí tu pregunta o pegá un link…"
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar() } }} aria-label="Mensaje para el asistente" />
+        <textarea className="up-editor" rows={2} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribile a BS67 o pegá un link…"
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar() } }} aria-label="Mensaje para BS67" />
         <button type="submit" className="up-btn up-btn-p" disabled={ocupado || !texto.trim()}>Enviar</button>
       </form>
     </aside>

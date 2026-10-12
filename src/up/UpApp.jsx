@@ -27,6 +27,7 @@ function fechaConAnio() {
 export default function UpApp({ email, volver }) {
   const [pantalla, setPantalla] = useState(() => (new URLSearchParams(window.location.search).has('up_redes') ? 'redes' : 'hoy'))
   const [cuentas, setCuentas] = useState({})
+  const [version, setVersion] = useState(0) // sube cuando BS67 cambia algo, para recargar la pantalla
   const [foco, setFoco] = useState(null) // { fecha, red } que abre la mesa de trabajo en Redes
 
   // Cuántos días esperan una respuesta y cuántas piezas quedaron en revisión, para el menú.
@@ -61,7 +62,7 @@ export default function UpApp({ email, volver }) {
             </button>
           ))}
         </nav>
-        <main className="up-cuerpo">
+        <main className="up-cuerpo" key={version}>
           {pantalla === 'hoy' && <Hoy abrirCalendario={() => setPantalla('calendario')} abrirPreguntas={() => setPantalla('preguntas')} alCambiar={contar} />}
           {pantalla === 'preguntas' && <Preguntas alCambiar={contar} />}
           {pantalla === 'revisor' && <Revisor alCambiar={contar} />}
@@ -71,7 +72,7 @@ export default function UpApp({ email, volver }) {
           {pantalla === 'agentes' && <Agentes />}
         </main>
       </div>
-      <Asistente />
+      <Asistente alCambiar={() => { setVersion(v => v + 1); contar() }} />
     </div>
   )
 }

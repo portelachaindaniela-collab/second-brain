@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { proveedor, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo, HERRAMIENTAS, ACCIONES, validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente } from './logic.mjs'
+import { proveedor, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo, HERRAMIENTAS, ACCIONES, validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente, buscarPlan, bloqueoDeDia } from './logic.mjs'
 
 test('usa Groq si hay clave y si no, Gemini', () => {
   assert.equal(proveedor({ GROQ_API_KEY: 'g', GEMINI_API_KEY: 'x' }).nombre, 'groq')
@@ -72,4 +72,29 @@ test('redacción: marca números que no están ni en el texto ni en la Ficha', (
   const fuentes = ['El alcance creció 170%, hasta 165.400.', 'Copa Federal 2024']
   assert.deepEqual(numerosSinFuente('1/ Creció 170% hasta 165400.\n\n2/ En 2024.', fuentes), [])
   assert.deepEqual(numerosSinFuente('Llegamos a 200.000 personas en 3 meses.', fuentes), ['200.000', '3'])
+})
+
+test('valida editar y borrar un día', () => {
+  assert.deepEqual(validarAccion('editar_dia', { fecha: '2026-10-15', nueva_fecha: '2026-10-16', plan: ' Octubre ' }), { ok: true, args: { fecha: '2026-10-15', nueva_fecha: '2026-10-16', plan: 'Octubre' } })
+  assert.equal(validarAccion('editar_dia', { fecha: '2026-10-15' }).ok, false)
+  assert.equal(validarAccion('editar_dia', { fecha: '2026-10-15', nueva_fecha: '16/10' }).ok, false)
+  assert.equal(validarAccion('editar_dia', { fecha: '2026-10-15', redes: [] }).ok, false)
+  assert.deepEqual(validarAccion('editar_dia', { fecha: '2026-10-15', redes: ['x'] }).args, { fecha: '2026-10-15', redes: ['x'], formato_instagram: 'ninguno' })
+  assert.deepEqual(validarAccion('editar_dia', { fecha: '2026-10-15', salteado: true }).args, { fecha: '2026-10-15', salteado: true })
+  assert.deepEqual(validarAccion('borrar_dia', { fecha: '2026-10-15' }), { ok: true, args: { fecha: '2026-10-15' } })
+  assert.match(describirAccion('editar_dia', { fecha: '2026-10-15', nueva_fecha: '2026-10-16' }), /viernes, 16 de octubre/)
+  assert.equal(validarAccion('cargar_idea', { fecha: '2026-10-08', tema_dia: 'a', redes: ['x'], plan: 'Noviembre' }).args.plan, 'Noviembre')
+})
+
+test('busca planes sin importar tildes', () => {
+  const planes = [{ id: 1, nombre: 'Calendario inicial' }, { id: 2, nombre: 'Campaña Olé' }]
+  assert.equal(buscarPlan(planes, 'campana ole').id, 2)
+  assert.equal(buscarPlan(planes, 'inicial').id, 1)
+  assert.equal(buscarPlan(planes, 'otro'), null)
+  assert.equal(buscarPlan(planes, ''), null)
+})
+
+test('bloquea días aprobados o publicados', () => {
+  assert.equal(bloqueoDeDia([{ estado: 'pendiente' }]), '')
+  assert.notEqual(bloqueoDeDia([{ estado: 'aprobado' }]), '')
 })

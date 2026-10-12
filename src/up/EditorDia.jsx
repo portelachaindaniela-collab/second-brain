@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { NOMBRE_RED } from './pipeline.js'
+import { bloqueoDeDia } from './planes.mjs'
 
 const REDES = ['linkedin', 'x', 'instagram']
 
 // Alta o edición de un día del calendario editorial: la idea entra como un día más y los agentes la toman la mañana
 // de esa fecha (o antes, con "Generar ahora").
-export default function EditorDia({ dia, fecha, semanas, cerrar, guardado }) {
+export default function EditorDia({ dia, fecha, semanas, planes, planInicial, piezas = [], cerrar, guardado }) {
   const nuevo = !dia
   const [f, setF] = useState(() => ({
     fecha: dia?.fecha ?? fecha,
@@ -16,6 +17,7 @@ export default function EditorDia({ dia, fecha, semanas, cerrar, guardado }) {
     formato_instagram: dia?.formato_instagram && dia.formato_instagram !== 'ninguno' ? dia.formato_instagram : 'carrusel',
     tema_instagram: dia?.tema_instagram ?? '',
     fotos_propias: dia?.fotos_propias ?? false,
+    plan_id: dia?.plan_id ?? planInicial ?? planes[0]?.id ?? '',
   }))
   const [ocupado, setOcupado] = useState(false)
   const ref = useRef(null)
@@ -33,6 +35,9 @@ export default function EditorDia({ dia, fecha, semanas, cerrar, guardado }) {
     e.preventDefault()
     if (!f.tema_dia.trim()) { setAviso('Escribí la idea (el tema del día).'); return }
     if (!f.redes.length) { setAviso('Elegí al menos una red.'); return }
+    const fechaAntes = dia?.fecha
+    const mueve = !nuevo && f.fecha !== fechaAntes && piezas.length > 0
+    if (mueve && bloqueoDeDia(piezas)) { setAviso(`${bloqueoDeDia(piezas)} No se puede cambiar la fecha.`); return }
     setOcupado(true); setAviso('')
     const fila = {
       fecha: f.fecha,
@@ -42,10 +47,16 @@ export default function EditorDia({ dia, fecha, semanas, cerrar, guardado }) {
       formato_instagram: conInstagram ? f.formato_instagram : 'ninguno',
       tema_instagram: conInstagram && f.tema_instagram.trim() ? f.tema_instagram.trim() : null,
       fotos_propias: conInstagram && f.formato_instagram === 'carrusel' && f.fotos_propias,
+      plan_id: f.plan_id || null,
     }
     const { data, error } = nuevo
       ? await supabase.from('up_calendario').insert(fila).select('*').single()
       : await supabase.from('up_calendario').update(fila).eq('id', dia.id).select('*').single()
+    if (!error && mueve) {
+      // Los borradores van atados a la fecha: se mudan con el día.
+      const { error: eP } = await supabase.from('up_piezas').update({ fecha: f.fecha }).eq('fecha', fechaAntes)
+      if (eP) { setOcupado(false); setAviso('El día se movió, pero los borradores no: ' + eP.message); return }
+    }
     setOcupado(false)
     if (error) { setAviso(error.code === '23505' ? 'Ya hay una publicación ese día: elegí otra fecha o editá la que está.' : 'No se pudo guardar: ' + error.message); return }
     guardado(data)
@@ -56,7 +67,16 @@ export default function EditorDia({ dia, fecha, semanas, cerrar, guardado }) {
       <div className="up-vol">{nuevo ? 'Nueva idea' : 'Editar el día'}</div>
       <label className="up-campo-l">Día
         <input className="up-campo" type="date" value={f.fecha} onChange={e => cambiar('fecha', e.target.value)} required />
+        {!nuevo && f.fecha !== dia.fecha && piezas.length > 0 && <span className="up-nota-chica">Los borradores se mudan con el día.</span>}
       </label>
+      {planes.length > 0 && (
+        <label className="up-campo-l">Plan de trabajo
+          <select className="up-campo" value={f.plan_id} onChange={e => cambiar('plan_id', e.target.value)}>
+            {planes.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            {!f.plan_id && <option value="">Sin plan</option>}
+          </select>
+        </label>
+      )}
       <label className="up-campo-l">La idea (tema del día)
         <textarea className="up-editor" rows={3} value={f.tema_dia} onChange={e => cambiar('tema_dia', e.target.value)} placeholder="Ej.: Qué aprendí armando un área de comunicación desde cero" autoFocus />
       </label>
