@@ -5,6 +5,7 @@ import { supabase } from './supabase.js'
 const APPS = [
   { id: 'bs67', marca: 'BS67', nombre: 'BS67', detalle: 'Hoy, flujo, mail y calendario, trabajadores, eventos, métricas y proyectos.' },
   { id: 'up', marca: 'UP', nombre: 'UP', detalle: 'Publicaciones en LinkedIn, X e Instagram desde el calendario editorial.' },
+  { id: 'pdg', marca: 'pdg', nombre: 'PDG comercial', detalle: 'Ventas y marketing de Point Data Global: cuentas, agentes y propuestas.' },
 ]
 
 // Cambiar la contraseña ya con la sesión abierta (por ejemplo, después de entrar con el enlace por mail).

@@ -17,6 +17,8 @@ import VisorArchivo from './screens/VisorArchivo.jsx'
 import Inicio from './Inicio.jsx'
 import UpApp from './up/UpApp.jsx'
 import './up/up.css'
+import PdgApp from './pdg/PdgApp.jsx'
+import './pdg/pdg.css'
 import { TRABAJADOR_GOOGLE, estadoGoogle, debeSincronizarAlAbrir } from './googleEstado.mjs'
 
 const Escritor = lazy(() => import('./screens/Escritor.jsx'))
@@ -161,6 +163,7 @@ export default function App() {
   if (!session) return <Login />
   if (!app) return <Inicio email={session.user.email} elegir={setApp} salir={() => supabase.auth.signOut()} />
   if (app === 'up') return <UpApp email={session.user.email} volver={() => setApp(null)} />
+  if (app === 'pdg') return <PdgApp email={session.user.email} volver={() => setApp(null)} />
 
   function abrirProyecto(id) {
     setHojaProyecto('resumen')

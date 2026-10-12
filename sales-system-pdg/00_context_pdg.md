@@ -1,19 +1,51 @@
-# Contexto Principal del Negocio: Point Data Global (PDG)
+# Manual comercial de Point Data Global (PDG)
 
-- **Nombre de la Solución/Mockup Base:** Point Data Global (PDG)
-- **URL Demostrativa Live:** https://pointdataglobal.netlify.app
-- **Modelo de Negocio:** No vendemos una suscripción al sitio PDG. Vendemos el **servicio de desarrollo, diseño UX/UI, arquitectura de datos y motor de visualización de estadísticas de fútbol femenino** tomando a PDG como el prototipo funcional de alta fidelidad.
+## Qué vendemos
+PDG es un **sistema de datos de fútbol femenino que funciona solo**: recolecta resultados de fuentes públicas, los valida y unifica, calcula tablas y estadísticas propias, y los publica en portales, apps, informes y newsletters.
 
-## Propuesta de Valor
-Aceleramos el lanzamiento de plataformas, portales y hubs de datos de fútbol femenino. En lugar de desarrollar desde cero (6-12 meses), reutilizamos la arquitectura, diseño responsivo y motor de datos de PDG para entregar un sitio web profesional a medida en cuestión de semanas.
+No vendemos "la web". La web (https://pointdataglobal.netlify.app) es la **vidriera**: muestra el sistema funcionando en vivo. Lo que vendemos es **el sistema adaptado a cada cliente**: sus competencias, su marca, sus canales y, si los tiene, sus propios datos.
 
-## Público Objetivo (Clientes B2B)
-1. **Ligas y Federaciones:** Quieren su propio portal oficial de estadísticas para dar visibilidad a torneos femeninos.
-2. **Medios de Comunicación y Portales Deportivos:** Buscan integrar secciones interactivas, tablas en vivo y widgets de métricas.
-3. **Agencias de Representación y Scouting:** Requieren catálogos de jugadoras con reportes de rendimiento y visualizaciones avanzadas.
-4. **Marcas y Patrocinadores:** Buscan crear activaciones de contenido/branded data alrededor del fútbol femenino.
+Metáfora para explicarlo: los recolectores son los camiones, la base de datos es el almacén y la web, la app o el informe son la vidriera. El cliente puede tener su propia vidriera, sus propios camiones o las dos cosas.
 
-## Puntos Fuertes de la Arquitectura PDG (Argumentos de Venta)
-- **Cero tiempo perdido en diseño:** El cliente puede navegar e interactuar con https://pointdataglobal.netlify.app en la primera reunión.
-- **Especializado en Fútbol Femenino:** Interfaces optimizadas para la densidad de datos del deporte (mapas de calor, métricas esperadas xG/xA, radar de rendimiento).
-- **Escalable e Integrable:** Diseñado para conectarse vía API con proveedores como Opta, StatsBomb, Wyscout o bases de datos custom.
+## Módulos del sistema (existen hoy)
+1. **Recolección automática.** Un recolector por liga o fuente que corre solo todos los días. Activos: Primera División argentina (Apertura, Clausura, Reserva), Liga F (España) y Liga MX Femenil. Chile y Colombia armados, falta probarlos. Marcador en vivo durante los partidos (cada 3 minutos) y goleadoras actualizadas cada 5 minutos.
+2. **Motor de datos.** Unifica nombres de clubes (alias; Primera y Reserva cuentan como la misma institución), valida cada partido, guarda historial y aparta lo dudoso para revisión. **Calcula las tablas de posiciones por su cuenta**, no las copia. Sumar una liga es sumar un recolector, no armar un sistema nuevo.
+3. **Almacén central.** Partidos, posiciones, equipos, escudos y goleadoras en una base de datos con API, lista para alimentar cualquier pantalla. Los escudos se cambian en un solo lugar y se actualizan en todas las salidas.
+4. **Salidas.** Portal web con cifras en vivo, selector de competiciones, fixture, posiciones, goleadoras, historial de Copa Libertadores y archivo de la selección. App instalable (PWA) y paquete de app Android. Informes PDF de torneo y comparativos entre clubes, planillas de métricas en Excel y newsletter semanal (preparado, en activación).
+5. **Calidad.** Pruebas automáticas, revisión en celular, tablet y escritorio, modo claro y oscuro. Nunca muestra un total parcial como si fuera completo.
+
+## En desarrollo (no se ofrece como terminado)
+- Capa de jugadoras: perfil por jugadora con club, selección y goles en cada contexto.
+- Newsletter con envío automático.
+- Conexión con proveedores pagos (Opta, StatsBomb, Wyscout, API-Football): el sistema está pensado para sumarlos, pero hoy no hay ninguna conexión hecha.
+- Mapas de calor, xG/xA y radares de rendimiento **no existen hoy**. Se pueden ofrecer como desarrollo a medida solo si el cliente aporta datos de eventos de un proveedor pago.
+
+## Cómo se adapta a cada tipo de cliente
+- **Clubes:** portal propio con Primera, Reserva e inferiores; informe posterior a cada partido y de temporada, generado solo; comparativo con rivales; datos para sponsors y prensa; app con su escudo.
+- **Ligas y federaciones:** portal oficial con todas las categorías; tablas calculadas y verificables; cifras de la competencia; archivo histórico; newsletter para hinchas; datos para TV y prensa.
+- **Agencias y scouting:** seguimiento de equipos y goleadoras en varias ligas y países con nombres unificados; informes comparativos. El seguimiento por jugadora llega con la capa de jugadoras.
+- **Medios:** tablas, fixture y marcador en vivo para insertar en sus notas; informes listos para publicar; cobertura de ligas que hoy nadie cubre con datos.
+- **Marcas y patrocinadores:** contenido de datos con su marca (rankings, informes, newsletter patrocinado); seguimiento de los equipos que patrocinan.
+
+## Formas de contratarlo
+- **Llave en mano:** armamos y operamos el sistema para el cliente.
+- **Datos por API:** el cliente consume el almacén desde sus propios sistemas.
+- **Solo las salidas:** su equipo técnico conserva su backend y nosotros armamos portal, app o informes.
+- **Informes a pedido.**
+
+Precios y plazos: los define Daniela. Mientras no figuren en este manual, van como [A DEFINIR].
+
+## Por qué PDG
+- **Ya funciona:** se muestra en vivo en la primera reunión, no es una promesa.
+- **Especializado en fútbol femenino,** donde los datos son escasos, dispersos y nadie los ordena.
+- **Escala por liga:** sumar una competencia es sumar un recolector.
+- **Datos propios y defendibles:** las tablas se calculan a partir de resultados públicos, no se copian.
+- **Mundial 2027 (Brasil):** PDG llega con la historia de las ligas de cada jugadora, el contexto que FIFA no da.
+
+## Reglas para todos los agentes
+- Vender el sistema y su adaptación al cliente, nunca "la web" ni "una plantilla".
+- No presentar como existente nada de "En desarrollo".
+- No inventar precios, plazos cerrados, clientes, cifras ni testimonios.
+- Si preguntan de dónde salen los datos: "Recopilamos resultados de fuentes públicas de fútbol femenino y calculamos nosotros las tablas de posiciones."
+- Los datos con licencia (Opta a través de una liga, FIFA) no se recolectan: se integran pagándole al proveedor.
+- Español rioplatense, tono profesional, directo y sin exagerar.
