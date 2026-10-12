@@ -1,6 +1,7 @@
 // Avisos de Hoy: lo que María consolida en process_reports, escrito en texto claro. No es el estado del
 // trabajador María (eso está en Trabajadores) sino lo que encontró: un sitio que no responde, tareas quietas.
-export const AGENTES_MARIA = ['monitor_sitios', 'tareas_estancadas', 'sync_estado']
+// bs67 va primero: que el asistente funcione es la prioridad de María.
+export const AGENTES_MARIA = ['bs67', 'monitor_sitios', 'tareas_estancadas', 'sync_estado']
 const ZONA = 'America/Argentina/Buenos_Aires'
 const DIA_MS = 86_400_000
 
@@ -70,7 +71,15 @@ function google(r, avisos, enOrden) {
   else avisos.push({ nivel: nivelDe(r.estado), texto: 'Algo anda mal con Google', detalles: [r.resumen].filter(Boolean) })
 }
 
-const LECTORES = { monitor_sitios: sitios, tareas_estancadas: tareas, sync_estado: google }
+function bs67(r, avisos, enOrden) {
+  if (r.estado === 'ok') { enOrden.push('BS67 responde'); return }
+  const d = r.detalle ?? {}
+  const detalles = [r.resumen.replace(/^BS67: /, '')]
+  if (d.ultimo_error?.error) detalles.push(`Último error (${d.ultimo_error.app === 'bs67' ? 'BS67' : d.ultimo_error.app.toUpperCase()}, ${d.ultimo_error.cuando}): ${d.ultimo_error.error}`)
+  avisos.push({ nivel: nivelDe(r.estado), prioridad: true, texto: r.estado === 'error' ? 'BS67 no está funcionando bien' : 'BS67 tuvo problemas', detalles })
+}
+
+const LECTORES = { bs67, monitor_sitios: sitios, tareas_estancadas: tareas, sync_estado: google }
 
 // reportes: filas de process_reports (de cualquier antigüedad); se usa la última de cada chequeo de María.
 export function avisosDeMaria(reportes, { proyectoDeTarea = {}, proyectos = [], ahora = Date.now() } = {}) {
@@ -84,7 +93,7 @@ export function avisosDeMaria(reportes, { proyectoDeTarea = {}, proyectos = [], 
   for (const agente of AGENTES_MARIA) if (ultimos[agente]) LECTORES[agente](ultimos[agente], avisos, enOrden, { proyectoDeTarea, nombreProyecto, ahora })
   const fechas = Object.values(ultimos).map(r => Date.parse(r.iniciado_at))
   return {
-    avisos: avisos.sort((a, b) => (a.nivel === b.nivel ? 0 : a.nivel === 'error' ? -1 : 1)),
+    avisos: avisos.sort((a, b) => (a.prioridad !== b.prioridad ? (a.prioridad ? -1 : 1) : a.nivel === b.nivel ? 0 : a.nivel === 'error' ? -1 : 1)),
     enOrden,
     consolidado_at: fechas.length ? new Date(Math.max(...fechas)).toISOString() : null,
   }

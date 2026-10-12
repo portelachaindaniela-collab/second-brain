@@ -2,11 +2,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   MAX_VUELTAS, HERRAMIENTAS, ACCIONES, proveedor, sistema, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo,
-  validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente, buscarPlan, bloqueoDeDia } from "./logic.mjs";
+  validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente, buscarPlan, bloqueoDeDia, fragmentosDeCharla } from "./logic.mjs";
 
 // BS67 en UP. La app manda { mensajes } (la conversación), { ejecutar: { nombre, args } } (una acción que la
 // dueña confirmó) o { redactar: { fecha, red, texto, pedido } } (una versión para la mesa de trabajo).
-// Lee y escribe con la sesión de la dueña (RLS), nunca con permisos de servicio.
+// Lee y escribe con la sesión de la dueña (RLS), nunca con permisos de servicio. Cada respuesta queda en bs67_registro
+// (app 'up') para que María controle que BS67 funcione.
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -134,6 +135,13 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
       const { data } = await db.from("up_chequeos").select("estado,chequeos,at").order("at", { ascending: false }).limit(1).maybeSingle();
       return data ?? { error: "Noruega todavía no revisó." };
     }
+    case "buscar_charlas": {
+      const { data } = await db.from("bs67_charlas").select("titulo,app,mensajes,updated_at").order("updated_at", { ascending: false }).limit(200);
+      const encontradas = (data || []).map((c: any) => ({ c, f: fragmentosDeCharla(c, String(a?.texto ?? "")) })).filter((x: any) => x.f.encontrada).slice(0, 8);
+      return encontradas.length
+        ? { charlas: encontradas.map(({ c, f }: any) => ({ titulo: c.titulo, app: c.app, cuando: c.updated_at, fragmentos: f.fragmentos })) }
+        : { charlas: [], nota: "No encontré charlas sobre eso." };
+    }
     case "buscar_web": return await buscarWeb(prov, String(a?.consulta ?? "").slice(0, 500));
     case "leer_link": return await leerLink(String(a?.url ?? ""));
     default: return { error: "Herramienta desconocida." };
@@ -239,14 +247,27 @@ Deno.serve(async (req: Request) => {
   let body: any = {};
   try { body = await req.json(); } catch { return json({ error: "Cuerpo inválido." }, 400); }
 
+  const inicio = Date.now();
+  // El registro para María: nunca frena la respuesta.
+  const registrar = (fila: any) => admin.from("bs67_registro").insert({ owner_id: u.user.id, app: "up", ms: Date.now() - inicio, ...fila }).then(() => {}, () => {});
+
   if (body?.ejecutar) {
     const v: any = validarAccion(body.ejecutar.nombre, body.ejecutar.args);
     if (!v.ok) return json({ respuesta: v.error });
-    return json({ respuesta: await ejecutar(db, jwt, body.ejecutar.nombre, v.args) });
+    try {
+      const respuesta = await ejecutar(db, jwt, body.ejecutar.nombre, v.args);
+      const fallo = /^No (se )?pud|^Los agentes no pudieron/.test(respuesta);
+      await registrar({ tipo: "accion", estado: fallo ? "error" : "ok", error: fallo ? `${body.ejecutar.nombre}: ${respuesta}`.slice(0, 500) : null });
+      return json({ respuesta });
+    } catch (e) {
+      const detalle = e instanceof Error ? e.message : String(e);
+      await registrar({ tipo: "accion", estado: "error", error: `${body.ejecutar.nombre}: ${detalle}`.slice(0, 500) });
+      return json({ error: `No pude hacerlo (${detalle}).` }, 500);
+    }
   }
 
   const prov = proveedor(env);
-  if (!prov) return json({ error: "Falta configurar la IA (GROQ_API_KEY o GEMINI_API_KEY)." }, 503);
+  if (!prov) { await registrar({ estado: "error", error: "Falta la clave de la IA." }); return json({ error: "Falta configurar la IA (GROQ_API_KEY o GEMINI_API_KEY)." }, 503); }
   if (body?.redactar) {
     const v: any = validarRedaccion(body.redactar);
     if (!v.ok) return json({ error: v.error }, 400);
@@ -273,7 +294,10 @@ Deno.serve(async (req: Request) => {
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
       const m = await modelo(prov, mensajes);
       const llamadas = m.tool_calls || [];
-      if (!llamadas.length) return json({ respuesta: (m.content || "").trim() || "No tengo una respuesta para eso.", herramientas: usadas, ia: prov.nombre });
+      if (!llamadas.length) {
+        await registrar({ estado: "ok", ia: prov.nombre, herramientas: usadas.length });
+        return json({ respuesta: (m.content || "").trim() || "No tengo una respuesta para eso.", herramientas: usadas, ia: prov.nombre });
+      }
       const accion = llamadas.find((l: any) => ACCIONES.has(l.function?.name));
       if (accion) {
         let args: any = {};
@@ -283,6 +307,7 @@ Deno.serve(async (req: Request) => {
           mensajes.push({ role: "assistant", content: m.content ?? "", tool_calls: [accion] }, { role: "tool", tool_call_id: accion.id, content: JSON.stringify({ error: v.error }) });
           continue;
         }
+        await registrar({ estado: "ok", ia: prov.nombre, herramientas: usadas.length });
         return json({
           respuesta: (m.content || "").trim(), herramientas: usadas, ia: prov.nombre,
           propuesta: { nombre: accion.function.name, args: v.args, descripcion: describirAccion(accion.function.name, v.args) },
@@ -297,8 +322,11 @@ Deno.serve(async (req: Request) => {
         mensajes.push({ role: "tool", tool_call_id: l.id, content: JSON.stringify(resultado).slice(0, 16000) });
       }
     }
+    await registrar({ estado: "error", ia: prov.nombre, herramientas: usadas.length, error: "Se trabó: demasiadas vueltas de herramientas." });
     return json({ respuesta: "Me trabé buscando la respuesta. ¿Me lo pedís de otra forma?", herramientas: usadas, ia: prov.nombre });
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 502);
+    const detalle = e instanceof Error ? e.message : String(e);
+    await registrar({ estado: "error", ia: prov.nombre, herramientas: usadas.length, error: detalle.slice(0, 500) });
+    return json({ error: detalle }, 502);
   }
 });

@@ -141,3 +141,51 @@ export function reporteMaria(saludes) {
     datos: { trabajadores: saludes },
   }
 }
+
+// BS67, el asistente de las tres apps: es lo primero que controla María. Mira lo que BS67 registró en las últimas 24 h
+// (cada respuesta y cada acción) y la prueba que hace ella misma en cada vuelta: que las funciones de BS67 respondan y
+// que haya alguna IA disponible.
+// prueba: { funciones: { 'bs67-chat': bool, 'up-asistente': bool }, ias: { groq: 'ok'|'error'|'sin_clave', gemini: ... } }
+const NOMBRE_APP = { bs67: 'BS67', up: 'UP', pdg: 'PDG' }
+const NOMBRE_IA = { groq: 'Groq', gemini: 'Gemini' }
+export const BS67_LENTO_MS = 30_000
+
+export function reporteBS67(registros = [], prueba = {}, ahora = Date.now()) {
+  const recientes = registros.filter(r => ahora - Date.parse(r.at) < 24 * HORA)
+  const errores = recientes.filter(r => r.estado === 'error')
+  const porApp = {}
+  for (const r of recientes) porApp[r.app] = (porApp[r.app] ?? 0) + 1
+  const tiempos = recientes.filter(r => r.estado === 'ok' && r.tipo !== 'accion' && Number.isFinite(r.ms)).map(r => r.ms).sort((a, b) => a - b)
+  const mediana = tiempos.length ? tiempos[Math.floor(tiempos.length / 2)] : null
+  const caidas = Object.entries(prueba.funciones ?? {}).filter(([, ok]) => !ok).map(([f]) => f)
+  const ias = Object.entries(prueba.ias ?? {}).filter(([, e]) => e !== 'sin_clave')
+  const iasOk = ias.filter(([, e]) => e === 'ok').map(([ia]) => NOMBRE_IA[ia] ?? ia)
+  const iasMal = ias.filter(([, e]) => e !== 'ok').map(([ia]) => NOMBRE_IA[ia] ?? ia)
+  const cuota = errores.filter(r => /l[íi]mite|quota|429|cuota/i.test(r.error ?? '')).length
+
+  const problemas = []
+  let estado = 'ok'
+  if (caidas.length) { estado = 'error'; problemas.push(`no responde ${caidas.join(' ni ')}`) }
+  if (ias.length && !iasOk.length) { estado = 'error'; problemas.push(`ninguna IA responde (${iasMal.join(', ')})`) }
+  else if (iasMal.length) { estado = peor(estado, 'aviso'); problemas.push(`${iasMal.join(' y ')} no responde${iasMal.length > 1 ? 'n' : ''}; sigue con ${iasOk.join(' y ')}`) }
+  if (errores.length >= 3 && errores.length / recientes.length >= 0.3) { estado = 'error'; problemas.push(`${errores.length} de ${recientes.length} respuestas fallaron`) }
+  else if (errores.length) { estado = peor(estado, 'aviso'); problemas.push(`${errores.length} ${errores.length === 1 ? 'respuesta falló' : 'respuestas fallaron'}`) }
+  if (cuota) problemas.push(`${cuota} por límite de la IA`)
+  if (mediana !== null && mediana > BS67_LENTO_MS) { estado = peor(estado, 'aviso'); problemas.push(`tarda ${Math.round(mediana / 1000)} s en contestar`) }
+
+  const uso = recientes.length
+    ? `${recientes.length} ${recientes.length === 1 ? 'respuesta' : 'respuestas'} en 24 h (${Object.entries(porApp).map(([a, n]) => `${NOMBRE_APP[a] ?? a} ${n}`).join(' · ')})`
+    : 'sin uso en 24 h'
+  const ultimo = errores.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]
+  return {
+    agente: 'bs67',
+    estado,
+    resumen: estado === 'ok'
+      ? `BS67 funciona: ${uso}${mediana !== null ? `, contesta en ~${Math.max(1, Math.round(mediana / 1000))} s` : ''}${iasOk.length ? `. IA: ${iasOk.join(' y ')}` : ''}.`
+      : `BS67: ${problemas.join('; ')}. ${uso}.`,
+    datos: {
+      total: recientes.length, errores: errores.length, por_app: porApp, mediana_ms: mediana, prueba,
+      ultimo_error: ultimo ? { app: ultimo.app, error: ultimo.error, cuando: hace(Date.parse(ultimo.at), ahora) } : null,
+    },
+  }
+}

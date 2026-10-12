@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { identificarCorrida, abrirCorrida, cerrarCorrida, HEADER_SECRETO } from "../_shared/trabajador.mjs";
 import { resultadoCorrida } from "./corrida.mjs";
-import { saludTrabajador, reporteSitios, reporteTareas, reporteGoogle, reporteMaria } from "./consolidar.mjs";
+import { saludTrabajador, reporteSitios, reporteTareas, reporteGoogle, reporteMaria, reporteBS67 } from "./consolidar.mjs";
 
 // María no ejecuta trabajo: lee lo que dejaron los trabajadores en trabajos_corridas, consolida qué corrió,
 // qué falló y qué quedó pendiente, y lo guarda en process_reports. BS67 y Hoy leen de ahí.
@@ -21,6 +21,30 @@ async function ultimaCorrida(admin: any, clave: string, soloOk = false) {
   if (soloOk) q = q.eq("estado", "ok");
   const { data } = await q.order("iniciado_at", { ascending: false }).limit(1).maybeSingle();
   return data ?? null;
+}
+
+// La prueba de BS67 que hace María en cada vuelta, sin gastar consultas de IA: que las funciones de BS67 arranquen
+// (sin sesión contestan "Iniciá sesión") y que las claves de Groq y Gemini sigan valiendo (listar modelos es gratis).
+async function probarBS67() {
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const funcion = async (nombre: string) => {
+    try {
+      const r = await fetch(`${url}/functions/v1/${nombre}`, { method: "POST", headers: { apikey: anon, Authorization: `Bearer ${anon}`, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(20000) });
+      const cuerpo = await r.json().catch(() => null);
+      return r.status === 401 && typeof cuerpo?.error === "string";
+    } catch { return false; }
+  };
+  const ia = async (clave: string | undefined, pedir: (c: string) => Promise<Response>) => {
+    if (!clave) return "sin_clave";
+    try { return (await pedir(clave)).ok ? "ok" : "error"; } catch { return "error"; }
+  };
+  const [chat, up, groq, gemini] = await Promise.all([
+    funcion("bs67-chat"), funcion("up-asistente"),
+    ia(Deno.env.get("GROQ_API_KEY"), c => fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${c}` }, signal: AbortSignal.timeout(15000) })),
+    ia(Deno.env.get("GEMINI_API_KEY"), c => fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${c}`, { signal: AbortSignal.timeout(15000) })),
+  ]);
+  return { funciones: { "bs67-chat": chat, "up-asistente": up }, ias: { groq, gemini } };
 }
 
 async function consolidar(admin: any, ownerId: string) {
@@ -45,13 +69,17 @@ async function consolidar(admin: any, ownerId: string) {
   });
   const salud = (clave: string) => saludes.find((s: any) => s.clave === clave);
 
-  const [sitios, tareas, googleUltima, googleOk] = await Promise.all([
+  const [sitios, tareas, googleUltima, googleOk, registroBS67, pruebaBS67] = await Promise.all([
     ultimaCorrida(admin, "monitor_sitios", true),
     ultimaCorrida(admin, "tareas_estancadas", true),
     ultimaCorrida(admin, "google_sync"),
     ultimaCorrida(admin, "google_sync", true),
+    admin.from("bs67_registro").select("app,tipo,estado,ia,ms,error,at").eq("owner_id", ownerId).gte("at", new Date(ahora - 24 * 3600_000).toISOString()).limit(2000),
+    probarBS67(),
   ]);
+  // BS67 va primero: es la prioridad de María.
   const reportes = [
+    reporteBS67(registroBS67.data ?? [], pruebaBS67, ahora),
     reporteSitios(sitios, salud("monitor_sitios"), ahora),
     reporteTareas(tareas, salud("tareas_estancadas"), ahora),
     reporteGoogle(googleUltima, googleOk, ahora),

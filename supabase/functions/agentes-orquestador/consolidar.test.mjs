@@ -103,3 +103,31 @@ test('reporteMaria resume a todos y nombra los que tienen problemas', () => {
   assert.equal(r.resumen, '3 trabajadores: 1 al día, 1 pausado. Google: No corrió a las 15:30.')
   assert.equal(peor('ok', 'aviso', 'ok'), 'aviso')
 })
+
+test('BS67: funciona, avisa y falla según el registro y la prueba de María', async () => {
+  const { reporteBS67 } = await import('./consolidar.mjs')
+  const ahora = Date.parse('2026-10-12T15:00:00Z')
+  const r = (estado, app = 'bs67', ms = 4000, error = null, horas = 1) => ({ estado, app, ms, error, tipo: 'charla', at: new Date(ahora - horas * 3600_000).toISOString() })
+  const sana = { funciones: { 'bs67-chat': true, 'up-asistente': true }, ias: { groq: 'ok', gemini: 'ok' } }
+
+  const ok = reporteBS67([r('ok'), r('ok', 'up', 6000), r('ok', 'pdg', 2000), r('error', 'bs67', 1, 'x', 30)], sana, ahora)
+  assert.equal(ok.agente, 'bs67')
+  assert.equal(ok.estado, 'ok')
+  assert.match(ok.resumen, /3 respuestas en 24 h \(BS67 1 · UP 1 · PDG 1\), contesta en ~4 s/)
+
+  const unError = reporteBS67([r('ok'), r('ok'), r('ok'), r('ok'), r('error', 'up', 1, 'La IA llegó a su límite')], sana, ahora)
+  assert.equal(unError.estado, 'aviso')
+  assert.match(unError.resumen, /1 respuesta falló; 1 por límite de la IA/)
+  assert.equal(unError.datos.ultimo_error.app, 'up')
+
+  assert.equal(reporteBS67([r('error'), r('error'), r('error'), r('ok')], sana, ahora).estado, 'error')
+  assert.match(reporteBS67([], { funciones: { 'bs67-chat': false, 'up-asistente': true }, ias: { groq: 'ok' } }, ahora).resumen, /no responde bs67-chat/)
+  const sinIa = reporteBS67([], { funciones: { 'bs67-chat': true }, ias: { groq: 'error', gemini: 'error' } }, ahora)
+  assert.equal(sinIa.estado, 'error')
+  assert.match(sinIa.resumen, /ninguna IA responde/)
+  const respaldo = reporteBS67([], { funciones: { 'bs67-chat': true }, ias: { groq: 'error', gemini: 'ok' } }, ahora)
+  assert.equal(respaldo.estado, 'aviso')
+  assert.match(respaldo.resumen, /Groq no responde; sigue con Gemini/)
+  assert.equal(reporteBS67([], { ias: { groq: 'sin_clave', gemini: 'ok' } }, ahora).estado, 'ok')
+  assert.equal(reporteBS67([r('ok', 'bs67', 45000)], sana, ahora).estado, 'aviso')
+})

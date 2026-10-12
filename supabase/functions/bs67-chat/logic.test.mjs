@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   proveedor, sistema, HERRAMIENTAS, ACCIONES, validarAccion, describirAccion, normalizarEvento, venceISO, slugProyecto,
-  urlPermitida, htmlATexto, historialParaModelo, contiene, ultimoPorAgente,
+  urlPermitida, htmlATexto, historialParaModelo, contiene, ultimoPorAgente, fragmentosDeCharla,
 } from './logic.mjs'
 
 const ID = '11111111-2222-3333-4444-555555555555'
@@ -90,4 +90,25 @@ test('busca sin tildes y se queda con el último reporte por agente', () => {
   assert.ok(contiene('lo que sea', undefined))
   assert.ok(!contiene('Pagar luz', 'gas'))
   assert.deepEqual(ultimoPorAgente([{ agente: 'a', n: 1 }, { agente: 'b', n: 2 }, { agente: 'a', n: 3 }]).map(r => r.n), [1, 2])
+})
+
+test('sabe en qué app está', () => {
+  assert.match(sistema({ hoy: 'hoy', app: 'pdg' }), /app PDG comercial\. Respondé/)
+  assert.match(sistema({ hoy: 'hoy', pantalla: 'flujo' }), /app BS67 \(Second Brain\), pantalla «flujo»/)
+})
+
+test('valida y describe cuentas de PDG', () => {
+  assert.deepEqual(validarAccion('crear_cuenta_pdg', { nombre: ' Acme ', etapa: 'otra' }).args.etapa, 'prospecto')
+  assert.equal(validarAccion('crear_cuenta_pdg', { nombre: 'Acme', proxima_fecha: 'mañana' }).ok, false)
+  assert.deepEqual(validarAccion('editar_cuenta_pdg', { id: ID, etapa: 'demo', proxima_fecha: '2026-10-20' }).args, { id: ID, etapa: 'demo', proxima_fecha: '2026-10-20' })
+  assert.equal(validarAccion('editar_cuenta_pdg', { id: ID }).ok, false)
+  assert.match(describirAccion('editar_cuenta_pdg', { id: ID, etapa: 'demo' }, { cuenta: 'Acme' }), /cuenta «Acme» de PDG: etapa demo/)
+})
+
+test('encuentra lo hablado en charlas viejas', () => {
+  const charla = { titulo: 'Plan de octubre', mensajes: [{ rol: 'user', texto: 'Quiero hablar del Olé Summit' }, { rol: 'bot', texto: 'Dale, ¿qué día?' }, { rol: 'error', texto: 'x' }] }
+  const r = fragmentosDeCharla(charla, 'ole summit')
+  assert.equal(r.encontrada, true)
+  assert.deepEqual(r.fragmentos, ['Daniela: Quiero hablar del Olé Summit'])
+  assert.equal(fragmentosDeCharla(charla, 'presupuesto').encontrada, false)
 })

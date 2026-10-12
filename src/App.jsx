@@ -11,7 +11,7 @@ import Trabajadores from './screens/Trabajadores.jsx'
 import Eventos from './screens/Eventos.jsx'
 import MiNicho from './screens/MiNicho.jsx'
 import Login from './Login.jsx'
-import BotFlotante from './BotFlotante.jsx'
+import BS67 from './bs67/BS67.jsx'
 import MailCalendario from './screens/MailCalendario.jsx'
 import VisorArchivo from './screens/VisorArchivo.jsx'
 import Inicio from './Inicio.jsx'
@@ -29,10 +29,6 @@ export default function App() {
   // App elegida en el inicio: null muestra las dos (BS67 y UP).
   // Al volver de conectar una red (up-linkedin redirige con ?up_redes=...) se entra directo a UP.
   const [app, setApp] = useState(() => (new URLSearchParams(window.location.search).has('up_redes') ? 'up' : null))
-  const [botAbierto, setBotAbierto] = useState(false)
-  const [botTexto, setBotTexto] = useState('')
-  const [botMensajes, setBotMensajes] = useState([])
-  const [botConsultando, setBotConsultando] = useState(false)
   const [pantalla, setPantalla] = useState('hoy')
   const [proyectoId, setProyectoId] = useState(null)
   const [hojaProyecto, setHojaProyecto] = useState('resumen')
@@ -89,7 +85,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s)
-      if (!s) { setApp(null); setBotMensajes([]); setBotTexto(''); setBotAbierto(false); setBotConsultando(false) }
+      if (!s) setApp(null)
     })
     return () => sub.subscription.unsubscribe()
   }, [])
@@ -324,10 +320,7 @@ export default function App() {
 
       <input ref={htmlInput} type="file" accept=".html,.htm,text/html" hidden onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) setHtmlLocal({ name: file.name, file }) }} />
       {htmlLocal && <VisorArchivo archivo={htmlLocal} cerrar={() => setHtmlLocal(null)} />}
-      <BotFlotante key={session.user.id} abierto={botAbierto} setAbierto={setBotAbierto}
-        texto={botTexto} setTexto={setBotTexto} mensajes={botMensajes} setMensajes={setBotMensajes}
-        consultando={botConsultando} setConsultando={setBotConsultando}
-        pantalla={pantalla} proyectoId={pantalla === 'proyecto' ? proyectoId : null}
+      <BS67 key={session.user.id} app="bs67" pantalla={pantalla} proyectoId={pantalla === 'proyecto' ? proyectoId : null}
         alCambiar={() => { setRevisionBot(r => r + 1); setRevisionGoogle(r => r + 1); cargarProyectos() }} />
 
       {nuevoProyectoAbierto && (

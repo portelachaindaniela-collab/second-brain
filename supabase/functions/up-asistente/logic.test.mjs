@@ -105,3 +105,11 @@ test('las acciones aceptan la publicación puntual cuando el día tiene varias',
   assert.deepEqual(validarAccion('borrar_dia', { fecha: '2026-10-08', publicacion_id: 'cualquiera' }).args, { fecha: '2026-10-08' })
   assert.equal(validarAccion('editar_dia', { fecha: '2026-10-08', publicacion_id: id, tema_dia: 'Nueva' }).args.publicacion_id, id)
 })
+
+test('busca en charlas viejas', async () => {
+  const { fragmentosDeCharla } = await import('./logic.mjs')
+  const charla = { titulo: 'Ideas', mensajes: [{ rol: 'user', texto: 'Quiero un post del Olé Summit' }, { rol: 'bot', texto: 'Dale' }] }
+  assert.equal(fragmentosDeCharla(charla, 'ole summit').encontrada, true)
+  assert.deepEqual(fragmentosDeCharla(charla, 'ole').fragmentos, ['Daniela: Quiero un post del Olé Summit'])
+  assert.equal(fragmentosDeCharla(charla, 'linkedin').encontrada, false)
+})

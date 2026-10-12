@@ -69,7 +69,7 @@ export default function Hoy({ proyectos, revision, ownerId, abrirProyecto, abrir
           .order('starts_at', { ascending: true }),
         supabase.from('tasks').select('id,title,project_id,status', { count: 'exact' }).eq('done', false).order('touched_at', { ascending: true }).limit(300),
         supabase.from('emails').select('id,gmail_id,subject,from_name,from_addr,received_at,is_unread').eq('is_unread', true).order('received_at', { ascending: false }).limit(200),
-        supabase.from('process_reports').select('id,agente,estado,resumen,detalle,iniciado_at').in('agente', AGENTES_MARIA).order('iniciado_at', { ascending: false }).limit(15),
+        supabase.from('process_reports').select('id,agente,estado,resumen,detalle,iniciado_at').in('agente', AGENTES_MARIA).order('iniciado_at', { ascending: false }).limit(20),
         supabase.from('noticias').select('temas').gte('created_at', hace24).limit(1000),
         supabase.from('trabajos_corridas').select('trabajador,estado,iniciado_at').gte('iniciado_at', hace24).limit(2000),
       ])

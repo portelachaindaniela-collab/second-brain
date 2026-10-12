@@ -1,0 +1,125 @@
+/* BS67: el asistente de las tres apps. Mismo componente; cada app le pone sus colores con las variables --b-*. */
+.maria-mascot-art svg { display: block; width: 100%; overflow: visible; }
+.maria-mascot-float { animation: maria-mascot-float 5s ease-in-out infinite; }
+.maria-mascot-eyes { transform-box: fill-box; transform-origin: center; animation: maria-mascot-blink 6.5s infinite; }
+.maria-mascot-hand { transform-origin: 88px 89px; animation: maria-mascot-wave 9s ease-in-out infinite; }
+.maria-mascot-light { animation: maria-mascot-light 3s ease-in-out infinite; }
+.maria-mascot-jet { transform-box: fill-box; transform-origin: top center; animation: maria-mascot-thrust 2s ease-in-out infinite; }
+@keyframes maria-mascot-float { 0%, 100% { transform: translateY(3px) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+@keyframes maria-mascot-blink { 0%, 42%, 46%, 100% { transform: scaleY(1); } 44% { transform: scaleY(.08); } }
+@keyframes maria-mascot-wave { 0%, 65%, 100% { transform: rotate(0); } 72%, 84% { transform: rotate(14deg); } 78%, 90% { transform: rotate(-9deg); } }
+@keyframes maria-mascot-light { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes maria-mascot-thrust { 0%, 100% { transform: scaleY(.8); opacity: .5; } 50% { transform: scaleY(1.12); opacity: .85; } }
+@media (prefers-reduced-motion: reduce) { .maria-mascot-art * { animation: none !important; } }
+
+.bs67 {
+  --b-panel: #FFFFFF; --b-suave: #F4F4F7; --b-borde: #E3E3EA; --b-texto: #16161D; --b-texto2: #6A6A78;
+  --b-acento: #5B5BD6; --b-acento-texto: #FFFFFF; --b-acento-suave: #EEF0FF; --b-error: #C2352B; --b-radio: 14px;
+  --b-letra: system-ui, sans-serif;
+  position: fixed; right: 16px; bottom: 12px; z-index: 90; display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  font-family: var(--b-letra); color: var(--b-texto);
+}
+.bs67-app-bs67 {
+  --b-panel: var(--surface, #fff); --b-suave: var(--surface-raised, #f4f4f7); --b-borde: var(--gray-200, #e3e3ea); --b-texto: var(--gray-900, #16161d);
+  --b-texto2: var(--gray-500, #6a6a78); --b-acento: var(--accent, #5b5bd6); --b-acento-texto: var(--accent-text, #fff); --b-acento-suave: var(--accent-100, #eef0ff);
+  --b-letra: inherit;
+}
+.bs67-app-up {
+  --b-panel: #F7F4EC; --b-suave: #FFFDF8; --b-borde: #DDD8CC; --b-texto: #121212; --b-texto2: #6E6A62; --b-acento: #121212;
+  --b-acento-texto: #F7F4EC; --b-acento-suave: #EFE9DA; --b-error: #A3302A; --b-radio: 4px; --b-letra: 'Libre Franklin', Helvetica, Arial, sans-serif;
+}
+.bs67-app-pdg {
+  --b-panel: #FFFFFF; --b-suave: #FBFAFE; --b-borde: #E4E1EE; --b-texto: #15131F; --b-texto2: #5E5A70; --b-acento: #6D3BFF;
+  --b-acento-texto: #FFFFFF; --b-acento-suave: #F0EAFB; --b-error: #C2352B; --b-letra: 'Manrope', system-ui, sans-serif;
+}
+.bs67 button { font: inherit; cursor: pointer; color: inherit; }
+.bs67 button:disabled { opacity: .45; cursor: default; }
+
+/* Botón con el robot */
+.bs67-lanzador { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 70px; padding: 0; border: 0; background: none; }
+.bs67-lanzador .maria-mascot-art { width: 58px; transition: transform .2s; }
+.bs67-lanzador:hover .maria-mascot-art, .bs67-lanzador:focus-visible .maria-mascot-art { transform: translateY(-3px); }
+.bs67-lanzador span { padding: 3px 8px; border-radius: 10px; background: var(--b-acento); color: var(--b-acento-texto); font-size: 10.5px; font-weight: 700; letter-spacing: .08em; }
+.bs67-lanzador:focus-visible { outline: 2px solid var(--b-acento); outline-offset: 4px; border-radius: 8px; }
+
+/* Panel: menú de charlas a la izquierda y la charla a la derecha */
+.bs67-panel {
+  display: grid; grid-template-columns: minmax(0, 1fr); width: min(460px, calc(100vw - 24px)); height: min(640px, calc(100dvh - 130px));
+  background: var(--b-panel); border: 1px solid var(--b-borde); border-radius: var(--b-radio); box-shadow: 0 16px 48px rgba(0, 0, 0, .18); overflow: hidden;
+}
+.bs67-panel.con-menu { grid-template-columns: 236px minmax(0, 1fr); width: min(800px, calc(100vw - 24px)); }
+.bs67-menu { display: flex; flex-direction: column; min-height: 0; padding: 12px 10px; background: var(--b-suave); border-right: 1px solid var(--b-borde); }
+.bs67-nueva { width: 100%; padding: 9px 10px; border: 1px solid var(--b-borde); border-radius: calc(var(--b-radio) * .6); background: var(--b-panel); font-weight: 600; font-size: 13px; text-align: left; }
+.bs67-nueva:hover { border-color: var(--b-acento); }
+.bs67-buscar { width: 100%; margin: 8px 0 6px; padding: 7px 9px; border: 1px solid var(--b-borde); border-radius: calc(var(--b-radio) * .6); background: var(--b-panel); color: var(--b-texto); font: inherit; font-size: 12.5px; }
+.bs67-lista { flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+.bs67-menu-vacio { margin: 12px 4px; font-size: 12px; color: var(--b-texto2); }
+.bs67-grupo h4 { margin: 12px 6px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--b-texto2); }
+.bs67-item { position: relative; display: flex; align-items: center; border-radius: calc(var(--b-radio) * .5); }
+.bs67-item:hover, .bs67-item.on { background: var(--b-acento-suave); }
+.bs67-item.on .bs67-item-abrir span { font-weight: 600; }
+.bs67-item-abrir { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 7px 8px; border: 0; background: none; text-align: left; font-size: 13px; }
+.bs67-item-abrir span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bs67-item-abrir small, .bs67-retomar small { font-size: 10px; font-weight: 700; color: var(--b-texto2); }
+.bs67-item-acciones { display: flex; opacity: 0; }
+.bs67-item:hover .bs67-item-acciones, .bs67-item:focus-within .bs67-item-acciones { opacity: 1; }
+.bs67-item-acciones button { width: 24px; height: 24px; border: 0; background: none; font-size: 12px; border-radius: 4px; }
+.bs67-item-acciones button:hover { background: var(--b-panel); }
+.bs67-renombrar { flex: 1; padding: 3px; }
+.bs67-renombrar input { width: 100%; padding: 4px 6px; border: 1px solid var(--b-acento); border-radius: 4px; font: inherit; font-size: 13px; background: var(--b-panel); color: var(--b-texto); }
+.bs67-borrar { flex: 1; display: flex; align-items: center; gap: 6px; padding: 5px 8px; font-size: 12.5px; }
+.bs67-borrar span { flex: 1; }
+.bs67-borrar button { padding: 2px 8px; border: 1px solid var(--b-borde); border-radius: 4px; background: var(--b-panel); font-size: 12px; }
+.bs67-borrar .si { border-color: var(--b-error); color: var(--b-error); }
+@media (hover: none) { .bs67-item-acciones { opacity: 1; } }
+
+.bs67-charla { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.bs67-cab { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 10px; border-bottom: 1px solid var(--b-borde); }
+.bs67-cab-mascota { width: 30px; flex-shrink: 0; }
+.bs67-cab-titulo { flex: 1; min-width: 0; }
+.bs67-cab-titulo strong { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bs67-cab-titulo small { display: block; font-size: 11px; color: var(--b-texto2); }
+.bs67-ico { width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 8px; background: none; font-size: 18px; line-height: 1; color: var(--b-texto2) !important; }
+.bs67-ico:hover:not(:disabled) { background: var(--b-suave); color: var(--b-texto) !important; }
+
+.bs67-mensajes { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; }
+.bs67-msj { max-width: 88%; align-self: flex-start; }
+.bs67-msj p { margin: 0; padding: 9px 12px; border-radius: calc(var(--b-radio) * .9) calc(var(--b-radio) * .9) calc(var(--b-radio) * .9) 3px; background: var(--b-suave); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bs67-msj.m-user { align-self: flex-end; }
+.bs67-msj.m-user p { background: var(--b-acento); color: var(--b-acento-texto); border-radius: calc(var(--b-radio) * .9) calc(var(--b-radio) * .9) 3px calc(var(--b-radio) * .9); }
+.bs67-msj.m-error p { background: none; border: 1px solid var(--b-borde); color: var(--b-error); }
+.bs67-msj a { color: inherit; text-decoration: underline; }
+.bs67-uso { display: block; margin: 3px 4px 0; font-size: 10.5px; color: var(--b-texto2); }
+.bs67-propuesta { margin-top: 6px; padding: 10px 12px; border: 1px dashed var(--b-acento); border-radius: calc(var(--b-radio) * .7); background: var(--b-panel); }
+.bs67-propuesta > span { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--b-acento); }
+.bs67-propuesta p { margin: 4px 0 0; padding: 0; background: none; font-size: 13px; }
+.bs67-propuesta-acciones { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.bs67-propuesta-acciones button { padding: 6px 12px; border: 1px solid var(--b-borde); border-radius: 8px; background: var(--b-panel); font-size: 12.5px; font-weight: 600; }
+.bs67-propuesta-acciones .p { background: var(--b-acento); border-color: var(--b-acento); color: var(--b-acento-texto); }
+.bs67-pensando { margin: 0; font-size: 12px; color: var(--b-texto2); }
+.bs67-pensando i { font-style: normal; animation: bs67-latido 1.2s infinite; }
+.bs67-pensando i:nth-child(2) { animation-delay: .2s; } .bs67-pensando i:nth-child(3) { animation-delay: .4s; }
+@keyframes bs67-latido { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+.bs67-aviso { margin: 0; font-size: 12px; color: var(--b-error); }
+
+.bs67-bienvenida p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.55; }
+.bs67-sugerencias { display: flex; flex-wrap: wrap; gap: 6px; }
+.bs67-sugerencias button { padding: 6px 10px; border: 1px solid var(--b-borde); border-radius: 14px; background: var(--b-panel); font-size: 12px; }
+.bs67-sugerencias button:hover, .bs67-retomar button:hover { border-color: var(--b-acento); }
+.bs67-retomar { display: flex; flex-direction: column; gap: 5px; margin-top: 16px; }
+.bs67-retomar > span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--b-texto2); }
+.bs67-retomar button { padding: 8px 10px; border: 1px solid var(--b-borde); border-radius: calc(var(--b-radio) * .6); background: var(--b-suave); text-align: left; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.bs67-pie { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px; border-top: 1px solid var(--b-borde); }
+.bs67-pie textarea { flex: 1; min-width: 0; max-height: 140px; padding: 8px 10px; border: 1px solid var(--b-borde); border-radius: calc(var(--b-radio) * .7); background: var(--b-suave); color: var(--b-texto); font: inherit; font-size: 13px; resize: none; }
+.bs67-pie textarea:focus { outline: 2px solid var(--b-acento); outline-offset: -1px; }
+.bs67-pie button { width: 38px; height: 38px; flex-shrink: 0; border: 0; border-radius: 10px; background: var(--b-acento); color: var(--b-acento-texto) !important; font-size: 16px; font-weight: 700; }
+
+/* Celular: la charla ocupa la pantalla y el menú se abre encima */
+@media (max-width: 700px) {
+  .bs67 { right: 10px; bottom: 8px; }
+  .bs67-panel, .bs67-panel.con-menu { position: fixed; inset: 0; width: auto; height: auto; grid-template-columns: minmax(0, 1fr); border: 0; border-radius: 0; }
+  .bs67-panel.con-menu .bs67-menu { position: absolute; inset: 0 auto 0 0; z-index: 2; width: min(300px, 85vw); box-shadow: 8px 0 24px rgba(0, 0, 0, .2); }
+  .bs67-lanzador.abierto { display: none; }
+  .bs67-lanzador .maria-mascot-art { width: 50px; }
+}

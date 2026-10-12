@@ -2,11 +2,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   MAX_VUELTAS, ZONA, HERRAMIENTAS, ACCIONES, proveedor, sistema, validarAccion, describirAccion, urlPermitida, htmlATexto,
-  historialParaModelo, contiene, ultimoPorAgente, venceISO, slugProyecto,
+  historialParaModelo, contiene, ultimoPorAgente, venceISO, slugProyecto, fragmentosDeCharla, APPS,
 } from "./logic.mjs";
 
-// BS67, el asistente de Second Brain. La app manda { mensaje, historial, pantalla, proyecto_id } (la conversación) o
-// { ejecutar: { nombre, args } } (una acción que Daniela confirmó). Lee y escribe con la sesión de Daniela (RLS).
+// BS67, el asistente de Second Brain en sus apps (bs67 y pdg; UP usa up-asistente). La app manda { mensaje, historial,
+// pantalla, proyecto_id, app } (la conversación) o { ejecutar: { nombre, args }, app } (una acción que Daniela confirmó).
+// Lee y escribe con la sesión de Daniela (RLS). Cada respuesta queda en bs67_registro para que María controle que funcione.
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Cache-Control": "no-store" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -166,6 +167,30 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
       ]);
       return { proximos_dias: d.data || [], necesita_a_daniela: (p.data || []).map((x: any) => `${x.fecha} ${x.red}: ${x.estado}`), nota: "Para cambiar algo de UP, Daniela lo hace adentro de UP (ahí BS67 tiene herramientas de UP)." };
     }
+    case "ver_cuentas_pdg": {
+      let q = db.from("pdg_cuentas").select("id,nombre,segmento,pais,web,contacto,notas,etapa,proxima_accion,proxima_fecha,updated_at").order("updated_at", { ascending: false }).limit(300);
+      if (a?.etapa) q = q.eq("etapa", a.etapa);
+      const { data } = await q;
+      return { cuentas: (data || []).filter((c: any) => contiene(`${c.nombre} ${c.segmento ?? ""} ${c.pais ?? ""} ${c.contacto ?? ""} ${c.notas ?? ""}`, a?.texto)).slice(0, 60).map((c: any) => ({ ...c, notas: c.notas?.slice(0, 300) ?? null })) };
+    }
+    case "ver_trabajos_pdg": {
+      let q = db.from("pdg_trabajos").select("id,cuenta_id,agente,pedido,texto,estado,created_at").order("created_at", { ascending: false }).limit(a?.texto ? 200 : 15);
+      if (a?.cuenta_id) q = q.eq("cuenta_id", a.cuenta_id);
+      const [{ data }, cuentas] = await Promise.all([q, db.from("pdg_cuentas").select("id,nombre")]);
+      const nombre = new Map((cuentas.data || []).map((c: any) => [c.id, c.nombre]));
+      return { trabajos: (data || []).filter((t: any) => contiene(`${t.pedido ?? ""} ${t.texto ?? ""}`, a?.texto)).slice(0, 15).map((t: any) => ({ cuenta: nombre.get(t.cuenta_id) ?? null, agente: t.agente, pedido: t.pedido, estado: t.estado, cuando: hora(t.created_at), texto: (t.texto || "").slice(0, 1500) })) };
+    }
+    case "leer_manual_pdg": {
+      const { data } = await db.from("pdg_manual").select("texto,updated_at").maybeSingle();
+      return data ? { manual: (data.texto || "").slice(0, 15000) } : { error: "Todavía no hay Manual comercial." };
+    }
+    case "buscar_charlas": {
+      const { data } = await db.from("bs67_charlas").select("titulo,app,mensajes,updated_at").order("updated_at", { ascending: false }).limit(200);
+      const encontradas = (data || []).map((c: any) => ({ c, f: fragmentosDeCharla(c, String(a?.texto ?? "")) })).filter((x: any) => x.f.encontrada).slice(0, 8);
+      return encontradas.length
+        ? { charlas: encontradas.map(({ c, f }: any) => ({ titulo: c.titulo, app: APPS[c.app] ?? c.app, cuando: hora(c.updated_at), fragmentos: f.fragmentos })) }
+        : { charlas: [], nota: "No encontré charlas sobre eso." };
+    }
     case "buscar_web": return await buscarWeb(prov, String(a?.consulta ?? "").slice(0, 500));
     case "leer_link": return await leerLink(String(a?.url ?? ""));
     default: return { error: "Herramienta desconocida." };
@@ -180,6 +205,7 @@ async function nombresDe(db: any, nombre: string, a: any) {
   if (nombre === "editar_proyecto") n.proyecto = await uno("projects", "name", a.id);
   else if (a.proyecto_id) n.proyecto = await uno("projects", "name", a.proyecto_id);
   if (nombre === "editar_curso") n.curso = await uno("cursos", "title", a.id);
+  if (nombre === "editar_cuenta_pdg") n.cuenta = await uno("pdg_cuentas", "nombre", a.id);
   if (nombre === "borrar_evento") {
     const { data } = await db.from("calendar_events").select("title,starts_at,all_day").eq("id", a.id).maybeSingle();
     if (data) n.evento = `${data.title}, ${data.all_day ? data.starts_at.slice(0, 10) : hora(data.starts_at)}`;
@@ -261,6 +287,20 @@ async function ejecutar(db: any, jwt: string, nombre: string, a: any) {
       const { error } = await db.from("cursos").insert({ title: a.titulo, plataforma: a.plataforma, url: a.url });
       return error ? `No se pudo anotar el curso: ${error.message}` : "Listo, el curso está en Cursos.";
     }
+    case "crear_cuenta_pdg": {
+      const { error } = await db.from("pdg_cuentas").insert(a);
+      return error ? `No se pudo agregar la cuenta: ${error.message}` : `Listo, «${a.nombre}» está en las cuentas de PDG.`;
+    }
+    case "editar_cuenta_pdg": {
+      const { id: cuentaId, ...c } = a;
+      if (c.notas) {
+        const { data: actual } = await db.from("pdg_cuentas").select("notas").eq("id", cuentaId).maybeSingle();
+        const fechaNota = new Intl.DateTimeFormat("es-AR", { timeZone: ZONA, day: "numeric", month: "numeric" }).format(new Date());
+        c.notas = [actual?.notas, `${fechaNota}: ${c.notas}`].filter(Boolean).join("\n");
+      }
+      const { data, error } = await db.from("pdg_cuentas").update({ ...c, updated_at: ahora }).eq("id", cuentaId).select("id");
+      return error ? `No se pudo actualizar la cuenta: ${error.message}` : data?.length ? "Listo, la cuenta quedó actualizada." : "No encontré esa cuenta.";
+    }
   }
   return "Acción desconocida.";
 }
@@ -278,33 +318,42 @@ Deno.serve(async (req: Request) => {
   let body: any = {};
   try { body = await req.json(); } catch { return json({ error: "Cuerpo inválido." }, 400); }
 
+  const app = body?.app === "pdg" ? "pdg" : "bs67";
+  const inicio = Date.now();
+  // El registro para María: nunca frena la respuesta.
+  const registrar = (fila: any) => admin.from("bs67_registro").insert({ owner_id: ownerId, app, ms: Date.now() - inicio, ...fila }).then(() => {}, () => {});
+
   if (body?.ejecutar) {
     const v: any = validarAccion(body.ejecutar.nombre, body.ejecutar.args);
     if (!v.ok) return json({ respuesta: v.error });
-    const respuesta = await ejecutar(db, jwt, body.ejecutar.nombre, v.args);
-    await db.from("bot_messages").insert({ owner_id: ownerId, channel: "web", role: "assistant", content: respuesta });
-    return json({ respuesta, cambio: true });
+    try {
+      const respuesta = await ejecutar(db, jwt, body.ejecutar.nombre, v.args);
+      const fallo = /^No (se )?pud|^No encontr|^Agendé \d+ de/.test(respuesta);
+      await registrar({ tipo: "accion", estado: fallo ? "error" : "ok", error: fallo ? `${body.ejecutar.nombre}: ${respuesta}`.slice(0, 500) : null });
+      return json({ respuesta, cambio: true });
+    } catch (e) {
+      const detalle = e instanceof Error ? e.message : String(e);
+      await registrar({ tipo: "accion", estado: "error", error: `${body.ejecutar.nombre}: ${detalle}`.slice(0, 500) });
+      return json({ error: `No pude hacerlo (${detalle}).` }, 500);
+    }
   }
 
   const mensaje = typeof body?.mensaje === "string" ? body.mensaje.trim().slice(0, 8000) : "";
   if (!mensaje) return json({ error: "Escribí un mensaje para BS67." }, 400);
   const prov = proveedor(env);
-  if (!prov) return json({ error: "BS67 no está configurado todavía (falta la clave de la IA)." }, 503);
+  if (!prov) { await registrar({ estado: "error", error: "Falta la clave de la IA." }); return json({ error: "BS67 no está configurado todavía (falta la clave de la IA)." }, 503); }
 
   const proyectoId = typeof body.proyecto_id === "string" && /^[0-9a-f-]{36}$/i.test(body.proyecto_id) ? body.proyecto_id : null;
   const proyecto = proyectoId ? (await db.from("projects").select("name").eq("id", proyectoId).maybeSingle()).data?.name : null;
   const hoy = new Intl.DateTimeFormat("es-AR", { timeZone: ZONA, dateStyle: "full" }).format(new Date()) + ` (${hoyAR()})`;
   const mensajes: any[] = [
-    { role: "system", content: sistema({ hoy, pantalla: typeof body.pantalla === "string" ? body.pantalla.slice(0, 60) : null, proyecto }) },
+    { role: "system", content: sistema({ hoy, pantalla: typeof body.pantalla === "string" ? body.pantalla.slice(0, 60) : null, proyecto, app }) },
     ...historialParaModelo(body.historial),
     { role: "user", content: mensaje },
   ];
   const usadas: string[] = [];
   const responder = async (resp: any) => {
-    await db.from("bot_messages").insert([
-      { owner_id: ownerId, project_id: proyectoId, channel: "web", role: "user", content: mensaje },
-      { owner_id: ownerId, project_id: proyectoId, channel: "web", role: "assistant", content: resp.respuesta || resp.propuesta?.descripcion || "" },
-    ]);
+    await registrar({ estado: "ok", ia: prov.nombre, herramientas: usadas.length });
     return json({ ...resp, herramientas: usadas, ia: prov.nombre });
   };
 
@@ -339,7 +388,7 @@ Deno.serve(async (req: Request) => {
   } catch (e) {
     const detalle = e instanceof Error ? e.message : String(e);
     console.error("bs67-chat:", detalle);
-    await admin.from("process_reports").insert({ owner_id: ownerId, agente: "bs67_chat", estado: "error", resumen: detalle, detalle: { ia: prov.nombre, modelo: prov.modelo }, iniciado_at: new Date().toISOString(), finalizado_at: new Date().toISOString() });
+    await registrar({ estado: "error", ia: prov.nombre, herramientas: usadas.length, error: detalle.slice(0, 500) });
     return json({ error: `No pude responder en este momento (${detalle}).` }, 502);
   }
 });

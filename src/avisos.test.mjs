@@ -54,3 +54,17 @@ test('ayudas', () => {
   assert.equal(haceCuantoConsolidado('2026-10-01T00:14:40Z', ahora), 'consolidado hace 15 min · 21:14')
   assert.equal(haceDias('2026-09-30T23:00:00Z', ahora), 'hoy')
 })
+
+test('BS67 es el primer aviso de María aunque sea solo un aviso', () => {
+  const ahora = Date.parse('2026-10-12T15:00:00Z')
+  const fila = (agente, estado, resumen, detalle = null) => ({ agente, estado, resumen, detalle, iniciado_at: '2026-10-12T14:00:00Z' })
+  const { avisos, enOrden } = avisosDeMaria([
+    fila('bs67', 'aviso', 'BS67: 1 respuesta falló. 5 respuestas en 24 h (BS67 5).', { ultimo_error: { app: 'up', error: 'La IA llegó a su límite', cuando: 'hace 2 h' } }),
+    fila('sync_estado', 'error', 'x', { vinculado: true, horas: 30 }),
+  ], { ahora })
+  assert.equal(avisos[0].texto, 'BS67 tuvo problemas')
+  assert.match(avisos[0].detalles[1], /UP, hace 2 h/)
+  assert.equal(avisos[1].nivel, 'error')
+  assert.deepEqual(avisosDeMaria([fila('bs67', 'ok', 'BS67 funciona')], { ahora }).enOrden, ['BS67 responde'])
+  assert.equal(enOrden.length, 0)
+})

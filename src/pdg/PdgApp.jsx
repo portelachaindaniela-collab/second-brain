@@ -5,6 +5,7 @@ import Tablero from './Tablero.jsx'
 import Cuentas from './Cuentas.jsx'
 import Marketing from './Marketing.jsx'
 import Manual from './Manual.jsx'
+import BS67 from '../bs67/BS67.jsx'
 
 const PANTALLAS = [
   { id: 'tablero', label: 'Tablero' },
@@ -64,6 +65,7 @@ export default function PdgApp({ email, volver }) {
           </>
         )}
       </main>
+      <BS67 app="pdg" pantalla={pantalla} alCambiar={recargar} />
     </div>
   )
 }
