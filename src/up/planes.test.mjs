@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { moverMes, colorLibre, diasVisibles, cuantosPorPlan, bloqueoDeDia, COLORES_PLAN, SIN_PLAN } from './planes.mjs'
+import { moverMes, colorLibre, diasVisibles, cuantosPorPlan, bloqueoDeDia, separarBorrables, COLORES_PLAN, SIN_PLAN } from './planes.mjs'
 
 test('moverMes cruza años en los dos sentidos', () => {
   assert.equal(moverMes('2026-10', 1), '2026-11')
@@ -32,4 +32,11 @@ test('bloqueoDeDia frena lo aprobado o publicado', () => {
   assert.equal(bloqueoDeDia([{ estado: 'pendiente' }, { estado: 'revision' }]), '')
   assert.match(bloqueoDeDia([{ estado: 'aprobado' }]), /aprobadas/)
   assert.match(bloqueoDeDia([{ estado: 'publicado' }]), /publicadas/)
+})
+
+test('separarBorrables deja afuera lo aprobado o publicado', () => {
+  const piezas = { a: [{ estado: 'pendiente' }], b: [{ estado: 'aprobado' }], c: [], d: [{ estado: 'publicado' }] }
+  const r = separarBorrables(['a', 'b', 'c', 'd'].map(fecha => ({ fecha })), f => piezas[f])
+  assert.deepEqual(r.borrables.map(d => d.fecha), ['a', 'c'])
+  assert.deepEqual(r.bloqueados.map(d => d.fecha), ['b', 'd'])
 })

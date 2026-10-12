@@ -573,3 +573,14 @@ h4.up-mono-k { color: var(--up-tinta-2); font-weight: 600; margin-bottom: 8px; }
 .up-bs67-boton span { padding: 3px 8px; border-radius: 10px; background: var(--up-tinta); color: var(--up-papel); font: 700 10.5px/1 var(--up-sans); letter-spacing: .08em; }
 .up-bs67-boton:focus-visible { outline: 2px solid var(--up-tinta); outline-offset: 4px; border-radius: 8px; }
 .up-chat-mascota { width: 34px; flex-shrink: 0; align-self: center; }
+
+/* Calendario: selección para borrar varias publicaciones */
+.up-sel-barra { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin: -4px 0 14px; padding: 10px 14px; background: #FFFDF8; border: 1px solid var(--up-tinta); font: 500 13px/18px var(--up-sans); }
+.up-sel-barra .up-link { margin-left: 0; }
+.up-sel-caja { width: 16px; height: 16px; border: 2px solid var(--up-tinta); border-radius: 3px; background: #FFFDF8; display: grid; place-items: center; flex-shrink: 0; }
+.up-cal-dia .up-sel-caja { position: absolute; top: 7px; right: 26px; }
+.marcado .up-sel-caja { background: var(--up-error); border-color: var(--up-error); }
+.marcado .up-sel-caja::after { content: ''; width: 4px; height: 8px; margin-top: -2px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.up-cal-dia.marcado, .up-cal-fila.marcado { background: rgba(163, 48, 42, .07); outline: 2px solid var(--up-error); outline-offset: -2px; }
+.up-cal-fila.seleccionando { grid-template-columns: 18px 48px minmax(0, 1fr) auto 120px; }
+@media (max-width: 760px) { .up-cal-fila.seleccionando { grid-template-columns: 18px 40px minmax(0, 1fr); } .up-cal-fila.seleccionando .up-cal-fila-redes, .up-cal-fila.seleccionando .up-cal-fila-estado { grid-column: 3; } }

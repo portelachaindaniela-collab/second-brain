@@ -39,3 +39,10 @@ export function bloqueoDeDia(piezas) {
   if (piezas.some(p => p.estado === 'aprobado')) return 'Este día tiene publicaciones aprobadas: desaprobalas antes o salteá el día.'
   return ''
 }
+
+// Borrado masivo: separa los días que se pueden borrar de los que tienen algo aprobado o publicado.
+export function separarBorrables(dias, piezasDe) {
+  const borrables = [], bloqueados = []
+  for (const d of dias) (bloqueoDeDia(piezasDe(d.fecha)) ? bloqueados : borrables).push(d)
+  return { borrables, bloqueados }
+}

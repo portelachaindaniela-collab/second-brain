@@ -7,7 +7,7 @@ import EditorDia from './EditorDia.jsx'
 import Publicacion from './Publicacion.jsx'
 import Planes from './Planes.jsx'
 import { marcaCalendario } from './edicion.mjs'
-import { moverMes, diasVisibles, cuantosPorPlan, bloqueoDeDia } from './planes.mjs'
+import { moverMes, diasVisibles, cuantosPorPlan, bloqueoDeDia, separarBorrables } from './planes.mjs'
 
 // Estado de un día, a partir de sus piezas: manda lo que necesita atención.
 const ESTADOS_DIA = {
@@ -80,6 +80,8 @@ export default function Calendario({ abrirEdicion }) {
   const [borrando, setBorrando] = useState(false)
   const [aviso, setAviso] = useState('')
   const [sinPlanVisible, setSinPlanVisible] = useState(() => leer(CLAVE_SIN_PLAN, '1') === '1')
+  const [seleccion, setSeleccion] = useState(null) // Set de fechas mientras se elige para borrar varias; null fuera de ese modo
+  const [borrandoVarios, setBorrandoVarios] = useState(false)
   const detalle = useRef(null)
 
   const cargar = useCallback(async () => {
@@ -114,8 +116,34 @@ export default function Calendario({ abrirEdicion }) {
   const planPorDefecto = planes.find(p => p.visible)?.id ?? planes[0]?.id
 
   function elegir(fecha) {
+    if (seleccion) { if (visibles.has(fecha)) alternarSeleccion(fecha); return }
     setElegido(fecha); setEditando(null); setAviso(''); setBorrando(false)
     if (window.innerWidth < 1000) requestAnimationFrame(() => detalle.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
+  function alternarSeleccion(fecha) {
+    setBorrandoVarios(false)
+    setSeleccion(s => { const n = new Set(s); if (n.has(fecha)) n.delete(fecha); else n.add(fecha); return n })
+  }
+
+  function empezarSeleccion() { setSeleccion(new Set()); setEditando(null); setBorrando(false); setBorrandoVarios(false); setAviso('') }
+  function terminarSeleccion() { setSeleccion(null); setBorrandoVarios(false) }
+
+  async function borrarSeleccionados() {
+    const { borrables, bloqueados } = separarBorrables(datos.dias.filter(d => seleccion.has(d.fecha)), piezasDe)
+    setOcupado(true)
+    let error = null
+    if (borrables.length) {
+      const fechas = borrables.map(d => d.fecha)
+      error = (await supabase.from('up_piezas').delete().in('fecha', fechas)).error
+      if (!error) error = (await supabase.from('up_calendario').delete().in('id', borrables.map(d => d.id))).error
+    }
+    setOcupado(false)
+    if (error) { setAviso('No se pudo borrar: ' + error.message); setBorrandoVarios(false); return }
+    terminarSeleccion()
+    await cargar()
+    const n = borrables.length
+    setAviso(`${n === 1 ? 'Borré 1 publicación' : `Borré ${n} publicaciones`}.${bloqueados.length ? ` No borré ${bloqueados.length} porque ${bloqueados.length === 1 ? 'tiene' : 'tienen'} algo aprobado o publicado (${bloqueados.map(d => Number(d.fecha.slice(8)) + '/' + Number(d.fecha.slice(5, 7))).join(', ')}).` : ''}`)
   }
 
   function irA(clave) { setMes(clave); setBorrando(false) }
@@ -205,8 +233,31 @@ export default function Calendario({ abrirEdicion }) {
           <button role="tab" aria-selected={vista === 'mes'} className={vista === 'mes' ? 'on' : ''} onClick={() => cambiarVista('mes')}>Mes</button>
           <button role="tab" aria-selected={vista === 'lista'} className={vista === 'lista' ? 'on' : ''} onClick={() => cambiarVista('lista')}>Lista</button>
         </div>
-        <button className="up-btn up-btn-p" onClick={nuevaIdea}>+ Nueva idea</button>
+        {seleccion
+          ? <button className="up-btn" onClick={terminarSeleccion}>Listo</button>
+          : <button className="up-btn" onClick={empezarSeleccion} disabled={!visibles.size}>Seleccionar</button>}
+        <button className="up-btn up-btn-p" onClick={nuevaIdea} disabled={!!seleccion}>+ Nueva idea</button>
       </div>
+
+      {seleccion && (
+        <div className="up-sel-barra" role="region" aria-label="Selección para borrar">
+          {borrandoVarios ? (
+            <>
+              <span>¿Borrar {seleccion.size === 1 ? 'esta publicación' : `estas ${seleccion.size} publicaciones`} y sus borradores sin aprobar? No se puede deshacer. Las que tengan algo aprobado o publicado se saltean.</span>
+              <button className="up-btn" disabled={ocupado} onClick={() => setBorrandoVarios(false)}>No</button>
+              <button className="up-btn up-btn-borrar" disabled={ocupado} onClick={borrarSeleccionados}>{ocupado ? 'Borrando…' : 'Sí, borrar'}</button>
+            </>
+          ) : (
+            <>
+              <strong>{seleccion.size ? `${seleccion.size} ${seleccion.size === 1 ? 'seleccionada' : 'seleccionadas'}` : 'Tocá las publicaciones que querés borrar'}</strong>
+              <button className="up-link" onClick={() => setSeleccion(new Set([...seleccion, ...delMes.map(d => d.fecha)]))}>Todas las del mes</button>
+              {seleccion.size > 0 && <button className="up-link" onClick={() => setSeleccion(new Set())}>Ninguna</button>}
+              <span className="up-sp" />
+              <button className="up-btn up-btn-borrar" disabled={!seleccion.size} onClick={() => setBorrandoVarios(true)}>Borrar {seleccion.size || ''}</button>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="up-cal">
         <section className="up-cal-mes">
@@ -219,9 +270,11 @@ export default function Calendario({ abrirEdicion }) {
                 const estado = d ? estadoDelDia(d, piezasDe(fecha)) : null
                 return (
                   <button key={fecha} role="gridcell"
-                    className={`up-cal-dia${d ? ` d-${estado}` : ' vacio'}${fecha < hoy ? ' pasado' : ''}${fecha === hoy ? ' hoy' : ''}${fecha === elegido ? ' elegido' : ''}`}
+                    className={`up-cal-dia${d ? ` d-${estado}` : ' vacio'}${fecha < hoy ? ' pasado' : ''}${fecha === hoy ? ' hoy' : ''}${!seleccion && fecha === elegido ? ' elegido' : ''}${seleccion?.has(fecha) ? ' marcado' : ''}`}
+                    aria-pressed={seleccion && d ? seleccion.has(fecha) : undefined}
                     onClick={() => elegir(fecha)} aria-label={d ? `${fechaLarga(fecha)}: ${d.tema_dia}, ${ESTADOS_DIA[estado]}` : fechaLarga(fecha)}>
                     <span className="up-cal-num">{Number(fecha.slice(8))}</span>
+                    {seleccion && d && <span className="up-sel-caja" aria-hidden="true" />}
                     {d?.redes.includes('instagram') && <span className="up-cal-ig" title={`Instagram: ${d.formato_instagram}`}><LogoRed red="instagram" /></span>}
                     {d && <span className="up-cal-chip" style={chip(d)} title={planDe(d.plan_id)?.nombre ?? 'Sin plan'}>{d.tema_dia}</span>}
                     <span className="up-cal-marcas">{piezasDe(fecha).filter(marcaCalendario).map(p => <i key={p.id} className={`m-${marcaCalendario(p)}`} title={`${NOMBRE_RED[p.red]}: ${ESTADOS[p.estado]}`}>{SIGLA[p.red]}</i>)}</span>
@@ -237,7 +290,8 @@ export default function Calendario({ abrirEdicion }) {
                 const estado = estadoDelDia(d, piezasDe(d.fecha))
                 return (
                   <li key={d.fecha}>
-                    <button className={`up-cal-fila d-${estado}${d.fecha === elegido ? ' elegido' : ''}${d.fecha === hoy ? ' hoy' : ''}`} onClick={() => elegir(d.fecha)}>
+                    <button className={`up-cal-fila d-${estado}${!seleccion && d.fecha === elegido ? ' elegido' : ''}${d.fecha === hoy ? ' hoy' : ''}${seleccion ? ' seleccionando' : ''}${seleccion?.has(d.fecha) ? ' marcado' : ''}`} onClick={() => elegir(d.fecha)} aria-pressed={seleccion ? seleccion.has(d.fecha) : undefined}>
+                      {seleccion && <span className="up-sel-caja" aria-hidden="true" />}
                       <span className="up-cal-fila-fecha"><small>{f.dia}</small><b>{f.numero}</b></span>
                       <span className="up-cal-fila-tema" style={chip(d)}>{d.tema_dia}<small>{planDe(d.plan_id)?.nombre ?? 'Sin plan'} · {d.tema_semana}</small></span>
                       <span className="up-cal-fila-redes">{d.redes.map(r => <LogoRed key={r} red={r} />)}</span>
