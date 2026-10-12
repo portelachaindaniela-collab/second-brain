@@ -36,7 +36,7 @@ test('bloqueoDeDia frena lo aprobado o publicado', () => {
 
 test('separarBorrables deja afuera lo aprobado o publicado', () => {
   const piezas = { a: [{ estado: 'pendiente' }], b: [{ estado: 'aprobado' }], c: [], d: [{ estado: 'publicado' }] }
-  const r = separarBorrables(['a', 'b', 'c', 'd'].map(fecha => ({ fecha })), f => piezas[f])
+  const r = separarBorrables(['a', 'b', 'c', 'd'].map(fecha => ({ fecha })), d => piezas[d.fecha])
   assert.deepEqual(r.borrables.map(d => d.fecha), ['a', 'c'])
   assert.deepEqual(r.bloqueados.map(d => d.fecha), ['b', 'd'])
 })

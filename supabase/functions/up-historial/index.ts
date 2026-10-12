@@ -67,15 +67,15 @@ async function copiar(admin: any, ownerId: string) {
     if (!hoja) hoja = await crearHoja(admin, token, ownerId);
 
     const [pie, cal, met] = await Promise.all([
-      admin.from("up_piezas").select("id,fecha,red,estado,texto,url_publicada,historial_fila,historial_at").eq("owner_id", ownerId).eq("estado", "publicado"),
-      admin.from("up_calendario").select("fecha,tema_dia,tema_instagram").eq("owner_id", ownerId),
+      admin.from("up_piezas").select("id,calendario_id,fecha,red,estado,texto,url_publicada,historial_fila,historial_at").eq("owner_id", ownerId).eq("estado", "publicado"),
+      admin.from("up_calendario").select("id,fecha,tema_dia,tema_instagram").eq("owner_id", ownerId),
       admin.from("up_metricas").select("pieza_id,dia,impresiones,reacciones,comentarios,compartidos,fuente,updated_at").eq("owner_id", ownerId),
     ]);
     if (pie.error || cal.error || met.error) throw new Error((pie.error || cal.error || met.error).message);
-    const temas = new Map((cal.data || []).map((d: any) => [d.fecha, d]));
+    const temas = new Map((cal.data || []).map((d: any) => [d.id, d]));
     const metricas = new Map<string, any[]>();
     for (const m of met.data || []) metricas.set(m.pieza_id, [...(metricas.get(m.pieza_id) || []), m]);
-    const tema = (p: any) => { const d: any = temas.get(p.fecha); return p.red === "instagram" && d?.tema_instagram ? d.tema_instagram : d?.tema_dia; };
+    const tema = (p: any) => { const d: any = temas.get(p.calendario_id); return p.red === "instagram" && d?.tema_instagram ? d.tema_instagram : d?.tema_dia; };
     const fila = (p: any) => filaHistorial(p, tema(p), ultimaMetrica(metricas.get(p.id) || []));
 
     const { nuevas, viejas } = queCopiar(pie.data || [], metricas);

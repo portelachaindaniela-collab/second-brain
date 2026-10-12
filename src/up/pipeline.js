@@ -1,9 +1,10 @@
 import { supabase } from '../supabase.js'
 
 // Corre los agentes de UP para una fecha. Devuelve el aviso para mostrar ('' si salió todo bien).
-// regenerar: reescribe lo que todavía no se aprobó; si no, completa solo lo que falta.
-export async function correrPipeline(fecha, regenerar = false) {
-  const { data, error } = await supabase.functions.invoke('up-pipeline', { body: { fecha, regenerar } })
+// regenerar: reescribe lo que todavía no se aprobó; si no, completa solo lo que falta. calendarioId: solo esa
+// publicación (un día puede tener varias); sin él, todas las de la fecha.
+export async function correrPipeline(fecha, regenerar = false, calendarioId = null) {
+  const { data, error } = await supabase.functions.invoke('up-pipeline', { body: { fecha, regenerar, ...(calendarioId && { calendario_id: calendarioId }) } })
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error genérico */ } }
   if (error || respuesta?.error) return respuesta?.error || 'No se pudieron generar los borradores.'

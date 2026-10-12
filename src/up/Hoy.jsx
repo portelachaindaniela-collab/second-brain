@@ -5,7 +5,7 @@ import { hoyIso, partesFecha, fechaLarga } from './fechas.js'
 import { correrPipeline, ESTADOS, NOMBRE_RED, REDES_AUTOMATICAS, estadoVisible } from './pipeline.js'
 import { conResaltados } from './resaltar.jsx'
 
-const CAMPOS_PIEZA = 'id,fecha,red,texto,estado,pregunta,motivo_revision,problemas,intentos_revision,assets,assets_texto,url_publicada,error_publicacion,formato:contenido->>formato'
+const CAMPOS_PIEZA = 'id,calendario_id,fecha,red,texto,estado,pregunta,motivo_revision,problemas,intentos_revision,assets,assets_texto,url_publicada,error_publicacion,formato:contenido->>formato'
 
 // Las placas del carrusel. El diseñador las arma con la plantilla cada 15 minutos; si el texto cambió, las vuelve a armar.
 function Placas({ pieza }) {
@@ -98,7 +98,7 @@ export default function Hoy({ abrirCalendario, abrirPreguntas, alCambiar }) {
   const cargar = useCallback(async () => {
     const hoy = hoyIso()
     const [cal, pie, hor, con] = await Promise.all([
-      supabase.from('up_calendario').select('id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,fotos_propias').order('fecha'),
+      supabase.from('up_calendario').select('id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,fotos_propias,salteado').order('fecha').order('created_at'),
       supabase.from('up_piezas').select(CAMPOS_PIEZA).or(`fecha.eq.${hoy},estado.eq.falta_info`),
       supabase.from('up_horarios').select('red,hora'),
       supabase.rpc('up_mis_conexiones'),
@@ -123,10 +123,11 @@ export default function Hoy({ abrirCalendario, abrirPreguntas, alCambiar }) {
     return true
   }
 
-  // Corre los agentes para hoy. "Generar" completa lo que falta; "Volver a generar" reescribe lo que todavía no aprobaste.
-  async function generar(regenerar) {
-    setGenerando(true); setAviso('')
-    const mensaje = await correrPipeline(hoyIso(), regenerar)
+  // Corre los agentes para una publicación de hoy. "Generar" completa lo que falta; "Volver a generar" reescribe lo que
+  // todavía no aprobaste.
+  async function generar(regenerar, calendarioId) {
+    setGenerando(calendarioId); setAviso('')
+    const mensaje = await correrPipeline(hoyIso(), regenerar, calendarioId)
     setGenerando(false)
     setAviso(mensaje)
     await cargar()
@@ -137,36 +138,45 @@ export default function Hoy({ abrirCalendario, abrirPreguntas, alCambiar }) {
   if (!datos) return <p className="up-vacio">Cargando…</p>
 
   const hoy = hoyIso()
-  const dia = datos.dias.find(d => d.fecha === hoy)
+  // Hoy puede haber varias publicaciones; las salteadas no se muestran.
+  const delDia = datos.dias.filter(d => d.fecha === hoy && !d.salteado)
   const proximos = datos.dias.filter(d => d.fecha > hoy).slice(0, 4)
-  const piezasHoy = datos.piezas.filter(p => p.fecha === hoy)
   const preguntas = datos.piezas.filter(p => p.estado === 'falta_info' && p.pregunta)
   const pasados = datos.dias.filter(d => d.fecha <= hoy).length
-  const pieza = red => piezasHoy.find(p => p.red === red)
+  const piezasDe = d => datos.piezas.filter(p => p.calendario_id === d.id)
 
   return (
     <div className="up-portada">
       <div className="up-portada-principal">
-        {dia ? (
+        {delDia.length ? (
           <>
-            <div className="up-antetitulo up-antetitulo-acciones">{fechaLarga(hoy)} · Semana «{dia.tema_semana}»
-              <button className="up-btn" disabled={generando} onClick={() => generar(piezasHoy.some(p => p.texto))}>{generando ? 'Generando…' : piezasHoy.some(p => p.texto) ? 'Volver a generar' : 'Generar borradores'}</button>
-            </div>
             {aviso && <p role="alert" className="up-error">{aviso}</p>}
-            <div className="up-portada-notas">
-              <Pieza red="linkedin" principal titulo={dia.tema_dia} pieza={pieza('linkedin')} guardar={guardar} envio={datos.envio.linkedin} />
-              <div className="up-portada-segunda">
-                <Pieza red="x" pieza={pieza('x')} guardar={guardar} envio={datos.envio.x} />
-                {dia.redes.includes('instagram') && dia.formato_instagram !== 'ninguno' && (
-                  <Pieza red="instagram" titulo={dia.tema_instagram} pieza={pieza('instagram')} guardar={guardar} envio={datos.envio.instagram} />
-                )}
-              </div>
-            </div>
+            {delDia.map((dia, i) => {
+              const piezasHoy = piezasDe(dia)
+              const pieza = red => piezasHoy.find(p => p.red === red)
+              const conTexto = piezasHoy.some(p => p.texto)
+              return (
+                <div key={dia.id} className={i ? 'up-portada-otra' : undefined}>
+                  <div className="up-antetitulo up-antetitulo-acciones">{fechaLarga(hoy)} · Semana «{dia.tema_semana}»{delDia.length > 1 && ` · ${i + 1} de ${delDia.length}`}
+                    <button className="up-btn" disabled={!!generando} onClick={() => generar(conTexto, dia.id)}>{generando === dia.id ? 'Generando…' : conTexto ? 'Volver a generar' : 'Generar borradores'}</button>
+                  </div>
+                  <div className="up-portada-notas">
+                    {dia.redes.includes('linkedin') && <Pieza red="linkedin" principal titulo={dia.tema_dia} pieza={pieza('linkedin')} guardar={guardar} envio={datos.envio.linkedin} />}
+                    <div className="up-portada-segunda">
+                      {dia.redes.includes('x') && <Pieza red="x" principal={!dia.redes.includes('linkedin')} titulo={dia.redes.includes('linkedin') ? undefined : dia.tema_dia} pieza={pieza('x')} guardar={guardar} envio={datos.envio.x} />}
+                      {dia.redes.includes('instagram') && dia.formato_instagram !== 'ninguno' && (
+                        <Pieza red="instagram" titulo={dia.tema_instagram || (dia.redes.length === 1 ? dia.tema_dia : undefined)} pieza={pieza('instagram')} guardar={guardar} envio={datos.envio.instagram} />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </>
         ) : (
           <div className="up-enc">
             <div className="up-antetitulo">{fechaLarga(hoy)}</div>
-            <h2 className="up-titular-1">Hoy no hay publicación en el calendario</h2>
+            <h2 className="up-titular-1">{datos.dias.some(d => d.fecha === hoy) ? 'Hoy salteaste las publicaciones' : 'Hoy no hay publicación en el calendario'}</h2>
             {proximos[0] && <p className="up-bajada">La próxima es el {fechaLarga(proximos[0].fecha).toLowerCase()}: {proximos[0].tema_dia}.</p>}
           </div>
         )}
@@ -177,7 +187,7 @@ export default function Hoy({ abrirCalendario, abrirPreguntas, alCambiar }) {
           <div className="up-vol">Necesito que me cuentes{preguntas.length > 0 && <button className="up-link" onClick={abrirPreguntas}>Responder</button>}</div>
           {preguntas.length === 0
             ? <p className="up-vacio">No hay preguntas pendientes.</p>
-            : [...new Map(preguntas.map(p => [p.fecha, p])).values()].map(p => <p key={p.id} className="up-pregunta"><b>{fechaLarga(p.fecha)}.</b> {p.pregunta}</p>)}
+            : [...new Map(preguntas.map(p => [p.calendario_id, p])).values()].map(p => <p key={p.id} className="up-pregunta"><b>{fechaLarga(p.fecha)}.</b> {p.pregunta}</p>)}
         </section>
         <section className="up-recuadro">
           <div className="up-vol">Avance del calendario</div>

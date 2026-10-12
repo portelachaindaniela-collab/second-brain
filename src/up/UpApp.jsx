@@ -28,13 +28,13 @@ export default function UpApp({ email, volver }) {
   const [pantalla, setPantalla] = useState(() => (new URLSearchParams(window.location.search).has('up_redes') ? 'redes' : 'hoy'))
   const [cuentas, setCuentas] = useState({})
   const [version, setVersion] = useState(0) // sube cuando BS67 cambia algo, para recargar la pantalla
-  const [foco, setFoco] = useState(null) // { fecha, red } que abre la mesa de trabajo en Redes
+  const [foco, setFoco] = useState(null) // { fecha, red, calendarioId } que abre la mesa de trabajo en Redes
 
   // Cuántos días esperan una respuesta y cuántas piezas quedaron en revisión, para el menú.
   const contar = useCallback(async () => {
-    const { data } = await supabase.from('up_piezas').select('fecha,estado').in('estado', ['falta_info', 'revision'])
+    const { data } = await supabase.from('up_piezas').select('calendario_id,estado').in('estado', ['falta_info', 'revision'])
     setCuentas({
-      falta_info: new Set((data || []).filter(p => p.estado === 'falta_info').map(p => p.fecha)).size,
+      falta_info: new Set((data || []).filter(p => p.estado === 'falta_info').map(p => p.calendario_id)).size,
       revision: (data || []).filter(p => p.estado === 'revision').length,
     })
   }, [])
@@ -66,7 +66,7 @@ export default function UpApp({ email, volver }) {
           {pantalla === 'hoy' && <Hoy abrirCalendario={() => setPantalla('calendario')} abrirPreguntas={() => setPantalla('preguntas')} alCambiar={contar} />}
           {pantalla === 'preguntas' && <Preguntas alCambiar={contar} />}
           {pantalla === 'revisor' && <Revisor alCambiar={contar} />}
-          {pantalla === 'calendario' && <Calendario abrirEdicion={(fecha, red) => { setFoco({ fecha, red }); setPantalla('redes') }} />}
+          {pantalla === 'calendario' && <Calendario abrirEdicion={(fecha, red, calendarioId) => { setFoco({ fecha, red, calendarioId }); setPantalla('redes') }} />}
           {pantalla === 'ficha' && <Ficha />}
           {pantalla === 'redes' && <Redes foco={foco} />}
           {pantalla === 'agentes' && <Agentes />}

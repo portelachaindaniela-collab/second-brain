@@ -192,7 +192,7 @@ export default function Redes({ foco }) {
         <h2 className="up-titular-1">Escribí, mirá cómo queda, aprobá</h2>
         {vuelta && <p role="status" className={`up-aviso-nota ${vuelta.ok ? 'up-aviso-ok' : 'up-aviso-error'}`}>{vuelta.detalle}</p>}
       </div>
-      <Mesa key={foco ? `${foco.fecha}-${foco.red}` : 'mesa'} foco={foco} />
+      <Mesa key={foco ? `${foco.calendarioId ?? foco.fecha}-${foco.red}` : 'mesa'} foco={foco} />
       <div className="up-enc up-redes-enc">
         <div className="up-antetitulo">Cuentas, horarios e historial</div>
         <p className="up-bajada">Lo aprobado sale solo el día que le toca, a la hora de cada red. Sin cuenta conectada o sin horario, lo publicás vos y tocás Publicado en Hoy.</p>

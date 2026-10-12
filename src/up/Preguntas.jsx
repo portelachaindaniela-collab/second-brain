@@ -14,7 +14,7 @@ function Pregunta({ grupo, alResolver }) {
     setOcupada('generar'); setAviso('')
     const { error } = await supabase.from('up_piezas').update({ respuesta: respuesta.trim() }).in('id', ids)
     if (error) { setOcupada(''); setAviso('No se pudo guardar la respuesta: ' + error.message); return }
-    const mensaje = await correrPipeline(grupo.fecha)
+    const mensaje = await correrPipeline(grupo.fecha, false, grupo.calendarioId)
     setOcupada('')
     setAviso(mensaje)
     if (!mensaje) alResolver()
@@ -24,8 +24,8 @@ function Pregunta({ grupo, alResolver }) {
     setOcupada('saltear'); setAviso('')
     const { error } = await supabase.from('up_calendario').update({ salteado: true }).eq('id', grupo.calendarioId)
     if (error) { setOcupada(''); setAviso('No se pudo saltear el día: ' + error.message); return }
-    // Las piezas de ese día que no llegaron a aprobarse dejan de existir: el día no se publica.
-    const { error: e } = await supabase.from('up_piezas').delete().eq('fecha', grupo.fecha).not('estado', 'in', '(aprobado,publicado)')
+    // Las piezas de esa publicación que no llegaron a aprobarse dejan de existir: no se publica.
+    const { error: e } = await supabase.from('up_piezas').delete().eq('calendario_id', grupo.calendarioId).not('estado', 'in', '(aprobado,publicado)')
     setOcupada('')
     if (e) { setAviso('Se salteó el día, pero no se pudieron borrar sus borradores: ' + e.message); return }
     alResolver()
@@ -57,8 +57,8 @@ export default function Preguntas({ alCambiar }) {
     if (error) { setError('No se pudieron cargar las preguntas: ' + error.message); return }
     const porFecha = new Map()
     for (const p of data || []) {
-      if (!porFecha.has(p.fecha)) porFecha.set(p.fecha, { fecha: p.fecha, calendarioId: p.calendario_id, tema: p.up_calendario?.tema_dia, pregunta: p.pregunta, respuesta: p.respuesta, piezas: [] })
-      porFecha.get(p.fecha).piezas.push(p)
+      if (!porFecha.has(p.calendario_id)) porFecha.set(p.calendario_id, { fecha: p.fecha, calendarioId: p.calendario_id, tema: p.up_calendario?.tema_dia, pregunta: p.pregunta, respuesta: p.respuesta, piezas: [] })
+      porFecha.get(p.calendario_id).piezas.push(p)
     }
     setGrupos([...porFecha.values()])
   }, [])
@@ -76,7 +76,7 @@ export default function Preguntas({ alCambiar }) {
         {grupos.length > 0 && <p className="up-bajada">Respondé y UP escribe el borrador con tu respuesta, o salteá el día si no querés publicar.</p>}
       </div>
       <div className="up-preguntas">
-        {grupos.map(g => <Pregunta key={g.fecha} grupo={g} alResolver={() => { cargar(); alCambiar?.() }} />)}
+        {grupos.map(g => <Pregunta key={g.calendarioId} grupo={g} alResolver={() => { cargar(); alCambiar?.() }} />)}
       </div>
     </>
   )

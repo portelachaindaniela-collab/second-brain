@@ -19,11 +19,13 @@ const PEDIDOS = {
 
 const redesDelDia = d => d.redes.filter(r => r !== 'instagram' || d.formato_instagram !== 'ninguno')
 
-// El día que se abre: el pedido (desde el Calendario), si no hoy, si no el próximo con publicación.
+// La publicación que se abre: la pedida (desde el Calendario), si no la de hoy, si no la próxima. Un día puede
+// tener varias publicaciones, así que se elige por id.
 function diaInicial(dias, foco) {
-  if (foco?.fecha && dias.some(d => d.fecha === foco.fecha)) return foco.fecha
+  if (foco?.calendarioId && dias.some(d => d.id === foco.calendarioId)) return foco.calendarioId
+  if (foco?.fecha && dias.some(d => d.fecha === foco.fecha)) return dias.find(d => d.fecha === foco.fecha).id
   const hoy = hoyIso()
-  return (dias.find(d => d.fecha >= hoy) || dias.at(-1))?.fecha ?? null
+  return (dias.find(d => d.fecha >= hoy) || dias.at(-1))?.id ?? null
 }
 
 async function pedirVersion(body) {
@@ -110,7 +112,7 @@ function Simulacion({ red, texto, pieza }) {
 
 export default function Mesa({ foco }) {
   const [dias, setDias] = useState(null)
-  const [fecha, setFecha] = useState(null)
+  const [pubId, setPubId] = useState(null)
   const [piezas, setPiezas] = useState([])
   const [textos, setTextos] = useState({})
   const [red, setRed] = useState(foco?.red || 'linkedin')
@@ -123,25 +125,25 @@ export default function Mesa({ foco }) {
   const [desde] = useState(() => new Date(Date.now() - 14 * 86_400_000).toLocaleDateString('en-CA'))
 
   useEffect(() => {
-    supabase.from('up_calendario').select('id,fecha,tema_dia,tema_instagram,redes,formato_instagram,salteado').eq('salteado', false).order('fecha')
+    supabase.from('up_calendario').select('id,fecha,tema_dia,tema_instagram,redes,formato_instagram,salteado').eq('salteado', false).order('fecha').order('created_at')
       .then(({ data, error }) => {
         if (error) { setAviso({ tipo: 'error', texto: 'No se pudo cargar el calendario: ' + error.message }); setDias([]); return }
         setDias(data || [])
-        setFecha(diaInicial(data || [], foco))
+        setPubId(diaInicial(data || [], foco))
       })
   }, [foco])
 
-  const cargarDia = useCallback(async f => {
-    const { data, error } = await supabase.from('up_piezas').select(CAMPOS).eq('fecha', f)
+  const cargarDia = useCallback(async id => {
+    const { data, error } = await supabase.from('up_piezas').select(CAMPOS).eq('calendario_id', id)
     if (error) { setAviso({ tipo: 'error', texto: 'No se pudo cargar el día: ' + error.message }); return }
     setPiezas(data || [])
     setTextos(Object.fromEntries((data || []).map(p => [p.red, p.texto || ''])))
   }, [])
 
-  useEffect(() => { if (fecha) cargarDia(fecha) }, [fecha, cargarDia])
+  useEffect(() => { if (pubId) cargarDia(pubId) }, [pubId, cargarDia])
 
   if (!dias) return <p className="up-vacio">Cargando…</p>
-  const dia = dias.find(d => d.fecha === fecha)
+  const dia = dias.find(d => d.id === pubId)
   if (!dia) return <p className="up-vacio">No hay días en el calendario. Cargá una idea en Calendario y escribila acá.</p>
 
   const redes = redesDelDia(dia)
@@ -151,11 +153,11 @@ export default function Mesa({ foco }) {
   const actual = pieza(activa)
   const publicada = actual?.estado === 'publicado'
   const sinGuardar = r => (textos[r] ?? '') !== (pieza(r)?.texto || '')
-  const opciones = dias.filter(d => d.fecha >= desde || d.fecha === fecha)
+  const opciones = dias.filter(d => d.fecha >= desde || d.id === pubId)
 
-  function cambiarDia(f) {
-    if (redes.some(sinGuardar) && !window.confirm('Hay cambios sin guardar. ¿Cambiar de día igual?')) return
-    setFecha(f); setPropuesta(null); setPidiendo(false); setAviso(null)
+  function cambiarDia(id) {
+    if (redes.some(sinGuardar) && !window.confirm('Hay cambios sin guardar. ¿Cambiar de publicación igual?')) return
+    setPubId(id); setPropuesta(null); setPidiendo(false); setAviso(null)
   }
 
   function escribir(valor) { setTextos(t => ({ ...t, [activa]: valor })); setAviso(null) }
@@ -189,7 +191,7 @@ export default function Mesa({ foco }) {
     const p = valor.trim()
     if (!p) return
     setOcupado('asistente'); setPropuesta(null); setAviso(null)
-    const r = await pedirVersion({ fecha: dia.fecha, red: activa, texto, pedido: p })
+    const r = await pedirVersion({ fecha: dia.fecha, calendario_id: dia.id, red: activa, texto, pedido: p })
     setOcupado('')
     if (r.error) { setAviso({ tipo: 'error', texto: r.error }); return }
     setPropuesta({ red: activa, texto: r.propuesta, numeros: r.numeros_sin_fuente || [] })
@@ -206,8 +208,8 @@ export default function Mesa({ foco }) {
     <div className="up-mesa">
       <section className="up-mesa-trabajo">
         <div className="up-mesa-barra">
-          <select className="up-campo up-mesa-dia" value={fecha} onChange={e => cambiarDia(e.target.value)} aria-label="Día">
-            {opciones.map(d => <option key={d.fecha} value={d.fecha}>{fechaLarga(d.fecha)} · {d.tema_dia}</option>)}
+          <select className="up-campo up-mesa-dia" value={pubId} onChange={e => cambiarDia(e.target.value)} aria-label="Publicación">
+            {opciones.map(d => <option key={d.id} value={d.id}>{fechaLarga(d.fecha)} · {d.tema_dia}</option>)}
           </select>
           <div className="up-mesa-redes" role="tablist">
             {redes.map(r => (
@@ -273,7 +275,7 @@ export default function Mesa({ foco }) {
 
       <aside className="up-mesa-sim" aria-label="Simulación">
         <div className="up-mono-k up-mesa-sim-cab">Simulación · cómo se ve en cada red<span>en vivo</span></div>
-        {redes.map(r => <Simulacion key={`${fecha}-${r}`} red={r} texto={textos[r] ?? ''} pieza={pieza(r)} />)}
+        {redes.map(r => <Simulacion key={`${pubId}-${r}`} red={r} texto={textos[r] ?? ''} pieza={pieza(r)} />)}
       </aside>
     </div>
   )

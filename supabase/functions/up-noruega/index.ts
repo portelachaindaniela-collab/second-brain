@@ -19,8 +19,8 @@ async function revisar(admin: any, ownerId: string, crons: any[]) {
   const hoy = hoyAR(new Date(ahora));
   const desde = new Date(ahora - 24 * 3600_000).toISOString();
   const [dia, piezasHoy, corridas, carruseles, horarios, conexiones, faltaInfo] = await Promise.all([
-    admin.from("up_calendario").select("fecha,redes,formato_instagram,salteado").eq("owner_id", ownerId).eq("fecha", hoy).maybeSingle(),
-    admin.from("up_piezas").select("red,texto,estado,error_publicacion").eq("owner_id", ownerId).eq("fecha", hoy),
+    admin.from("up_calendario").select("id,fecha,tema_dia,redes,formato_instagram,salteado").eq("owner_id", ownerId).eq("fecha", hoy),
+    admin.from("up_piezas").select("calendario_id,red,texto,estado,error_publicacion").eq("owner_id", ownerId).eq("fecha", hoy),
     admin.from("up_corridas").select("fecha,estado,error,iniciado_at").eq("owner_id", ownerId).gte("iniciado_at", desde),
     admin.from("up_piezas").select("texto,estado,assets_texto,updated_at").eq("owner_id", ownerId).eq("red", "instagram").eq("contenido->>formato", "carrusel").neq("estado", "publicado").not("texto", "is", null),
     admin.from("up_horarios").select("red,hora").eq("owner_id", ownerId),
@@ -31,7 +31,7 @@ async function revisar(admin: any, ownerId: string, crons: any[]) {
   if (error) throw new Error(error.message);
 
   const chequeos = [
-    chequearBorradores({ dia: dia.data, piezas: piezasHoy.data, ahora }),
+    chequearBorradores({ dias: dia.data, piezas: piezasHoy.data, ahora }),
     chequearCorridas({ corridas: corridas.data, ahora }),
     chequearDisenador({ carruseles: carruseles.data, ahora }),
     chequearPublicador({ piezasHoy: piezasHoy.data, horarios: horarios.data, conexiones: conexiones.data, ahora, redesAutomaticas: REDES_AUTOMATICAS }),

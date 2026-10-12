@@ -109,7 +109,7 @@ type Dia = { id: string; owner_id: string; fecha: string; tema_semana: string; t
 
 async function procesarDia(admin: any, crearLlamar: (alCambiar: (m: string) => Promise<void>) => any, dia: Dia, regenerar: boolean, origen: string) {
   const redes = planificar(dia);
-  const { data: existentes, error } = await admin.from("up_piezas").select("id,red,estado,respuesta,texto").eq("owner_id", dia.owner_id).eq("fecha", dia.fecha);
+  const { data: existentes, error } = await admin.from("up_piezas").select("id,red,estado,respuesta,texto").eq("calendario_id", dia.id);
   if (error) throw new Error(error.message);
 
   // Agente 1: crea las piezas que falten; solo se trabaja sobre las que todavía se pueden reescribir.
@@ -228,6 +228,8 @@ Deno.serve(async (req: Request) => {
 
   let consulta = admin.from("up_calendario").select("id,owner_id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,fotos_propias").eq("fecha", fecha).eq("salteado", false);
   if (ownerId) consulta = consulta.eq("owner_id", ownerId);
+  // Un día puede tener varias publicaciones: la app puede pedir una sola.
+  if (typeof body?.calendario_id === "string" && /^[0-9a-f-]{36}$/i.test(body.calendario_id)) consulta = consulta.eq("id", body.calendario_id);
   const { data: dias, error } = await consulta;
   if (error) return json({ error: error.message }, 500);
   if (!dias?.length) return json({ fecha, dias: [], mensaje: "No hay publicación en el calendario para esa fecha." });

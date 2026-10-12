@@ -136,8 +136,9 @@ export function diasDesdeTabla(tabla, hoy) {
     if (!fecha) { errores.push({ fila: n, motivo: `No entiendo la fecha «${v.fecha || 'vacía'}».` }); return }
     const idea = String(v.idea ?? '').trim()
     if (!idea) { errores.push({ fila: n, motivo: 'Falta la idea.' }); return }
-    if (vistas.has(fecha)) { errores.push({ fila: n, motivo: `El ${fecha} ya está en la fila ${vistas.get(fecha)}: UP publica una idea por día.` }); return }
-    vistas.set(fecha, n)
+    const clave = `${fecha}|${plano(idea)}`
+    if (vistas.has(clave)) { errores.push({ fila: n, motivo: `Es igual a la fila ${vistas.get(clave)} (misma fecha e idea).` }); return }
+    vistas.set(clave, n)
     const formato = leerFormato(v.instagram)
     let redes = leerRedes(v.redes) ?? ['linkedin', 'x']
     if (formato && !redes.includes('instagram')) redes = [...redes, 'instagram']
@@ -218,3 +219,6 @@ export async function tablaDesdeXlsx(buf) {
   }
   return Array.from(filas, f => f ?? [])
 }
+
+// La misma publicación (misma fecha e idea) para no cargarla dos veces si se importa de nuevo el mismo archivo.
+export const clavePublicacion = d => `${d.fecha}|${plano(d.tema_dia)}`

@@ -40,9 +40,10 @@ export function bloqueoDeDia(piezas) {
   return ''
 }
 
-// Borrado masivo: separa los días que se pueden borrar de los que tienen algo aprobado o publicado.
+// Borrado masivo: separa las publicaciones que se pueden borrar de las que tienen algo aprobado o publicado.
+// piezasDe(publicación) devuelve sus piezas.
 export function separarBorrables(dias, piezasDe) {
   const borrables = [], bloqueados = []
-  for (const d of dias) (bloqueoDeDia(piezasDe(d.fecha)) ? bloqueados : borrables).push(d)
+  for (const d of dias) (bloqueoDeDia(piezasDe(d)) ? bloqueados : borrables).push(d)
   return { borrables, bloqueados }
 }

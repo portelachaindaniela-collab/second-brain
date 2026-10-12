@@ -309,3 +309,22 @@ create trigger up_calendario_plan_por_defecto before insert on public.up_calenda
 insert into public.up_planes (owner_id, nombre, color)
 select distinct owner_id, 'Calendario inicial', '#326891' from public.up_calendario;
 update public.up_calendario c set plan_id = p.id from public.up_planes p where p.owner_id = c.owner_id and c.plan_id is null;
+
+-- Varias publicaciones el mismo día (2026-10-12): se saca el límite de una por fecha. Cada borrador queda atado a su
+-- publicación (calendario_id) y no a la fecha; up_piezas.fecha sigue a la de su publicación por trigger.
+alter table public.up_calendario drop constraint up_calendario_owner_id_fecha_key;
+create index up_calendario_owner_fecha_idx on public.up_calendario (owner_id, fecha);
+alter table public.up_piezas drop constraint up_piezas_owner_id_fecha_red_key;
+alter table public.up_piezas alter column calendario_id set not null;
+alter table public.up_piezas add constraint up_piezas_calendario_red_key unique (calendario_id, red);
+alter table public.up_piezas drop constraint up_piezas_calendario_id_fkey,
+  add constraint up_piezas_calendario_id_fkey foreign key (calendario_id) references public.up_calendario (id) on delete cascade;
+create index up_piezas_owner_fecha_idx on public.up_piezas (owner_id, fecha);
+
+create function public.up_piezas_siguen_fecha() returns trigger language plpgsql set search_path = public as $f$
+begin
+  update public.up_piezas set fecha = new.fecha where calendario_id = new.id and fecha is distinct from new.fecha;
+  return new;
+end $f$;
+create trigger up_piezas_siguen_fecha after update of fecha on public.up_calendario
+  for each row when (old.fecha is distinct from new.fecha) execute function public.up_piezas_siguen_fecha();

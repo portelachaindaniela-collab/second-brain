@@ -65,3 +65,13 @@ test('crons y estado general', () => {
   assert.equal(estadoGeneral([{ estado: 'ok' }, { estado: 'aviso' }]), 'aviso')
   assert.equal(estadoGeneral([{ estado: 'falla' }, { estado: 'aviso' }]), 'falla')
 })
+
+test('borradores con varias publicaciones el mismo día', () => {
+  const a = { id: 'a', tema_dia: 'Uno', redes: ['linkedin'], formato_instagram: 'ninguno', salteado: false }
+  const b = { id: 'b', tema_dia: 'Dos', redes: ['x'], formato_instagram: 'ninguno', salteado: false }
+  const piezas = [{ calendario_id: 'a', red: 'linkedin', texto: 'listo', estado: 'pendiente' }, { calendario_id: 'a', red: 'x', texto: 'de otra', estado: 'pendiente' }]
+  const r = chequearBorradores({ dias: [a, b], piezas, ahora: T('2026-10-06T12:00:00Z') })
+  assert.equal(r.estado, 'falla')
+  assert.match(r.detalle, /X de «Dos»/)
+  assert.equal(chequearBorradores({ dias: [a, { ...b, salteado: true }], piezas, ahora: T('2026-10-06T12:00:00Z') }).estado, 'ok')
+})

@@ -44,10 +44,13 @@ test('arma los días y explica las filas con problemas', () => {
   const r = diasDesdeTabla(tabla, HOY)
   assert.deepEqual(r.dias.map(d => [d.fecha, d.tema_dia, d.redes.join('+'), d.formato_instagram]), [
     ['2026-11-03', 'Arranque', 'linkedin', 'ninguno'],
+    ['2026-11-03', 'Repetida', 'linkedin+x', 'ninguno'],
     ['2026-11-05', 'Placas', 'x+instagram', 'carrusel'],
   ])
-  assert.deepEqual(r.errores.map(e => e.fila), [3, 4, 6, 8])
-  assert.match(r.errores[2].motivo, /fila 2/)
+  assert.deepEqual(r.errores.map(e => e.fila), [3, 4, 8])
+  const dup = diasDesdeTabla(tablaDesdeTexto('fecha,idea\n3/11,Uno\n3/11,uno\n3/11,Dos'), HOY)
+  assert.deepEqual(dup.dias.map(d => d.tema_dia), ['Uno', 'Dos'])
+  assert.match(dup.errores[0].motivo, /fila 2/)
 })
 
 test('pide las columnas mínimas y la plantilla sirve', () => {

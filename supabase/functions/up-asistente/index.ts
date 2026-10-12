@@ -63,11 +63,11 @@ async function leerLink(valor: string) {
   }
 }
 
-async function correrPipeline(jwt: string, fecha: string) {
+async function correrPipeline(jwt: string, fecha: string, calendarioId?: string) {
   const r = await fetch(`${env.SUPABASE_URL}/functions/v1/up-pipeline`, {
     method: "POST",
     headers: { Authorization: `Bearer ${jwt}`, apikey: env.SUPABASE_ANON_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ fecha }),
+    body: JSON.stringify({ fecha, calendario_id: calendarioId }),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok || data.error) return `Los agentes no pudieron generar: ${data.error || `HTTP ${r.status}`}.`;
@@ -82,10 +82,10 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
   switch (nombre) {
     case "estado_hoy": {
       const [d, p] = await Promise.all([
-        db.from("up_calendario").select("fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,salteado").eq("fecha", hoy).maybeSingle(),
-        db.from("up_piezas").select("red,estado,pregunta,motivo_revision,error_publicacion,url_publicada").eq("fecha", hoy),
+        db.from("up_calendario").select("id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,salteado").eq("fecha", hoy).order("created_at"),
+        db.from("up_piezas").select("calendario_id,red,estado,pregunta,motivo_revision,error_publicacion,url_publicada").eq("fecha", hoy),
       ]);
-      return { hoy, dia: d.data, piezas: p.data };
+      return { hoy, publicaciones: (d.data || []).map((x: any) => ({ publicacion_id: x.id, ...x, id: undefined, piezas: (p.data || []).filter((q: any) => q.calendario_id === x.id).map(({ calendario_id, ...q }: any) => q) })) };
     }
     case "pendientes": {
       const { data } = await db.from("up_piezas").select("fecha,red,estado,pregunta,motivo_revision,error_publicacion")
@@ -101,11 +101,11 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
       const desde = /^\d{4}-\d{2}-\d{2}$/.test(a?.desde) ? a.desde : hoy;
       const hasta = /^\d{4}-\d{2}-\d{2}$/.test(a?.hasta) ? a.hasta : masDias(desde, 14);
       const [d, p] = await Promise.all([
-        db.from("up_calendario").select("fecha,tema_semana,tema_dia,redes,formato_instagram,salteado,plan_id").gte("fecha", desde).lte("fecha", hasta).order("fecha"),
-        db.from("up_piezas").select("fecha,red,estado").gte("fecha", desde).lte("fecha", hasta),
+        db.from("up_calendario").select("id,fecha,tema_semana,tema_dia,redes,formato_instagram,salteado,plan_id").gte("fecha", desde).lte("fecha", hasta).order("fecha").order("created_at"),
+        db.from("up_piezas").select("calendario_id,red,estado").gte("fecha", desde).lte("fecha", hasta),
       ]);
       const planes = (await db.from("up_planes").select("id,nombre")).data || [];
-      return { desde, hasta, dias: (d.data || []).map(({ plan_id, ...x }: any) => ({ ...x, plan: planes.find((pl: any) => pl.id === plan_id)?.nombre ?? "Sin plan", piezas: (p.data || []).filter((q: any) => q.fecha === x.fecha).map((q: any) => `${q.red}: ${q.estado}`) })) };
+      return { desde, hasta, publicaciones: (d.data || []).map(({ plan_id, id, ...x }: any) => ({ publicacion_id: id, ...x, plan: planes.find((pl: any) => pl.id === plan_id)?.nombre ?? "Sin plan", piezas: (p.data || []).filter((q: any) => q.calendario_id === id).map((q: any) => `${q.red}: ${q.estado}`) })) };
     }
     case "ver_planes": {
       const [pl, d] = await Promise.all([
@@ -117,8 +117,11 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
         sin_plan: dias.filter((y: any) => !(pl.data || []).some((x: any) => x.id === y.plan_id)).length };
     }
     case "ver_borrador": {
-      const { data } = await db.from("up_piezas").select("fecha,red,estado,texto,problemas").eq("fecha", a?.fecha).eq("red", a?.red).maybeSingle();
-      return data ?? { error: "No hay pieza para esa fecha y red." };
+      let q = db.from("up_piezas").select("fecha,red,estado,texto,problemas,up_calendario(tema_dia)").eq("fecha", a?.fecha).eq("red", a?.red);
+      if (a?.publicacion_id) q = q.eq("calendario_id", a.publicacion_id);
+      const { data } = await q;
+      if (!data?.length) return { error: "No hay pieza para esa fecha y red." };
+      return data.length === 1 ? data[0] : { varias: data.map((x: any) => ({ tema: x.up_calendario?.tema_dia, estado: x.estado, texto: x.texto })) };
     }
     case "buscar_ficha": {
       let q = db.from("up_ficha_datos").select("grupo,dato,fuente").order("grupo").order("orden");
@@ -137,6 +140,16 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
   }
 }
 
+// La publicación que toca una acción: por id, o por fecha si ese día hay una sola.
+async function publicacion(db: any, a: any) {
+  let q = db.from("up_calendario").select("id,fecha,redes,tema_dia").eq("fecha", a.fecha);
+  if (a.publicacion_id) q = q.eq("id", a.publicacion_id);
+  const { data } = await q;
+  if (!data?.length) return "Ese día no tiene publicación en el calendario.";
+  if (data.length > 1) return `Ese día hay ${data.length} publicaciones (${data.map((d: any) => `«${d.tema_dia}»`).join(", ")}): decime cuál.`;
+  return data[0];
+}
+
 // Acciones confirmadas por la dueña.
 async function ejecutar(db: any, jwt: string, nombre: string, a: any) {
   switch (nombre) {
@@ -153,12 +166,12 @@ async function ejecutar(db: any, jwt: string, nombre: string, a: any) {
         plan_id = plan.id;
       }
       const { error } = await db.from("up_calendario").insert({ fecha: a.fecha, tema_semana: semana, tema_dia: a.tema_dia, redes: a.redes, formato_instagram: a.formato_instagram, tema_instagram: a.tema_instagram, ...(plan_id ? { plan_id } : {}) });
-      if (error) return error.code === "23505" ? "Ya hay una publicación ese día: elegí otra fecha o editala desde el Calendario." : `No se pudo cargar: ${error.message}`;
+      if (error) return `No se pudo cargar: ${error.message}`;
       return "Listo, la idea quedó en el calendario. Los agentes la escriben la mañana de ese día (o pedime que genere ahora).";
     }
     case "editar_dia": {
-      const { data: dia } = await db.from("up_calendario").select("id,fecha,redes").eq("fecha", a.fecha).maybeSingle();
-      if (!dia) return "Ese día no tiene publicación en el calendario.";
+      const dia: any = await publicacion(db, a);
+      if (typeof dia === "string") return dia;
       const cambios: any = {};
       for (const k of ["tema_dia", "tema_semana", "redes", "formato_instagram", "tema_instagram", "salteado"]) if (a[k] !== undefined) cambios[k] = a[k];
       if (cambios.formato_instagram && !cambios.redes && !dia.redes.includes("instagram")) delete cambios.formato_instagram;
@@ -168,33 +181,33 @@ async function ejecutar(db: any, jwt: string, nombre: string, a: any) {
         if (!plan) return `No encontré el plan «${a.plan}». Crealo en el Calendario (Planes de trabajo) o decime otro.`;
         cambios.plan_id = plan.id;
       }
-      const { data: piezas } = await db.from("up_piezas").select("estado").eq("fecha", a.fecha);
+      const { data: piezas } = await db.from("up_piezas").select("estado").eq("calendario_id", dia.id);
       if (a.nueva_fecha) {
         const b = bloqueoDeDia(piezas || []);
         if (b) return `${b} No se puede mover.`;
         cambios.fecha = a.nueva_fecha;
       }
       const { error } = await db.from("up_calendario").update(cambios).eq("id", dia.id);
-      if (error) return error.code === "23505" ? "Ya hay una publicación en la fecha nueva: elegí otra o mové primero esa." : `No se pudo cambiar: ${error.message}`;
-      if (a.nueva_fecha && piezas?.length) {
-        const { error: eP } = await db.from("up_piezas").update({ fecha: a.nueva_fecha }).eq("fecha", a.fecha);
-        if (eP) return `El día se movió, pero los borradores no: ${eP.message}`;
-      }
+      if (error) return `No se pudo cambiar: ${error.message}`;
       return "Listo, el día quedó cambiado en el calendario.";
     }
     case "borrar_dia": {
-      const { data: dia } = await db.from("up_calendario").select("id").eq("fecha", a.fecha).maybeSingle();
-      if (!dia) return "Ese día no tiene publicación en el calendario.";
-      const { data: piezas } = await db.from("up_piezas").select("estado").eq("fecha", a.fecha);
+      const dia: any = await publicacion(db, a);
+      if (typeof dia === "string") return dia;
+      const { data: piezas } = await db.from("up_piezas").select("estado").eq("calendario_id", dia.id);
       const b = bloqueoDeDia(piezas || []);
       if (b) return `${b} No se puede borrar; si querés, lo salteo.`;
-      const { error: eP } = await db.from("up_piezas").delete().eq("fecha", a.fecha);
+      const { error: eP } = await db.from("up_piezas").delete().eq("calendario_id", dia.id);
       if (eP) return `No se pudo borrar: ${eP.message}`;
       const { error } = await db.from("up_calendario").delete().eq("id", dia.id);
-      return error ? `No se pudo borrar: ${error.message}` : "Listo, borré el día. Quedó libre para otra idea.";
+      return error ? `No se pudo borrar: ${error.message}` : "Listo, borré la publicación.";
     }
     case "aprobar_pieza": {
-      const { data, error } = await db.from("up_piezas").update({ estado: "aprobado" }).eq("fecha", a.fecha).eq("red", a.red).in("estado", ["pendiente", "revision"]).not("texto", "is", null).select("id");
+      let q = db.from("up_piezas").select("id").eq("fecha", a.fecha).eq("red", a.red).in("estado", ["pendiente", "revision"]).not("texto", "is", null);
+      if (a.publicacion_id) q = q.eq("calendario_id", a.publicacion_id);
+      const { data: candidatas } = await q;
+      if ((candidatas?.length ?? 0) > 1) return "Ese día hay más de una publicación con borrador para esa red: decime cuál.";
+      const { data, error } = await db.from("up_piezas").update({ estado: "aprobado" }).in("id", (candidatas || []).map((x: any) => x.id)).select("id");
       if (error) return `No se pudo aprobar: ${error.message}`;
       return data?.length ? "Aprobado. Si la red está conectada y tiene horario, sale sola ese día." : "No encontré un borrador para aprobar en esa fecha y red (puede que ya esté aprobado o que todavía no exista).";
     }
@@ -204,7 +217,7 @@ async function ejecutar(db: any, jwt: string, nombre: string, a: any) {
       if (!data?.length) return "Ese día no tiene preguntas pendientes.";
       return `Respuesta guardada. ${await correrPipeline(jwt, a.fecha)}`;
     }
-    case "generar_borradores": return await correrPipeline(jwt, a.fecha);
+    case "generar_borradores": return await correrPipeline(jwt, a.fecha, a.publicacion_id);
     case "agregar_dato_ficha": {
       const { data: ult } = await db.from("up_ficha_datos").select("orden").eq("grupo", a.grupo).order("orden", { ascending: false }).limit(1).maybeSingle();
       const { error } = await db.from("up_ficha_datos").insert({ grupo: a.grupo, dato: a.dato, fuente: a.fuente, orden: (ult?.orden ?? 0) + 1 });
@@ -239,7 +252,8 @@ Deno.serve(async (req: Request) => {
     if (!v.ok) return json({ error: v.error }, 400);
     const [f, d] = await Promise.all([
       db.from("up_ficha_datos").select("grupo,dato").order("grupo").order("orden"),
-      v.args.fecha ? db.from("up_calendario").select("tema_dia,tema_instagram").eq("fecha", v.args.fecha).maybeSingle() : Promise.resolve({ data: null }),
+      v.args.calendario_id ? db.from("up_calendario").select("tema_dia,tema_instagram").eq("id", v.args.calendario_id).maybeSingle()
+        : v.args.fecha ? db.from("up_calendario").select("tema_dia,tema_instagram").eq("fecha", v.args.fecha).limit(1).maybeSingle() : Promise.resolve({ data: null }),
     ]);
     const ficha = f.data || [];
     const tema = v.args.red === "instagram" && d.data?.tema_instagram ? d.data.tema_instagram : d.data?.tema_dia;

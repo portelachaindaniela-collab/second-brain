@@ -35,8 +35,7 @@ export default function EditorDia({ dia, fecha, semanas, planes, planInicial, pi
     e.preventDefault()
     if (!f.tema_dia.trim()) { setAviso('Escribí la idea (el tema del día).'); return }
     if (!f.redes.length) { setAviso('Elegí al menos una red.'); return }
-    const fechaAntes = dia?.fecha
-    const mueve = !nuevo && f.fecha !== fechaAntes && piezas.length > 0
+    const mueve = !nuevo && f.fecha !== dia.fecha && piezas.length > 0
     if (mueve && bloqueoDeDia(piezas)) { setAviso(`${bloqueoDeDia(piezas)} No se puede cambiar la fecha.`); return }
     setOcupado(true); setAviso('')
     const fila = {
@@ -52,13 +51,8 @@ export default function EditorDia({ dia, fecha, semanas, planes, planInicial, pi
     const { data, error } = nuevo
       ? await supabase.from('up_calendario').insert(fila).select('*').single()
       : await supabase.from('up_calendario').update(fila).eq('id', dia.id).select('*').single()
-    if (!error && mueve) {
-      // Los borradores van atados a la fecha: se mudan con el día.
-      const { error: eP } = await supabase.from('up_piezas').update({ fecha: f.fecha }).eq('fecha', fechaAntes)
-      if (eP) { setOcupado(false); setAviso('El día se movió, pero los borradores no: ' + eP.message); return }
-    }
     setOcupado(false)
-    if (error) { setAviso(error.code === '23505' ? 'Ya hay una publicación ese día: elegí otra fecha o editá la que está.' : 'No se pudo guardar: ' + error.message); return }
+    if (error) { setAviso('No se pudo guardar: ' + error.message); return }
     guardado(data)
   }
 

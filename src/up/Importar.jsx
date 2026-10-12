@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { supabase } from '../supabase.js'
 import { NOMBRE_RED } from './pipeline.js'
 import { fechaLarga } from './fechas.js'
-import { tablaDesdeTexto, tablaDesdeXlsx, diasDesdeTabla, PLANTILLA } from './importar.mjs'
-import { bloqueoDeDia, colorLibre } from './planes.mjs'
+import { tablaDesdeTexto, tablaDesdeXlsx, diasDesdeTabla, clavePublicacion, PLANTILLA } from './importar.mjs'
+import { colorLibre } from './planes.mjs'
 
 const sinTildes = t => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
@@ -12,17 +12,17 @@ function nombreDesdeArchivo(nombre) {
 }
 
 // Importar un calendario armado afuera (una planilla, un CSV o una tabla de un chat o un doc) como días de UP.
-export default function Importar({ planes, dias, piezasDe, hoy, cerrar, listo }) {
+export default function Importar({ planes, dias, hoy, cerrar, listo }) {
   const [texto, setTexto] = useState('')
   const [archivo, setArchivo] = useState('')
   const [resultado, setResultado] = useState(null) // { dias, errores }
   const [destino, setDestino] = useState('nuevo') // 'nuevo' | id de un plan
   const [nombrePlan, setNombrePlan] = useState('')
-  const [reemplazar, setReemplazar] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState('')
 
-  const existentes = new Map(dias.map(d => [d.fecha, d]))
+  const yaCargadas = new Set(dias.map(clavePublicacion))
+  const ocupados = new Set(dias.map(d => d.fecha))
   const conPlanPropio = resultado?.dias.some(d => d.plan)
 
   function analizar(tabla, nombre) {
@@ -48,15 +48,13 @@ export default function Importar({ planes, dias, piezasDe, hoy, cerrar, listo })
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  // Qué pasa con cada día: nuevo, reemplaza al que estaba, queda el que estaba, o no se puede tocar.
+  // Qué pasa con cada fila: entra nueva (sola o sumada a otras de ese día) o se saltea si ya está cargada igual.
   function destinoDe(d) {
-    const ya = existentes.get(d.fecha)
-    if (!ya) return 'nuevo'
-    if (!reemplazar) return 'queda'
-    return bloqueoDeDia(piezasDe(d.fecha)) ? 'bloqueado' : 'reemplaza'
+    if (yaCargadas.has(clavePublicacion(d))) return 'repetida'
+    return ocupados.has(d.fecha) ? 'suma' : 'nuevo'
   }
-  const ETIQUETA = { nuevo: 'Nuevo', reemplaza: 'Reemplaza el que estaba', queda: 'Ya hay uno: queda el que estaba', bloqueado: 'Ya hay uno aprobado o publicado: no se toca' }
-  const aImportar = resultado ? resultado.dias.filter(d => ['nuevo', 'reemplaza'].includes(destinoDe(d))) : []
+  const ETIQUETA = { nuevo: 'Nueva', suma: 'Nueva · se suma a ese día', repetida: 'Ya está cargada: se saltea' }
+  const aImportar = resultado ? resultado.dias.filter(d => destinoDe(d) !== 'repetida') : []
 
   async function importar() {
     if (destino === 'nuevo' && !nombrePlan.trim() && !conPlanPropio) { setAviso('Poné un nombre para el plan nuevo.'); return }
@@ -81,18 +79,10 @@ export default function Importar({ planes, dias, piezasDe, hoy, cerrar, listo })
           plan_id: d.plan ? await planPorNombre(d.plan) : elegido,
         })
       }
-      const nuevos = filas.filter(f => !existentes.has(f.fecha))
-      const reemplazos = filas.filter(f => existentes.has(f.fecha))
-      if (nuevos.length) {
-        const { error } = await supabase.from('up_calendario').insert(nuevos)
-        if (error) throw new Error(error.code === '23505' ? 'Alguna fecha ya tiene publicación (¿la cargaron recién?). Volvé a abrir la importación.' : error.message)
-      }
-      for (const f of reemplazos) {
-        const { error } = await supabase.from('up_calendario').update(f).eq('id', existentes.get(f.fecha).id)
-        if (error) throw new Error(error.message)
-      }
-      const quedaron = resultado.dias.length - aImportar.length
-      listo(`Importé ${filas.length} ${filas.length === 1 ? 'día' : 'días'}${reemplazos.length ? ` (${reemplazos.length} reemplazados)` : ''}.${quedaron ? ` ${quedaron} no se tocaron porque ya tenían publicación.` : ''}${resultado.errores.length ? ` ${resultado.errores.length} filas tenían problemas y no entraron.` : ''}`, filas[0]?.fecha)
+      const { error } = await supabase.from('up_calendario').insert(filas)
+      if (error) throw new Error(error.message)
+      const repetidas = resultado.dias.length - aImportar.length
+      listo(`Importé ${filas.length} ${filas.length === 1 ? 'publicación' : 'publicaciones'}.${repetidas ? ` ${repetidas} ya estaban cargadas y no se duplicaron.` : ''}${resultado.errores.length ? ` ${resultado.errores.length} filas tenían problemas y no entraron.` : ''}`, filas[0]?.fecha)
     } catch (e) {
       setAviso(e.message || 'No se pudo importar.')
       setOcupado(false)
@@ -128,7 +118,7 @@ export default function Importar({ planes, dias, piezasDe, hoy, cerrar, listo })
       ) : (
         <>
           <p className="up-importar-intro">
-            {archivo ? <b>{archivo}: </b> : null}{resultado.dias.length} {resultado.dias.length === 1 ? 'día listo' : 'días listos'}
+            {archivo ? <b>{archivo}: </b> : null}{resultado.dias.length} {resultado.dias.length === 1 ? 'publicación lista' : 'publicaciones listas'}
             {resultado.errores.length > 0 && <>, {resultado.errores.length} {resultado.errores.length === 1 ? 'fila con problemas' : 'filas con problemas'}</>}.
             {' '}<button className="up-link" onClick={() => { setResultado(null); setArchivo(''); setNombrePlan('') }}>Elegir otro</button>
           </p>
@@ -150,24 +140,17 @@ export default function Importar({ planes, dias, piezasDe, hoy, cerrar, listo })
                   </select>
                   {destino === 'nuevo' && <input className="up-campo" value={nombrePlan} onChange={e => setNombrePlan(e.target.value)} placeholder="Nombre del plan nuevo" aria-label="Nombre del plan nuevo" maxLength={60} />}
                 </fieldset>
-                {resultado.dias.some(d => existentes.has(d.fecha)) && (
-                  <fieldset className="up-campo-l up-redes-check">
-                    <legend>Si ese día ya tiene publicación</legend>
-                    <label><input type="radio" checked={!reemplazar} onChange={() => setReemplazar(false)} />Dejar la que está</label>
-                    <label><input type="radio" checked={reemplazar} onChange={() => setReemplazar(true)} />Reemplazarla</label>
-                  </fieldset>
-                )}
               </div>
 
               <div className="up-importar-tabla" role="table" aria-label="Días a importar">
                 {resultado.dias.map(d => {
                   const que = destinoDe(d)
                   return (
-                    <div key={d.fecha} role="row" className={`up-importar-fila i-${que}`}>
+                    <div key={d.fila} role="row" className={`up-importar-fila i-${que}`}>
                       <span role="cell" className="up-importar-fecha">{fechaLarga(d.fecha)}</span>
                       <span role="cell" className="up-importar-idea">{d.tema_dia}{(d.tema_semana || d.plan) && <small>{[d.plan && `Plan «${d.plan}»`, d.tema_semana].filter(Boolean).join(' · ')}</small>}</span>
                       <span role="cell" className="up-importar-redes">{d.redes.map(r => NOMBRE_RED[r]).join(', ')}{d.redes.includes('instagram') ? ` (${d.formato_instagram})` : ''}</span>
-                      <span role="cell" className="up-importar-que">{ETIQUETA[que]}{d.fecha < hoy && que !== 'queda' ? ' · ya pasó' : ''}</span>
+                      <span role="cell" className="up-importar-que">{ETIQUETA[que]}{d.fecha < hoy && que !== 'repetida' ? ' · ya pasó' : ''}</span>
                     </div>
                   )
                 })}
@@ -179,7 +162,7 @@ export default function Importar({ planes, dias, piezasDe, hoy, cerrar, listo })
           <div className="up-acciones">
             <button className="up-btn" disabled={ocupado} onClick={cerrar}>Cancelar</button>
             <button className="up-btn up-btn-p" disabled={ocupado || !aImportar.length} onClick={importar}>
-              {ocupado ? 'Importando…' : aImportar.length ? `Importar ${aImportar.length} ${aImportar.length === 1 ? 'día' : 'días'}` : 'No hay días para importar'}
+              {ocupado ? 'Importando…' : aImportar.length ? `Importar ${aImportar.length} ${aImportar.length === 1 ? 'publicación' : 'publicaciones'}` : 'No hay nada nuevo para importar'}
             </button>
           </div>
         </>

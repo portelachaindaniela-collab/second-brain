@@ -33,18 +33,21 @@ export function redesDelDia(dia) {
   return redes
 }
 
-// 1. Los borradores de hoy: después de las 08:00 cada red del día tiene que tener texto o estar esperando un dato.
-export function chequearBorradores({ dia, piezas, ahora }) {
+// 1. Los borradores de hoy: después de las 08:00 cada red de cada publicación del día tiene que tener texto o estar
+// esperando un dato. Un día puede tener varias publicaciones; cada borrador va atado a la suya (calendario_id).
+export function chequearBorradores({ dia, dias, piezas, ahora }) {
   const nombre = 'Borradores de hoy'
-  if (!dia) return r('borradores', nombre, 'ok', 'Hoy no hay publicación en el calendario.')
-  if (dia.salteado) return r('borradores', nombre, 'ok', 'Salteaste el día de hoy.')
-  const sinHacer = redesDelDia(dia).filter(red => {
-    const p = piezas.find(x => x.red === red)
+  const todas = dias ?? (dia ? [dia] : [])
+  if (!todas.length) return r('borradores', nombre, 'ok', 'Hoy no hay publicación en el calendario.')
+  const activas = todas.filter(d => !d.salteado)
+  if (!activas.length) return r('borradores', nombre, 'ok', todas.length === 1 ? 'Salteaste el día de hoy.' : 'Salteaste las publicaciones de hoy.')
+  const sinHacer = activas.flatMap(d => redesDelDia(d).filter(red => {
+    const p = piezas.find(x => x.red === red && (!d.id || !x.calendario_id || x.calendario_id === d.id))
     return !p || (!p.texto && p.estado !== 'falta_info')
-  })
-  if (!sinHacer.length) return r('borradores', nombre, 'ok', 'Están todos los borradores del día.')
-  if (horaAR(ahora) < HORA_FIN_PIPELINE) return r('borradores', nombre, 'ok', `Faltan ${sinHacer.map(x => NOMBRE_RED[x]).join(', ')}; los agentes trabajan hasta las 07:52.`)
-  return r('borradores', nombre, 'falla', `No se generó ${sinHacer.map(x => NOMBRE_RED[x]).join(', ')}. Mirá el registro de corridas o tocá Generar en Hoy.`)
+  }).map(red => (activas.length > 1 && d.tema_dia ? `${NOMBRE_RED[red]} de «${d.tema_dia}»` : NOMBRE_RED[red])))
+  if (!sinHacer.length) return r('borradores', nombre, 'ok', activas.length === 1 ? 'Están todos los borradores del día.' : `Están todos los borradores de las ${activas.length} publicaciones de hoy.`)
+  if (horaAR(ahora) < HORA_FIN_PIPELINE) return r('borradores', nombre, 'ok', `Faltan ${sinHacer.join(', ')}; los agentes trabajan hasta las 07:52.`)
+  return r('borradores', nombre, 'falla', `No se generó ${sinHacer.join(', ')}. Mirá el registro de corridas o tocá Generar en Hoy.`)
 }
 
 // 2. Las corridas de las últimas 24 horas: errores, corridas colgadas y cortes de cuota seguidos. Un error que

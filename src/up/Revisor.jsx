@@ -32,7 +32,7 @@ function Caso({ pieza, alResolver }) {
     setOcupada('regenerar'); setAviso('')
     const { error } = await supabase.from('up_piezas').update({ texto: null, contenido: null, estado: 'pendiente', problemas: null, motivo_revision: null, intentos_revision: 0 }).eq('id', pieza.id)
     if (error) { setOcupada(''); setAviso('No se pudo preparar la pieza: ' + error.message); return }
-    const mensaje = await correrPipeline(pieza.fecha)
+    const mensaje = await correrPipeline(pieza.fecha, false, pieza.calendario_id)
     setOcupada('')
     setAviso(mensaje)
     alResolver()
@@ -85,7 +85,7 @@ export default function Revisor({ alCambiar }) {
 
   const cargar = useCallback(async () => {
     const { data, error } = await supabase.from('up_piezas')
-      .select('id,fecha,red,texto,problemas,motivo_revision,intentos_revision,up_calendario(tema_dia)')
+      .select('id,calendario_id,fecha,red,texto,problemas,motivo_revision,intentos_revision,up_calendario(tema_dia)')
       .eq('estado', 'revision').order('fecha')
     if (error) { setError('No se pudieron cargar los borradores en revisión: ' + error.message); return }
     setPiezas(data || [])

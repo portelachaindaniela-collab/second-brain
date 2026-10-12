@@ -53,7 +53,7 @@ test('historial: solo texto, últimos 20', () => {
 test('redacción: valida el pedido', () => {
   assert.equal(validarRedaccion({ red: 'x', pedido: ' ' }).ok, false)
   assert.equal(validarRedaccion({ red: 'tiktok', pedido: 'a' }).ok, false)
-  assert.deepEqual(validarRedaccion({ red: 'x', pedido: 'acortalo', texto: 't', fecha: 'mal' }), { ok: true, args: { red: 'x', fecha: null, texto: 't', pedido: 'acortalo' } })
+  assert.deepEqual(validarRedaccion({ red: 'x', pedido: 'acortalo', texto: 't', fecha: 'mal' }), { ok: true, args: { red: 'x', fecha: null, calendario_id: null, texto: 't', pedido: 'acortalo' } })
 })
 
 test('redacción: la Ficha y la forma de la red van en el sistema', () => {
@@ -97,4 +97,11 @@ test('busca planes sin importar tildes', () => {
 test('bloquea días aprobados o publicados', () => {
   assert.equal(bloqueoDeDia([{ estado: 'pendiente' }]), '')
   assert.notEqual(bloqueoDeDia([{ estado: 'aprobado' }]), '')
+})
+
+test('las acciones aceptan la publicación puntual cuando el día tiene varias', () => {
+  const id = '11111111-2222-3333-4444-555555555555'
+  assert.deepEqual(validarAccion('aprobar_pieza', { fecha: '2026-10-08', red: 'x', publicacion_id: id }).args, { fecha: '2026-10-08', red: 'x', publicacion_id: id })
+  assert.deepEqual(validarAccion('borrar_dia', { fecha: '2026-10-08', publicacion_id: 'cualquiera' }).args, { fecha: '2026-10-08' })
+  assert.equal(validarAccion('editar_dia', { fecha: '2026-10-08', publicacion_id: id, tema_dia: 'Nueva' }).args.publicacion_id, id)
 })
