@@ -6,6 +6,7 @@ import { ESTADOS, NOMBRE_RED, estadoVisible, correrPipeline } from './pipeline.j
 import EditorDia from './EditorDia.jsx'
 import Publicacion from './Publicacion.jsx'
 import Planes from './Planes.jsx'
+import Importar from './Importar.jsx'
 import { marcaCalendario } from './edicion.mjs'
 import { moverMes, diasVisibles, cuantosPorPlan, bloqueoDeDia, separarBorrables } from './planes.mjs'
 
@@ -82,6 +83,7 @@ export default function Calendario({ abrirEdicion }) {
   const [sinPlanVisible, setSinPlanVisible] = useState(() => leer(CLAVE_SIN_PLAN, '1') === '1')
   const [seleccion, setSeleccion] = useState(null) // Set de fechas mientras se elige para borrar varias; null fuera de ese modo
   const [borrandoVarios, setBorrandoVarios] = useState(false)
+  const [importando, setImportando] = useState(false)
   const detalle = useRef(null)
 
   const cargar = useCallback(async () => {
@@ -144,6 +146,13 @@ export default function Calendario({ abrirEdicion }) {
     await cargar()
     const n = borrables.length
     setAviso(`${n === 1 ? 'Borré 1 publicación' : `Borré ${n} publicaciones`}.${bloqueados.length ? ` No borré ${bloqueados.length} porque ${bloqueados.length === 1 ? 'tiene' : 'tienen'} algo aprobado o publicado (${bloqueados.map(d => Number(d.fecha.slice(8)) + '/' + Number(d.fecha.slice(5, 7))).join(', ')}).` : ''}`)
+  }
+
+  async function importado(mensaje, fecha) {
+    setImportando(false)
+    await cargar()
+    if (fecha) { setMes(claveMes(fecha)); setElegido(fecha) }
+    setAviso(mensaje)
   }
 
   function irA(clave) { setMes(clave); setBorrando(false) }
@@ -235,7 +244,8 @@ export default function Calendario({ abrirEdicion }) {
         </div>
         {seleccion
           ? <button className="up-btn" onClick={terminarSeleccion}>Listo</button>
-          : <button className="up-btn" onClick={empezarSeleccion} disabled={!visibles.size}>Seleccionar</button>}
+          : <button className="up-btn" onClick={empezarSeleccion} disabled={!visibles.size || importando}>Seleccionar</button>}
+        <button className="up-btn" onClick={() => { terminarSeleccion(); setEditando(null); setImportando(true) }} disabled={importando}>Importar</button>
         <button className="up-btn up-btn-p" onClick={nuevaIdea} disabled={!!seleccion}>+ Nueva idea</button>
       </div>
 
@@ -259,6 +269,9 @@ export default function Calendario({ abrirEdicion }) {
         </div>
       )}
 
+      {importando ? (
+        <Importar planes={planes} dias={datos.dias} piezasDe={piezasDe} hoy={hoy} cerrar={() => setImportando(false)} listo={importado} />
+      ) : (
       <div className="up-cal">
         <section className="up-cal-mes">
           {vista === 'mes' ? (
@@ -373,6 +386,7 @@ export default function Calendario({ abrirEdicion }) {
           </section>
         </div>
       </div>
+      )}
     </>
   )
 }
