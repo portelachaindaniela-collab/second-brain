@@ -17,12 +17,6 @@ function semanaActual() {
   return [inicio, fin]
 }
 
-function textoFiltros({ busqueda, sinLeer }) {
-  const partes = [sinLeer ? 'solo sin leer' : 'todos los mails']
-  if (busqueda.trim()) partes.push(`asunto con "${busqueda.trim()}"`)
-  return partes.join(' · ')
-}
-
 export default function MailCalendario({ tab, revision, proyectos, google, conectarGoogle, abrirMail, sincronizar, sincronizando, errorSync }) {
   const [filtros, setFiltros] = useState({ busqueda: '', sinLeer: false })
   const [extra, setExtra] = useState(0)
@@ -87,18 +81,16 @@ export default function MailCalendario({ tab, revision, proyectos, google, conec
         </div>
         <div ref={bloqueMail}>
           <Bloque titulo="Mail">
+            <div className="action-row mail-filtros">
+              <input aria-label="Buscar por asunto" placeholder="Buscar por asunto" value={filtros.busqueda} onChange={e => setFiltros(f => ({ ...f, busqueda: e.target.value }))} />
+              <label className="check-label"><input type="checkbox" checked={filtros.sinLeer} onChange={e => setFiltros(f => ({ ...f, sinLeer: e.target.checked }))} />Solo sin leer</label>
+            </div>
             <Bandeja enBloque filtros={filtros} revision={revision} abrirMail={abrirMail} />
           </Bloque>
         </div>
       </Bloques>
 
       <Pie titulo="Google" resumen={pieGoogle.resumen} boton={pieGoogle.boton} onBoton={pieGoogle.onBoton} ocupado={sincronizando} nota={errorSync} />
-      <Pie titulo="Filtros de mail" resumen={textoFiltros(filtros)} boton="Filtrar">
-        <div className="action-row" style={{ marginBottom: 0 }}>
-          <input aria-label="Buscar por asunto" placeholder="Buscar por asunto" value={filtros.busqueda} onChange={e => setFiltros(f => ({ ...f, busqueda: e.target.value }))} />
-          <label className="check-label"><input type="checkbox" checked={filtros.sinLeer} onChange={e => setFiltros(f => ({ ...f, sinLeer: e.target.checked }))} />Solo sin leer</label>
-        </div>
-      </Pie>
       <Pie titulo="Comunidad" resumen={`${EVENTOS_COMUNIDAD.length} eventos de tu web para sumar al calendario`}
         boton={importando ? 'Importando…' : 'Importar'} onBoton={importar} ocupado={importando} nota={textoImportacion(importacion)} />
     </div>
