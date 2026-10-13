@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { LogoRed } from './logos.jsx'
+import { resumenAdjuntos } from './adjuntos.mjs'
 import { hoyIso, partesFecha, fechaLarga } from './fechas.js'
 import { correrPipeline, ESTADOS, NOMBRE_RED, REDES_AUTOMATICAS, estadoVisible } from './pipeline.js'
 import { conResaltados } from './resaltar.jsx'
 
-const CAMPOS_PIEZA = 'id,calendario_id,fecha,red,texto,estado,pregunta,motivo_revision,problemas,intentos_revision,assets,assets_texto,url_publicada,error_publicacion,formato:contenido->>formato'
+const CAMPOS_PIEZA = 'id,calendario_id,fecha,red,adjuntos,texto,estado,pregunta,motivo_revision,problemas,intentos_revision,assets,assets_texto,url_publicada,error_publicacion,formato:contenido->>formato'
 
 // Las placas del carrusel. El diseñador las arma con la plantilla cada 15 minutos; si el texto cambió, las vuelve a armar.
 function Placas({ pieza }) {
@@ -59,6 +60,7 @@ function Pieza({ red, pieza, principal, titulo, guardar, envio }) {
           <ul>{pieza.motivo_revision.split('\n').map((m, i) => <li key={i}>{m}</li>)}</ul>
         </div>
       )}
+      {pieza?.adjuntos?.length > 0 && <p className="up-adjuntos-nota">Adjunto: {resumenAdjuntos(pieza.adjuntos)}{red === 'linkedin' ? ' (sale con el post)' : ' (bajalo desde Redes para publicarlo)'}.</p>}
       {pieza && !editando && <Placas pieza={pieza} />}
       {editando ? (
         <textarea className="up-editor" value={borrador} onChange={e => setBorrador(e.target.value)} rows={Math.max(8, borrador.split('\n').length + 2)} aria-label={`Texto de ${NOMBRE_RED[red]}`} />

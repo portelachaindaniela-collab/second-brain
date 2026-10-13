@@ -4,11 +4,13 @@ import { LogoRed } from './logos.jsx'
 import { hoyIso, fechaLarga } from './fechas.js'
 import { ESTADOS, NOMBRE_RED, estadoVisible } from './pipeline.js'
 import { medir, postsDeX, captionDe, recorte } from './edicion.mjs'
+import AdjuntosPieza from './AdjuntosPieza.jsx'
+import { pesoLegible } from './adjuntos.mjs'
 
 // Mesa de trabajo: el texto de cada red del día en un editor simple y, al lado, cómo se ve en cada red mientras se
 // escribe. El asistente puede proponer una versión; entra al editor solo si la dueña la usa, y se guarda al tocar
 // Guardar o Aprobar.
-const CAMPOS = 'id,fecha,red,texto,estado,assets,assets_texto,url_publicada,error_publicacion,formato:contenido->>formato'
+const CAMPOS = 'id,calendario_id,fecha,red,texto,estado,assets,assets_texto,adjuntos,url_publicada,error_publicacion,formato:contenido->>formato'
 const NOMBRE = 'Daniela Portela Chain'
 const USUARIO = 'danielachain'
 const PEDIDOS = {
@@ -45,7 +47,24 @@ function Contador({ red, texto }) {
 function Avatar() { return <span className="up-sim-avatar" aria-hidden="true">DP</span> }
 
 // Cómo se ve en cada red. Es una simulación: la tipografía y el corte del «ver más» son aproximados.
-function Simulacion({ red, texto, pieza }) {
+// Lo adjunto, como se ve debajo del texto: el documento como tarjeta, las imágenes en grilla.
+function MediaSim({ adjuntos = [], urls = {} }) {
+  if (!adjuntos.length) return null
+  const doc = adjuntos.find(a => a.tipo === 'documento')
+  if (doc) return <div className="up-sim-doc"><b>{doc.nombre.replace(/\.[^.]+$/, '')}</b><small>{doc.nombre.split('.').pop().toUpperCase()} · {pesoLegible(doc.bytes)} · se desliza como carrusel</small></div>
+  const imgs = adjuntos.filter(a => a.tipo === 'imagen')
+  return (
+    <div className={`up-sim-imgs n${Math.min(imgs.length, 4)}`}>
+      {imgs.slice(0, 4).map((a, i) => (
+        <span key={a.ruta} style={urls[a.ruta] ? { backgroundImage: `url("${urls[a.ruta]}")` } : undefined}>
+          {i === 3 && imgs.length > 4 && <b>+{imgs.length - 4}</b>}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function Simulacion({ red, texto, pieza, urls }) {
   const [abierto, setAbierto] = useState(false)
   const [placa, setPlaca] = useState(0)
   const vacio = !texto.trim()
@@ -57,6 +76,7 @@ function Simulacion({ red, texto, pieza }) {
         {vacio ? <p className="up-sim-vacio">Todavía no hay texto para LinkedIn.</p> : (
           <p className="up-sim-texto">{abierto || !r.cortado ? texto.trim() : r.visible}{r.cortado && !abierto && <>… <button className="up-sim-mas" onClick={() => setAbierto(true)}>ver más</button></>}</p>
         )}
+        <MediaSim adjuntos={pieza?.adjuntos} urls={urls} />
         <footer><span>Recomendar</span><span>Comentar</span><span>Compartir</span></footer>
       </article>
     )
@@ -78,6 +98,7 @@ function Simulacion({ red, texto, pieza }) {
             </div>
           )
         })}
+        {!vacio && <MediaSim adjuntos={pieza?.adjuntos} urls={urls} />}
       </article>
     )
   }
@@ -103,6 +124,7 @@ function Simulacion({ red, texto, pieza }) {
           </>
         ) : <p>{formato === 'reel' ? 'Reel: el video lo subís vos.' : vacio ? 'Sin placas todavía.' : 'Las placas se arman unos minutos después de guardar este texto.'}</p>}
       </div>
+      <MediaSim adjuntos={pieza?.adjuntos} urls={urls} />
       {vacio ? <p className="up-sim-vacio">Todavía no hay texto para Instagram.</p> : (
         <p className="up-sim-texto"><b>{USUARIO}</b> {abierto || !r.cortado ? caption : r.visible}{r.cortado && !abierto && <>… <button className="up-sim-mas" onClick={() => setAbierto(true)}>más</button></>}</p>
       )}
@@ -121,6 +143,7 @@ export default function Mesa({ foco }) {
   const [pidiendo, setPidiendo] = useState(false)
   const [pedido, setPedido] = useState('')
   const [propuesta, setPropuesta] = useState(null)
+  const [miniaturas, setMiniaturas] = useState({}) // red → { ruta: link firmado } para ver las imágenes adjuntas
   // En la lista de días: lo que viene y las últimas dos semanas.
   const [desde] = useState(() => new Date(Date.now() - 14 * 86_400_000).toLocaleDateString('en-CA'))
 
@@ -158,6 +181,15 @@ export default function Mesa({ foco }) {
   function cambiarDia(id) {
     if (redes.some(sinGuardar) && !window.confirm('Hay cambios sin guardar. ¿Cambiar de publicación igual?')) return
     setPubId(id); setPropuesta(null); setPidiendo(false); setAviso(null)
+  }
+
+  // Adjuntar se puede antes de escribir: si la red todavía no tiene pieza, se crea vacía.
+  async function asegurarPieza() {
+    if (actual) return actual
+    const { data, error } = await supabase.from('up_piezas').insert({ fecha: dia.fecha, red: activa, calendario_id: dia.id, contenido: activa === 'instagram' ? { formato: dia.formato_instagram } : null }).select(CAMPOS).single()
+    if (error) throw new Error('No se pudo preparar la publicación: ' + error.message)
+    setPiezas(ps => [...ps, data])
+    return data
   }
 
   function escribir(valor) { setTextos(t => ({ ...t, [activa]: valor })); setAviso(null) }
@@ -235,6 +267,9 @@ export default function Mesa({ foco }) {
           </div>
         </div>
 
+        <AdjuntosPieza key={`${pubId}-${activa}`} red={activa} pieza={actual} campos={CAMPOS} editable={!publicada} asegurarPieza={asegurarPieza}
+          alCambiar={p => setPiezas(ps => [...ps.filter(x => x.id !== p.id), p])} alVer={(r, urls) => setMiniaturas(m => ({ ...m, [r]: urls }))} />
+
         {!publicada && (pidiendo ? (
           <form className="up-mesa-pedido" onSubmit={e => { e.preventDefault(); pedir() }}>
             <div className="up-mono-k">¿Qué hago con el texto de {NOMBRE_RED[activa]}?</div>
@@ -275,7 +310,7 @@ export default function Mesa({ foco }) {
 
       <aside className="up-mesa-sim" aria-label="Simulación">
         <div className="up-mono-k up-mesa-sim-cab">Simulación · cómo se ve en cada red<span>en vivo</span></div>
-        {redes.map(r => <Simulacion key={`${pubId}-${r}`} red={r} texto={textos[r] ?? ''} pieza={pieza(r)} />)}
+        {redes.map(r => <Simulacion key={`${pubId}-${r}`} red={r} texto={textos[r] ?? ''} pieza={pieza(r)} urls={miniaturas[r]} />)}
       </aside>
     </div>
   )

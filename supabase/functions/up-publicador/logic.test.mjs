@@ -38,3 +38,15 @@ test('link al post y mensajes de error', () => {
   assert.match(motivoErrorLinkedIn(401, {}), /Reconectala/)
   assert.match(motivoErrorLinkedIn(500, { message: 'boom' }), /500: boom/)
 })
+
+test('arma el post con documento o imágenes', async () => {
+  const { cuerpoPostLinkedIn, planDeAdjuntos } = await import('./logic.mjs')
+  assert.equal(cuerpoPostLinkedIn('p1', 'hola').content, undefined)
+  assert.deepEqual(cuerpoPostLinkedIn('p1', 'hola', { documento: { urn: 'urn:li:document:1', titulo: 'Propuesta' } }).content, { media: { title: 'Propuesta', id: 'urn:li:document:1' } })
+  assert.deepEqual(cuerpoPostLinkedIn('p1', 'hola', { imagenes: ['urn:li:image:1'] }).content, { media: { id: 'urn:li:image:1' } })
+  assert.deepEqual(cuerpoPostLinkedIn('p1', 'hola', { imagenes: ['a', 'b'] }).content, { multiImage: { images: [{ id: 'a' }, { id: 'b' }] } })
+  assert.equal(planDeAdjuntos([{ tipo: 'documento', nombre: 'Propuesta Olé.pdf' }]).documento.titulo, 'Propuesta Olé')
+  assert.equal(planDeAdjuntos([{ tipo: 'imagen' }, { tipo: 'imagen' }]).imagenes.length, 2)
+  assert.match(planDeAdjuntos([{ tipo: 'documento', nombre: 'a.pdf' }, { tipo: 'imagen' }]).error, /uno u otro/)
+  assert.deepEqual(planDeAdjuntos([]), { imagenes: [] })
+})

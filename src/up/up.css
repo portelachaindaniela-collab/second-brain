@@ -593,3 +593,28 @@ h4.up-mono-k { color: var(--up-tinta-2); font-weight: 600; margin-bottom: 8px; }
 .up-cal-varias small { color: var(--up-tinta-3); }
 .up-cal-otra { display: block; margin: 14px 0 0; }
 .up-portada-otra { margin-top: 36px; padding-top: 24px; border-top: 3px double var(--up-tinta); }
+
+/* Redes: adjuntos de cada publicación (documento o imágenes) */
+.up-adjuntos { margin-top: 14px; padding: 12px 14px; border: 1px dashed var(--up-filete); border-radius: 4px; background: #FFFDF8; }
+.up-adjuntos.arrastrando { border-color: var(--up-tinta); background: #F3EEE2; }
+.up-adjuntos-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.up-adjuntos-lista { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.up-adjuntos-lista li { display: flex; align-items: center; gap: 10px; font: 500 13px/18px var(--up-sans); }
+.up-adjunto-ico { flex-shrink: 0; width: 34px; padding: 3px 0; border-radius: 3px; background: var(--up-tinta); color: var(--up-papel); font: 700 9.5px/1 var(--up-sans); letter-spacing: .04em; text-align: center; }
+.up-adjunto-ico.t-imagen { background: #3D6B4F; }
+.up-adjunto-nombre { flex: 1; min-width: 0; padding: 0; border: 0; background: none; text-align: left; color: var(--up-link); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-adjunto-nombre:hover { text-decoration: underline; }
+.up-adjuntos-lista small { color: var(--up-tinta-3); font-size: 11.5px; }
+.up-adjunto-quitar { width: 24px; height: 24px; border: 0; background: none; font-size: 17px; color: var(--up-tinta-3); }
+.up-adjunto-quitar:hover { color: var(--up-error); }
+.up-adjuntos-vacio, .up-adjuntos-nota { margin: 8px 0 0; font: italic 400 13px/18px var(--up-serif); color: var(--up-tinta-3); }
+.up-sim-doc { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 4px; padding: 14px; border: 1px solid #DDD8CC; border-radius: 6px; background: #F3F2EF; }
+.up-sim-doc b { font: 700 13.5px/1.3 var(--up-sans); }
+.up-sim-doc small { font: 500 11.5px/1.3 var(--up-sans); color: #666; }
+.up-sim-imgs { display: grid; gap: 2px; margin: 10px 0 4px; }
+.up-sim-imgs.n2, .up-sim-imgs.n4 { grid-template-columns: 1fr 1fr; }
+.up-sim-imgs.n3 { grid-template-columns: 1fr 1fr; }
+.up-sim-imgs.n3 span:first-child { grid-column: span 2; }
+.up-sim-imgs span { position: relative; aspect-ratio: 4 / 3; background: #E7E3D8 center / cover no-repeat; }
+.up-sim-imgs.n1 span { aspect-ratio: 16 / 10; }
+.up-sim-imgs b { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .45); color: #fff; font: 700 18px/1 var(--up-sans); }

@@ -84,9 +84,9 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
     case "estado_hoy": {
       const [d, p] = await Promise.all([
         db.from("up_calendario").select("id,fecha,tema_semana,tema_dia,redes,formato_instagram,tema_instagram,salteado").eq("fecha", hoy).order("created_at"),
-        db.from("up_piezas").select("calendario_id,red,estado,pregunta,motivo_revision,error_publicacion,url_publicada").eq("fecha", hoy),
+        db.from("up_piezas").select("calendario_id,red,estado,pregunta,motivo_revision,error_publicacion,url_publicada,adjuntos").eq("fecha", hoy),
       ]);
-      return { hoy, publicaciones: (d.data || []).map((x: any) => ({ publicacion_id: x.id, ...x, id: undefined, piezas: (p.data || []).filter((q: any) => q.calendario_id === x.id).map(({ calendario_id, ...q }: any) => q) })) };
+      return { hoy, publicaciones: (d.data || []).map((x: any) => ({ publicacion_id: x.id, ...x, id: undefined, piezas: (p.data || []).filter((q: any) => q.calendario_id === x.id).map(({ calendario_id, adjuntos, ...q }: any) => ({ ...q, adjuntos: (adjuntos || []).map((j: any) => j.nombre) })) })) };
     }
     case "pendientes": {
       const { data } = await db.from("up_piezas").select("fecha,red,estado,pregunta,motivo_revision,error_publicacion")
@@ -118,7 +118,7 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
         sin_plan: dias.filter((y: any) => !(pl.data || []).some((x: any) => x.id === y.plan_id)).length };
     }
     case "ver_borrador": {
-      let q = db.from("up_piezas").select("fecha,red,estado,texto,problemas,up_calendario(tema_dia)").eq("fecha", a?.fecha).eq("red", a?.red);
+      let q = db.from("up_piezas").select("fecha,red,estado,texto,problemas,adjuntos,up_calendario(tema_dia)").eq("fecha", a?.fecha).eq("red", a?.red);
       if (a?.publicacion_id) q = q.eq("calendario_id", a.publicacion_id);
       const { data } = await q;
       if (!data?.length) return { error: "No hay pieza para esa fecha y red." };

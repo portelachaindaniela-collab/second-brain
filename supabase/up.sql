@@ -328,3 +328,16 @@ begin
 end $f$;
 create trigger up_piezas_siguen_fecha after update of fecha on public.up_calendario
   for each row when (old.fecha is distinct from new.fecha) execute function public.up_piezas_siguen_fecha();
+
+-- Adjuntos de las publicaciones (2026-10-12): documentos (PDF, PowerPoint, Word) o imágenes que salen con el post.
+-- Bucket privado: cada dueña solo ve su carpeta (<owner_id>/...). El publicador los baja con permisos de servicio y
+-- los sube a LinkedIn; para X e Instagram quedan para bajarlos y publicarlos a mano.
+insert into storage.buckets (id, name, public, file_size_limit) values ('up-adjuntos', 'up-adjuntos', false, 104857600);
+create policy "dueña lee sus adjuntos de UP" on storage.objects for select to authenticated
+  using (bucket_id = 'up-adjuntos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "dueña sube sus adjuntos de UP" on storage.objects for insert to authenticated
+  with check (bucket_id = 'up-adjuntos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "dueña borra sus adjuntos de UP" on storage.objects for delete to authenticated
+  using (bucket_id = 'up-adjuntos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+-- [{ ruta, nombre, tipo: 'documento' | 'imagen', mime, bytes }]
+alter table public.up_piezas add column adjuntos jsonb not null default '[]'::jsonb;

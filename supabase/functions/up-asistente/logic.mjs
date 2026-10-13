@@ -27,7 +27,7 @@ export const GUIA = `Cómo funciona UP (app de publicaciones de Daniela en Linke
 - Diseñador: arma las placas de los carruseles (GitHub Action cada 15 minutos). Si se edita el texto, las vuelve a armar.
 - Publicador: sube a LinkedIn lo aprobado del día a la hora elegida en Redes (hay que conectar LinkedIn). X e Instagram todavía se publican a mano y se marca "Publicado".
 - Ficha de datos: la única fuente de hechos y números de los posts. Los agentes nunca inventan datos.
-- Redes: la mesa de trabajo (editor de cada red con la simulación de cómo se ve; el asistente puede proponer una versión), conectar LinkedIn, elegir horarios y conectar Google Sheets, donde queda el historial de lo publicado con sus métricas.
+- Redes: la mesa de trabajo (editor de cada red con la simulación de cómo se ve; el asistente puede proponer una versión; con «+ Adjuntar» se suma un documento —PDF, PowerPoint o Word, que en LinkedIn se ve como carrusel— o hasta 20 imágenes: en LinkedIn salen con el post programado y en X e Instagram quedan para bajarlas y publicarlas a mano), conectar LinkedIn, elegir horarios y conectar Google Sheets, donde queda el historial de lo publicado con sus métricas.
 - Agentes: la sala de control con el trabajo de cada agente y Noruega.
 - Noruega: el agente madre; cada 30 minutos chequea que todo funcione y avisa qué hacer.`
 
