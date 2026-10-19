@@ -6,6 +6,7 @@ import ProyectoShell from './screens/proyecto/ProyectoShell.jsx'
 import Pantalla from './screens/Pantalla.jsx'
 import Mail from './screens/Mail.jsx'
 import Metricas from './screens/Metricas.jsx'
+import BusquedasGoogle from './screens/BusquedasGoogle.jsx'
 import Cursos from './screens/Cursos.jsx'
 import Trabajadores from './screens/Trabajadores.jsx'
 import Eventos from './screens/Eventos.jsx'
@@ -230,6 +231,7 @@ export default function App() {
           <li><button className={`nav-item${pantalla === 'postulaciones' ? ' active' : ''}`} onClick={() => setPantalla('postulaciones')}>Postulaciones</button></li>
           <li><button className={`nav-item${pantalla === 'nicho' ? ' active' : ''}`} onClick={() => setPantalla('nicho')}>Mi nicho</button></li>
           <li><button className={`nav-item${pantalla === 'metricas' ? ' active' : ''}`} onClick={() => setPantalla('metricas')}>Métricas</button></li>
+          <li><button className={`nav-item${pantalla === 'busquedas' ? ' active' : ''}`} onClick={() => setPantalla('busquedas')}>Búsquedas en Google</button></li>
           <li><button className={`nav-item${pantalla === 'cursos' ? ' active' : ''}`} onClick={() => setPantalla('cursos')}>Cursos</button></li>
         </ul>
 
@@ -295,6 +297,7 @@ export default function App() {
             {pantalla === 'postulaciones' && 'Postulaciones'}
             {pantalla === 'nicho' && 'Mi nicho'}
             {pantalla === 'metricas' && 'Métricas'}
+            {pantalla === 'busquedas' && 'Búsquedas en Google'}
             {pantalla === 'cursos' && 'Cursos'}
             {pantalla === 'escribir' && 'Escribir'}
             {pantalla === 'proyecto' && (proyectoActual?.name || 'Proyecto')}
@@ -314,6 +317,7 @@ export default function App() {
           {pantallasVisitadas.has('postulaciones') && <div hidden={pantalla !== 'postulaciones'}><Postulaciones /></div>}
           {pantallasVisitadas.has('nicho') && <div hidden={pantalla !== 'nicho'}><MiNicho /></div>}
           {pantallasVisitadas.has('metricas') && <div hidden={pantalla !== 'metricas'}><Metricas key={session.user.id} ownerId={session.user.id} /></div>}
+          {pantallasVisitadas.has('busquedas') && <div hidden={pantalla !== 'busquedas'}><BusquedasGoogle key={session.user.id} /></div>}
           {pantallasVisitadas.has('cursos') && <div hidden={pantalla !== 'cursos'}><Cursos key={revisionBot} /></div>}
           {pantallasVisitadas.has('escribir') && <div hidden={pantalla !== 'escribir'}><Suspense fallback={<p className="empty-state">Abriendo el editor…</p>}><Escritor key={session.user.id} ownerId={session.user.id} /></Suspense></div>}
           {pantalla === 'proyecto' && proyectoActual && <ProyectoShell hoja={hojaProyecto} setHoja={setHojaProyecto} key={`${proyectoActual.id}-${revisionBot}`} abrirMail={abrirMail} proyecto={proyectoActual} recargarProyectos={cargarProyectos} />}
