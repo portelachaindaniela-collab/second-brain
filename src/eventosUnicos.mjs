@@ -18,6 +18,20 @@ export function diasDelEvento(evento) {
 
 const nombre = e => (e.title || '').trim().toLowerCase()
 
+const mismoHorario = (a, b) => !a.all_day && !b.all_day && a.ends_at && b.ends_at
+  && new Date(a.starts_at).getTime() === new Date(b.starts_at).getTime()
+  && new Date(a.ends_at).getTime() === new Date(b.ends_at).getTime()
+
+// Mismo horario exacto en otro calendario = la misma cosa vista desde dos lados (ej. el bloque "Testing QA" propio
+// y la clase "Módulo 5: …" del calendario del curso). Se muestra una sola vez con los dos nombres, el más corto
+// primero; `titulo_original` guarda el del evento que queda, para editarlo sin pisarlo en Google.
+function unirMismoHorario(a, b) {
+  const base = !a.description && b.description ? b : a
+  const titulos = [...new Set([a.title, b.title].map(t => (t || '').trim()).filter(Boolean))]
+    .sort((x, y) => x.length - y.length)
+  return { ...base, title: titulos.join(' · '), titulo_original: base.titulo_original ?? base.title }
+}
+
 // Mismo título y días que se pisan = el mismo evento cargado dos veces (ej. el importado de
 // Comunidad y el que Gmail crea solo desde el mail de la entrada). Se queda el que tiene horario.
 export function unirRepetidos(eventos) {
@@ -29,8 +43,10 @@ export function unirRepetidos(eventos) {
       const [otroDesde, otroHasta] = diasDelEvento(otro)
       return desde <= otroHasta && otroDesde <= hasta
     })
-    if (i === -1) resultado.push(evento)
-    else if (resultado[i].all_day && !evento.all_day) resultado[i] = evento
+    if (i !== -1) { if (resultado[i].all_day && !evento.all_day) resultado[i] = evento; continue }
+    const j = resultado.findIndex(otro => otro.calendar_id !== evento.calendar_id && mismoHorario(otro, evento))
+    if (j !== -1) resultado[j] = unirMismoHorario(resultado[j], evento)
+    else resultado.push(evento)
   }
   return resultado
 }

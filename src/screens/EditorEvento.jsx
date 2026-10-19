@@ -12,7 +12,7 @@ function defaultInicio() {
 export default function EditorEvento({ evento, cerrar, guardado, eliminado, proyectoId }) {
   const esNuevo = !evento?.id
   const inicioBase = evento?.starts_at || defaultInicio()
-  const [titulo, setTitulo] = useState(evento?.title || '')
+  const [titulo, setTitulo] = useState(evento?.titulo_original ?? evento?.title ?? '')
   const [lugar, setLugar] = useState(evento?.location || '')
   const [descripcion, setDescripcion] = useState(evento?.description || '')
   const [todoElDia, setTodoElDia] = useState(!!evento?.all_day)

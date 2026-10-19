@@ -22,3 +22,23 @@ test('no junta eventos con el mismo nombre en días distintos', () => {
 test('un evento de todo el día ocupa sus días reales, sin correrse por la zona horaria', () => {
   assert.deepEqual(diasDelEvento(importado), ['2026-09-29', '2026-09-30'])
 })
+
+test('junta el mismo horario en dos calendarios y muestra los dos nombres, el corto primero', () => {
+  const bloque = { id: 'p', title: 'Testing QA', calendar_id: 'propio', all_day: false, starts_at: '2026-10-20T21:30:00+00:00', ends_at: '2026-10-20T23:30:00+00:00' }
+  const clase = { id: 'c', title: 'Módulo 5: Ejecución de Pruebas', calendar_id: 'curso', description: 'link', all_day: false, starts_at: '2026-10-20 21:30:00+00', ends_at: '2026-10-20 23:30:00+00' }
+  for (const orden of [[bloque, clase], [clase, bloque]]) {
+    const [unido, ...resto] = unirRepetidos(orden)
+    assert.equal(resto.length, 0)
+    assert.equal(unido.id, 'c')
+    assert.equal(unido.title, 'Testing QA · Módulo 5: Ejecución de Pruebas')
+    assert.equal(unido.titulo_original, 'Módulo 5: Ejecución de Pruebas')
+  }
+})
+
+test('no junta horarios iguales del mismo calendario ni horarios que solo se pisan', () => {
+  const a = { id: 'a', title: 'Reunión A', calendar_id: 'x', all_day: false, starts_at: '2026-10-20T13:00:00Z', ends_at: '2026-10-20T14:00:00Z' }
+  const b = { ...a, id: 'b', title: 'Reunión B' }
+  const c = { ...a, id: 'c', title: 'Reunión C', calendar_id: 'y', ends_at: '2026-10-20T14:30:00Z' }
+  assert.equal(unirRepetidos([a, b]).length, 2)
+  assert.equal(unirRepetidos([a, c]).length, 2)
+})
