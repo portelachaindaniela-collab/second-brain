@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { quitarEliminados } from "./eliminados.mjs";
 import { resultadoCorrida } from "./corrida.mjs";
+import { filasCalendarios } from "./calendarios.mjs";
 import { identificarCorrida, abrirCorrida, cerrarCorrida, HEADER_SECRETO } from "../_shared/trabajador.mjs";
 
 const TRABAJADOR = "google_sync";
@@ -74,6 +75,9 @@ async function sincronizar(admin: any, ownerId: string): Promise<Record<string, 
       calendarios = calListData.items
         .filter((c: any) => c.selected !== false && !c.deleted)
         .map((c: any) => (c.primary ? { ...c, id: "primary" } : c));
+      // Nombre y color de cada calendario, para que la vista mensual los pinte como en Google.
+      const filas = filasCalendarios(calListData.items, ownerId);
+      if (filas.length) await admin.from("calendarios").upsert(filas, { onConflict: "owner_id,calendar_id" });
     }
   } catch (_) { /* si falla la lista, seguimos con al menos "primary" */ }
 

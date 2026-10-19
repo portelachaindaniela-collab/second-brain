@@ -5,7 +5,7 @@ import { fechaEvento } from '../eventoFecha.js'
 import { unirRepetidos } from '../eventosUnicos.mjs'
 import { importarEventosComunidad, textoImportacion } from '../comunidadImportar.js'
 import { inicioSemana, moverSemana, tituloSemana, diasDeSemana } from '../semana.mjs'
-import { tipoEvento, TIPOS_EVENTO } from '../calendarioMes.mjs'
+import { calendarioDe, leyendaCalendarios, prepararCalendarios } from '../calendarioMes.mjs'
 import { Bloques, Bloque } from '../estructura.jsx'
 
 const DIA_CORTO = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
@@ -17,6 +17,11 @@ function horaEnSemana({ evento, continua }) {
   if (continua) return 'sigue'
   const fin = evento.ends_at && evento.ends_at !== evento.starts_at && new Date(evento.ends_at).toDateString() === new Date(evento.starts_at).toDateString() ? '–' + hora24(evento.ends_at) : ''
   return hora24(evento.starts_at) + fin
+}
+
+// Clase y color del calendario de un evento: el color real de Google va en --tipo; sin él queda el de la clase.
+function pintar(calendario, clase) {
+  return { className: `${clase} tipo-${calendario.tipo}`, style: calendario.color ? { '--tipo': calendario.color } : undefined }
 }
 
 const mismoMes = (a, b) => a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
@@ -37,6 +42,15 @@ export default function Agenda({ proyectos, revision, enBloque = false, debajo }
   const [cargando, setCargando] = useState(true)
   const [importando, setImportando] = useState(false)
   const [resultadoImport, setResultadoImport] = useState(null)
+  const [calendarios, setCalendarios] = useState(() => new Map())
+  useEffect(() => {
+    let vivo = true
+    // Nombre y color de cada calendario de Google. Si falla o está vacía, se pinta por grupos como antes.
+    supabase.from('calendarios').select('calendar_id,nombre,color').then(({ data }) => {
+      if (vivo && data) setCalendarios(prepararCalendarios(data))
+    }).catch(() => {})
+    return () => { vivo = false }
+  }, [revision])
   useEffect(() => {
     let vivo = true
     setCargando(true); setError('')
@@ -102,7 +116,7 @@ export default function Agenda({ proyectos, revision, enBloque = false, debajo }
     {diasSemana.map(d => <div key={d.clave} className={`semana-dia${d.items.length ? '' : ' libre'}${d.fecha.toDateString() === hoyTexto ? ' hoy' : ''}`}>
       <div className="semana-fecha"><span>{DIA_CORTO[d.fecha.getDay()]}</span><strong>{d.fecha.getDate()}</strong></div>
       <div className="semana-eventos">
-        {cargando ? null : d.items.length ? d.items.map(item => <button key={item.evento.id} className={`semana-evento tipo-${tipoEvento(item.evento)}`} onClick={() => setEditando(item.evento)}>
+        {cargando ? null : d.items.length ? d.items.map(item => <button key={item.evento.id} {...pintar(calendarioDe(item.evento, calendarios), 'semana-evento')} title={calendarioDe(item.evento, calendarios).nombre} onClick={() => setEditando(item.evento)}>
           <span className="semana-hora">{horaEnSemana(item)}</span>
           <span className="semana-titulo">{item.evento.title || '(sin título)'}{item.evento.location && <small>{item.evento.location}</small>}</span>
         </button>) : <span className="semana-libre">Libre</span>}
@@ -123,20 +137,20 @@ export default function Agenda({ proyectos, revision, enBloque = false, debajo }
         return <button key={dia} className={`calendar-day${seleccion === dia ? ' selected' : ''}${esHoy ? ' hoy' : ''}${pasado ? ' pasado' : ''}${finde ? ' finde' : ''}`}
           onClick={() => setSeleccion(dia)} aria-label={`${dia}${esHoy ? ', hoy' : ''}, ${items.length} eventos`} aria-pressed={seleccion === dia}>
           <span className="calendar-numero">{dia}{esHoy && <em> · hoy</em>}</span>
-          {items.slice(0, 3).map(e => <small key={e.id} className={`calendar-titulo tipo-${tipoEvento(e)}`}>{!e.all_day && <b>{hora24(e.starts_at)}</b>}{e.title || '(sin título)'}</small>)}
+          {items.slice(0, 3).map(e => <small key={e.id} {...pintar(calendarioDe(e, calendarios), 'calendar-titulo')}>{!e.all_day && <b>{hora24(e.starts_at)}</b>}{e.title || '(sin título)'}</small>)}
           {items.length > 3 && <small className="calendar-mas">+{items.length - 3} más</small>}
         </button>
       })}
     </div>
-    <div className="calendar-leyenda">{TIPOS_EVENTO.map(t => <span key={t.tipo} className={`tipo-${t.tipo}`}>{t.etiqueta}</span>)}</div>
+    <div className="calendar-leyenda">{leyendaCalendarios(calendarios, eventos).map(c => <span key={c.clave} {...pintar(c, '')}>{c.nombre}</span>)}</div>
   </>
 
   const detalle = <Bloque titulo={<span className="calendar-detalle-titulo">{tituloDetalle}</span>} accion={seleccion && <button className="btn btn-sm" onClick={() => setSeleccion(null)}>Ver todo el mes</button>}>
     <div className="bloque-scroll">{cargando ? <p className="empty-state">Cargando…</p> : !visibles.length ? <p className="empty-state">{seleccion ? 'Día libre.' : 'Sin eventos en este mes.'}</p>
-      : visibles.map(e => <button key={e.id} className={`calendar-detalle-evento tipo-${tipoEvento(e)}`} onClick={() => setEditando(e)}>
+      : visibles.map(e => <button key={e.id} {...pintar(calendarioDe(e, calendarios), 'calendar-detalle-evento')} onClick={() => setEditando(e)}>
         <span className="semana-hora">{e.all_day ? 'Todo el día' : hora24(e.starts_at) + (e.ends_at && e.ends_at !== e.starts_at ? '–' + hora24(e.ends_at) : '')}{!seleccion && <small>{fechaEvento(e).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric' }).replace('.', '')}</small>}</span>
         <span className="calendar-detalle-texto">{e.title || '(sin título)'}
-          {(e.location || e.project_id) && <small>{[e.location, proyectos.find(p => p.id === e.project_id)?.name].filter(Boolean).join(' · ')}</small>}</span>
+          <small>{[calendarioDe(e, calendarios).nombre, e.location, proyectos.find(p => p.id === e.project_id)?.name].filter(Boolean).join(' · ')}</small></span>
       </button>)}</div>
   </Bloque>
 
