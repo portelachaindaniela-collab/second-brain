@@ -251,11 +251,44 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--gray-700
 .section-heading h3 { font-size:13px; }
 .pagination,.calendar-toolbar { display:flex; align-items:center; gap:12px; margin:14px 0; font-size:12px; }
 .calendar-toolbar strong { text-transform:capitalize; }
-.calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); padding:10px; gap:4px; }
-.calendar-weekday { text-align:center; padding:8px 0; color:var(--gray-500); font-size:11px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .04em; }
-.calendar-day { min-height:70px; padding:8px; border:1px solid var(--gray-200); background:transparent; border-radius:6px; text-align:left; color:inherit; cursor:pointer; }
-.calendar-day.selected { background:var(--accent-100); border-color:var(--accent); color:var(--accent); }
-.calendar-day small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9px; margin-top:4px; }
+.calendar-toolbar .calendar-periodo { text-transform:none; font-size:17px; font-weight:700; color:var(--gray-900); min-width:150px; text-align:center; }
+.calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; }
+.calendar-weekday { text-align:center; padding:6px 0; color:var(--gray-500); font-size:11px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .04em; }
+/* Cada tipo de calendario tiene su color; el chip lo usa de borde y de fondo suave. */
+.tipo-principal { --tipo: var(--accent); }
+.tipo-otro { --tipo: var(--id-azul); }
+.tipo-comunidad { --tipo: var(--green-600); }
+.tipo-feriado { --tipo: var(--gray-500); }
+.calendar-day { display:flex; flex-direction:column; gap:3px; min-height:104px; padding:6px; border:1px solid var(--gray-200); background:transparent; border-radius:6px; text-align:left; color:inherit; cursor:pointer; font:inherit; min-width:0; }
+.calendar-day:hover { border-color:var(--gray-300); }
+.calendar-day.finde { background:var(--surface-inset); }
+.calendar-day.pasado { background:var(--surface-inset); }
+.calendar-day.pasado .calendar-numero { color:var(--gray-500); }
+.calendar-day.pasado small.calendar-titulo { opacity:.55; }
+.calendar-day.selected { border-color:var(--gray-500); box-shadow:inset 0 0 0 1px var(--gray-500); }
+.calendar-day.hoy { background:var(--accent-100); border:2px solid var(--accent); padding:5px; }
+.calendar-numero { font-size:14px; font-weight:700; color:var(--gray-900); line-height:1.2; }
+.calendar-day.hoy .calendar-numero { color:var(--accent); }
+.calendar-numero em { font-style:normal; font-size:11px; font-weight:600; }
+.calendar-day small.calendar-titulo { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; line-height:1.3; padding:2px 5px; border-left:3px solid var(--tipo); background:color-mix(in srgb, var(--tipo) 16%, transparent); color:var(--gray-900); }
+.calendar-titulo b { font-family:var(--font-mono); font-weight:600; font-size:11px; margin-right:5px; color:var(--tipo); }
+.calendar-day small.calendar-mas { font-size:11.5px; color:var(--gray-700); font-weight:600; }
+.calendar-leyenda { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:10px; font-size:11.5px; color:var(--gray-500); }
+.calendar-leyenda span::before { content:''; display:inline-block; width:9px; height:9px; margin-right:6px; background:var(--tipo); vertical-align:-1px; }
+.calendar-detalle-titulo { text-transform:capitalize; }
+.calendar-detalle-evento { display:grid; grid-template-columns:110px minmax(0,1fr); gap:12px; align-items:baseline; width:100%; padding:10px 8px; border:0; border-bottom:1px solid var(--gray-200); border-left:3px solid var(--tipo); background:transparent; color:inherit; font:inherit; font-size:14px; text-align:left; cursor:pointer; }
+.calendar-detalle-evento:hover { background:var(--gray-50); }
+.calendar-detalle-evento .semana-hora { color:var(--tipo); }
+.calendar-detalle-evento .semana-hora small { display:block; color:var(--gray-500); text-transform:capitalize; }
+.calendar-detalle-texto small { display:block; margin-top:2px; color:var(--gray-500); font-size:12px; }
+.pantalla-bloques > .bloque-completo { grid-column:1 / -1; }
+.lo-proximo { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 14px; margin:0 0 16px; padding:14px 18px; background:var(--accent-100); border:2px solid var(--accent); border-radius:var(--radius); }
+.lo-proximo.vacio { background:var(--surface-raised); border:1px solid var(--gray-200); }
+.lo-proximo-etiqueta { flex-basis:100%; font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
+.lo-proximo strong { font-size:19px; font-weight:700; color:var(--gray-900); }
+.lo-proximo.vacio strong { font-size:15px; font-weight:600; color:var(--gray-700); }
+.lo-proximo-hora { font-family:var(--font-mono); color:var(--accent); margin-right:10px; }
+.lo-proximo-lugar { font-size:13px; color:var(--gray-500); }
 .calendar-event { padding:12px 14px; border-bottom:1px solid var(--gray-200); font-size:13px; }
 .calendar-event summary { cursor:pointer; }
 .calendar-event summary span { color:var(--gray-500); font-size:11px; margin-left:10px; font-family: var(--font-mono); }
@@ -266,10 +299,15 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--gray-700
 .file-viewer-body > img { display:block; max-width:100%; max-height:100%; margin:auto; object-fit:contain; }
 /* Celular: en una celda de 40 px un título no se lee; cada evento es un punto y el detalle aparece al tocar el día. */
 @media(max-width:700px) {
-  .calendar-grid { padding:6px; gap:3px; }
-  .calendar-day { padding:5px 4px; min-height:48px; }
-  .calendar-day small.calendar-titulo { display:inline-block; width:6px; height:6px; margin:4px 3px 0 0; border-radius:50%; background:var(--accent); font-size:0; }
-  .calendar-day small.calendar-mas { font-size:9px; }
+  .calendar-grid { gap:3px; }
+  .calendar-day { flex-direction:row; flex-wrap:wrap; align-content:flex-start; padding:5px 4px; min-height:52px; }
+  .calendar-day.hoy { padding:4px 3px; }
+  .calendar-numero { flex-basis:100%; font-size:13px; }
+  .calendar-numero em { display:none; }
+  .calendar-day small.calendar-titulo { width:7px; height:7px; padding:0; border:0; border-radius:50%; background:var(--tipo); font-size:0; }
+  .calendar-day small.calendar-mas { font-size:10px; }
+  .calendar-titulo b { display:none; }
+  .calendar-detalle-evento { grid-template-columns:84px minmax(0,1fr); }
 }
 /* Vista semanal: un renglón por día, todos con el mismo alto mínimo, para que los días libres se vean como espacio. */
 .calendar-toolbar { flex-wrap:wrap; }
@@ -285,9 +323,9 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--gray-700
 .semana-eventos { display:flex; flex-direction:column; justify-content:center; gap:4px; padding:8px 10px; }
 .semana-dia.libre .semana-eventos { background:repeating-linear-gradient(135deg, transparent 0 7px, var(--gray-100) 7px 9px); }
 .semana-libre { color:var(--gray-500); font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
-.semana-evento { display:grid; grid-template-columns:96px minmax(0,1fr); align-items:baseline; gap:10px; width:100%; padding:6px 8px; border:1px solid var(--gray-200); border-left:3px solid var(--accent); border-radius:6px; background:var(--surface-raised); color:inherit; font:inherit; font-size:13px; text-align:left; cursor:pointer; }
-.semana-evento:hover { border-color:var(--gray-300); border-left-color:var(--accent); background:var(--gray-50); }
-.semana-hora { font-family:var(--font-mono); font-size:11.5px; color:var(--accent); white-space:nowrap; }
+.semana-evento { display:grid; grid-template-columns:96px minmax(0,1fr); align-items:baseline; gap:10px; width:100%; padding:6px 8px; border:1px solid var(--gray-200); border-left:3px solid var(--tipo, var(--accent)); border-radius:6px; background:var(--surface-raised); color:inherit; font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.semana-evento:hover { border-color:var(--gray-300); border-left-color:var(--tipo, var(--accent)); background:var(--gray-50); }
+.semana-hora { font-family:var(--font-mono); font-size:11.5px; color:var(--tipo, var(--accent)); white-space:nowrap; }
 .semana-titulo { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .semana-titulo small { margin-left:8px; color:var(--gray-500); font-size:11px; }
 @media(max-width:700px) {

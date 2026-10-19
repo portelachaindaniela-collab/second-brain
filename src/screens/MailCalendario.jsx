@@ -5,22 +5,31 @@ import Bandeja from './Bandeja.jsx'
 import { supabase, hora } from '../supabase.js'
 import { unirRepetidos } from '../eventosUnicos.mjs'
 import { EVENTOS_COMUNIDAD } from '../comunidadEventos.mjs'
-import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
+import { CabeceraPantalla, Bloque, Pie } from '../estructura.jsx'
+import { proximoEvento, cuandoFalta } from '../calendarioMes.mjs'
 
-// Semana de lunes a domingo, en la hora de la computadora.
-function semanaActual() {
-  const inicio = new Date()
-  inicio.setHours(0, 0, 0, 0)
-  inicio.setDate(inicio.getDate() - ((inicio.getDay() + 6) % 7))
-  const fin = new Date(inicio)
-  fin.setDate(fin.getDate() + 7)
-  return [inicio, fin]
+function mesActual() {
+  const hoy = new Date()
+  return [new Date(hoy.getFullYear(), hoy.getMonth(), 1), new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1)]
+}
+
+const hora24 = iso => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+// Lo que viene, siempre arriba de todo: para no tener que acordarse de mirar el calendario.
+function LoProximo({ evento, cargando }) {
+  if (cargando) return null
+  if (!evento) return <div className="lo-proximo vacio"><span className="lo-proximo-etiqueta">Lo próximo</span><strong>No tenés nada agendado por delante.</strong></div>
+  return <div className="lo-proximo">
+    <span className="lo-proximo-etiqueta">Lo próximo · {cuandoFalta(evento)}</span>
+    <strong>{!evento.all_day && <span className="lo-proximo-hora">{hora24(evento.starts_at)}</span>}{evento.title || '(sin título)'}</strong>
+    {evento.location && <span className="lo-proximo-lugar">{evento.location}</span>}
+  </div>
 }
 
 export default function MailCalendario({ tab, revision, proyectos, google, conectarGoogle, abrirMail, sincronizar, sincronizando, errorSync }) {
   const [filtros, setFiltros] = useState({ busqueda: '', sinLeer: false })
   const [extra, setExtra] = useState(0)
-  const [cifras, setCifras] = useState({ sinLeer: null, semana: null })
+  const [cifras, setCifras] = useState({ sinLeer: null, mes: null, proximo: null })
   const [importando, setImportando] = useState(false)
   const [importacion, setImportacion] = useState(null)
   const bloqueCalendario = useRef(null)
@@ -28,17 +37,19 @@ export default function MailCalendario({ tab, revision, proyectos, google, conec
 
   useEffect(() => {
     let vivo = true
-    const [inicio, fin] = semanaActual()
+    const [inicio, fin] = mesActual()
+    const ayer = new Date(Date.now() - 86400000)
     Promise.all([
       supabase.from('emails').select('id', { count: 'exact', head: true }).eq('is_unread', true),
       supabase.from('calendar_events').select('id,title,starts_at,ends_at,all_day').gte('starts_at', inicio.toISOString()).lt('starts_at', fin.toISOString()),
-    ]).then(([mails, eventos]) => {
-      if (vivo) setCifras({ sinLeer: mails.count ?? 0, semana: unirRepetidos(eventos.data || []).length })
+      supabase.from('calendar_events').select('id,title,starts_at,ends_at,all_day,location').gte('starts_at', ayer.toISOString()).order('starts_at').limit(30),
+    ]).then(([mails, eventos, siguientes]) => {
+      if (vivo) setCifras({ sinLeer: mails.count ?? 0, mes: unirRepetidos(eventos.data || []).length, proximo: proximoEvento(unirRepetidos(siguientes.data || [])) })
     })
     return () => { vivo = false }
   }, [revision, extra])
 
-  // "Ver calendario" / "Ver todos los mails" desde Hoy: los dos bloques están a la vista, se lleva al pedido.
+  // "Ver calendario" / "Ver todos los mails" desde Hoy: el mail está debajo del mes, se lleva al pedido.
   // Al abrir la pantalla no se mueve: la cabecera va primero.
   const tabAnterior = useRef(tab)
   useEffect(() => {
@@ -70,16 +81,13 @@ export default function MailCalendario({ tab, revision, proyectos, google, conec
       <CabeceraPantalla sobretitulo="Google" titulo="Mail y Calendario" cargando={sinLeer == null}
         cifras={[
           { valor: sinLeer, etiqueta: 'mails sin leer', nivel: sinLeer ? 'aviso' : undefined },
-          { valor: cifras.semana, etiqueta: 'eventos de la semana' },
+          { valor: cifras.mes, etiqueta: 'eventos del mes' },
         ]} />
 
-      <Bloques>
-        <div ref={bloqueCalendario}>
-          <Bloque titulo="Calendario">
-            <Agenda enBloque revision={revision + extra} proyectos={proyectos} />
-          </Bloque>
-        </div>
-        <div ref={bloqueMail}>
+      <LoProximo evento={cifras.proximo} cargando={sinLeer == null} />
+
+      <div ref={bloqueCalendario}>
+        <Agenda enBloque revision={revision + extra} proyectos={proyectos} debajo={ancho => <div key="mail" ref={bloqueMail} className={ancho === 'completo' ? 'bloque-completo' : undefined}>
           <Bloque titulo="Mail">
             <div className="action-row mail-filtros">
               <input aria-label="Buscar por asunto" placeholder="Buscar por asunto" value={filtros.busqueda} onChange={e => setFiltros(f => ({ ...f, busqueda: e.target.value }))} />
@@ -87,8 +95,8 @@ export default function MailCalendario({ tab, revision, proyectos, google, conec
             </div>
             <Bandeja enBloque filtros={filtros} revision={revision} abrirMail={abrirMail} />
           </Bloque>
-        </div>
-      </Bloques>
+        </div>} />
+      </div>
 
       <Pie titulo="Google" resumen={pieGoogle.resumen} boton={pieGoogle.boton} onBoton={pieGoogle.onBoton} ocupado={sincronizando} nota={errorSync} />
       <Pie titulo="Comunidad" resumen={`${EVENTOS_COMUNIDAD.length} eventos de tu web para sumar al calendario`}
