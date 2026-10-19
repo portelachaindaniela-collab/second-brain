@@ -9,12 +9,15 @@ export const tienePermiso = scopes => Array.isArray(scopes) && scopes.includes(S
 export const DIAS_PRIMERA = 90
 export const DIAS_REPASO = 10
 
+// Se pide junto con el de planillas (pantalla Postulaciones): al autorizar uno solo, Google puede soltar el otro.
+export const PERMISOS_EXTRA = ['https://www.googleapis.com/auth/spreadsheets', SCOPE_SEARCH_CONSOLE]
+
 export function urlPermiso({ clientId, redirectUri, state }) {
   const u = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   u.searchParams.set('client_id', clientId)
   u.searchParams.set('redirect_uri', redirectUri)
   u.searchParams.set('response_type', 'code')
-  u.searchParams.set('scope', SCOPE_SEARCH_CONSOLE)
+  u.searchParams.set('scope', PERMISOS_EXTRA.join(' '))
   u.searchParams.set('access_type', 'offline')
   u.searchParams.set('prompt', 'consent')
   u.searchParams.set('include_granted_scopes', 'true')

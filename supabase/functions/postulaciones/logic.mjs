@@ -6,13 +6,16 @@ export const SCOPE_PLANILLAS = 'https://www.googleapis.com/auth/spreadsheets'
 
 export const tienePermiso = scopes => Array.isArray(scopes) && scopes.includes(SCOPE_PLANILLAS)
 
-// Pide solo el permiso nuevo; include_granted_scopes suma los que ya tenía la conexión de Google.
+// Los permisos extra que usa la app se piden siempre juntos: al autorizar uno solo, Google puede soltar el otro
+// (pasó al conectar Search Console: se perdió el de planillas). include_granted_scopes suma los de agenda y mail.
+export const PERMISOS_EXTRA = [SCOPE_PLANILLAS, 'https://www.googleapis.com/auth/webmasters.readonly']
+
 export function urlPermiso({ clientId, redirectUri, state }) {
   const u = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   u.searchParams.set('client_id', clientId)
   u.searchParams.set('redirect_uri', redirectUri)
   u.searchParams.set('response_type', 'code')
-  u.searchParams.set('scope', SCOPE_PLANILLAS)
+  u.searchParams.set('scope', PERMISOS_EXTRA.join(' '))
   u.searchParams.set('access_type', 'offline')
   u.searchParams.set('prompt', 'consent')
   u.searchParams.set('include_granted_scopes', 'true')

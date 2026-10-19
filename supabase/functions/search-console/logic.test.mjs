@@ -31,3 +31,10 @@ test('tienePermiso', () => {
   assert.ok(tienePermiso([SCOPE_SEARCH_CONSOLE]))
   assert.ok(!tienePermiso(['x']))
 })
+
+import { urlPermiso } from './logic.mjs'
+test('urlPermiso pide Search Console y planillas juntos', () => {
+  const scope = new URL(urlPermiso({ clientId: 'c', redirectUri: 'https://r', state: 's' })).searchParams.get('scope')
+  assert.ok(scope.includes(SCOPE_SEARCH_CONSOLE))
+  assert.ok(scope.includes('auth/spreadsheets'))
+})

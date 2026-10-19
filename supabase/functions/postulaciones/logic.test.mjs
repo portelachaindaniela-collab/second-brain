@@ -44,3 +44,10 @@ test('tienePermiso pide el scope de planillas', () => {
   assert.ok(tienePermiso(['a', SCOPE_PLANILLAS]))
   assert.ok(!tienePermiso(['https://www.googleapis.com/auth/drive.file']))
 })
+
+import { urlPermiso } from './logic.mjs'
+test('urlPermiso pide planillas y Search Console juntos', () => {
+  const scope = new URL(urlPermiso({ clientId: 'c', redirectUri: 'https://r', state: 's' })).searchParams.get('scope')
+  assert.ok(scope.includes(SCOPE_PLANILLAS))
+  assert.ok(scope.includes('webmasters.readonly'))
+})
