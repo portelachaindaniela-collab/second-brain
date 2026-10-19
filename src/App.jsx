@@ -10,6 +10,7 @@ import Cursos from './screens/Cursos.jsx'
 import Trabajadores from './screens/Trabajadores.jsx'
 import Eventos from './screens/Eventos.jsx'
 import MiNicho from './screens/MiNicho.jsx'
+import Postulaciones from './screens/Postulaciones.jsx'
 import Login from './Login.jsx'
 import BS67 from './bs67/BS67.jsx'
 import MailCalendario from './screens/MailCalendario.jsx'
@@ -226,6 +227,7 @@ export default function App() {
           <li><button className="nav-item" onClick={() => setPantalla('escribir')}>Escribir</button></li>
           <li><button className={`nav-item${pantalla === 'trabajadores' ? ' active' : ''}`} onClick={() => setPantalla('trabajadores')}>Trabajadores</button></li>
           <li><button className={`nav-item${pantalla === 'eventos' ? ' active' : ''}`} onClick={() => setPantalla('eventos')}>Eventos</button></li>
+          <li><button className={`nav-item${pantalla === 'postulaciones' ? ' active' : ''}`} onClick={() => setPantalla('postulaciones')}>Postulaciones</button></li>
           <li><button className={`nav-item${pantalla === 'nicho' ? ' active' : ''}`} onClick={() => setPantalla('nicho')}>Mi nicho</button></li>
           <li><button className={`nav-item${pantalla === 'metricas' ? ' active' : ''}`} onClick={() => setPantalla('metricas')}>Métricas</button></li>
           <li><button className={`nav-item${pantalla === 'cursos' ? ' active' : ''}`} onClick={() => setPantalla('cursos')}>Cursos</button></li>
@@ -290,6 +292,7 @@ export default function App() {
             {pantalla === 'mailcal' && 'Mail y Calendario'}
             {pantalla === 'trabajadores' && 'Trabajadores'}
             {pantalla === 'eventos' && 'Eventos'}
+            {pantalla === 'postulaciones' && 'Postulaciones'}
             {pantalla === 'nicho' && 'Mi nicho'}
             {pantalla === 'metricas' && 'Métricas'}
             {pantalla === 'cursos' && 'Cursos'}
@@ -308,6 +311,7 @@ export default function App() {
           {pantallasVisitadas.has('flujo') && <div hidden={pantalla !== 'flujo'}><Flujo key={revisionBot} proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} abrirHtml={() => htmlInput.current?.click()} /></div>}
           {pantallasVisitadas.has('trabajadores') && <div hidden={pantalla !== 'trabajadores'}><Trabajadores /></div>}
           {pantallasVisitadas.has('eventos') && <div hidden={pantalla !== 'eventos'}><Eventos /></div>}
+          {pantallasVisitadas.has('postulaciones') && <div hidden={pantalla !== 'postulaciones'}><Postulaciones /></div>}
           {pantallasVisitadas.has('nicho') && <div hidden={pantalla !== 'nicho'}><MiNicho /></div>}
           {pantallasVisitadas.has('metricas') && <div hidden={pantalla !== 'metricas'}><Metricas key={session.user.id} ownerId={session.user.id} /></div>}
           {pantallasVisitadas.has('cursos') && <div hidden={pantalla !== 'cursos'}><Cursos key={revisionBot} /></div>}
