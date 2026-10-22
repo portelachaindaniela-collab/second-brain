@@ -22,9 +22,14 @@ async function invocar(app, body) {
   const { data, error } = await supabase.functions.invoke(funcionDe(app), { body })
   let r = data
   if (error?.context) { try { r = await error.context.json() } catch { /* queda el error genérico */ } }
-  if (error || r?.error) throw new Error(r?.error || 'BS67 no respondió. Probá de nuevo en un momento.')
+  if (error || r?.error) throw Object.assign(new Error(r?.error || 'BS67 no respondió. Probá de nuevo en un momento.'), { limite: r?.limite, esperar_s: r?.esperar_s })
   return r
 }
+
+// Después de un límite de la IA no se manda nada más: por minuto, al menos 60 s (o lo que pida la IA, hasta 5 min);
+// el diario, hasta cerrar el chat o recargar. Así reintentar a mano no gasta más cupo.
+const hastaCuando = e => (e.limite === 'dia' ? Infinity : Date.now() + Math.min(300, Math.max(60, e.esperar_s ?? 0)) * 1000)
+const reloj = ms => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 
 function Texto({ texto }) {
   return texto.split(/(https?:\/\/[^\s)]+)/g).map((p, i) => (/^https?:\/\//.test(p) ? <a key={i} href={p} target="_blank" rel="noreferrer">{p}</a> : p))
@@ -42,15 +47,20 @@ export default function BS67({ app = 'bs67', pantalla = null, proyectoId = null,
   const [renombrando, setRenombrando] = useState(null) // { id, titulo }
   const [borrando, setBorrando] = useState(null) // id
   const [aviso, setAviso] = useState('')
+  const [espera, setEspera] = useState(null) // { hasta, limite }
+  const [ahora, setAhora] = useState(() => Date.now())
   const mensajesRef = useRef([])
   const charlaRef = useRef(null)
   const ocupado = useRef(false)
+  const esperaRef = useRef(null)
   const final = useRef(null)
   const entrada = useRef(null)
   const boton = useRef(null)
   const abiertaUnaVez = useRef(false)
 
   const ponerMensajes = m => { mensajesRef.current = m; setMensajes(m) }
+  const ponerEspera = e => { esperaRef.current = e; setEspera(e) }
+  const enEspera = () => esperaRef.current && Date.now() < esperaRef.current.hasta
   const ponerCharla = id => { charlaRef.current = id; setCharlaId(id); guardarLocal(`bs67-charla-${app}`, id) }
 
   const cargarCharlas = useCallback(async () => {
@@ -88,6 +98,11 @@ export default function BS67({ app = 'bs67', pantalla = null, proyectoId = null,
 
   useEffect(() => { if (abierto) final.current?.scrollIntoView({ block: 'end' }) }, [abierto, mensajes, consultando])
   useEffect(() => { if (abierto) entrada.current?.focus() }, [abierto])
+  useEffect(() => {
+    if (!espera || espera.hasta === Infinity) return
+    const t = setInterval(() => { setAhora(Date.now()); if (Date.now() >= espera.hasta) ponerEspera(null) }, 1000)
+    return () => clearInterval(t)
+  }, [espera])
 
   // Guarda la charla (la crea con el primer mensaje) y la sube arriba en el menú.
   async function guardar(lista) {
@@ -111,6 +126,7 @@ export default function BS67({ app = 'bs67', pantalla = null, proyectoId = null,
     if (ocupado.current) return
     ocupado.current = true; setConsultando(true)
     try { await tarea() } catch (e) {
+      if (e.limite) { ponerEspera({ hasta: hastaCuando(e), limite: e.limite }); setAhora(Date.now()) }
       const lista = [...mensajesRef.current, { rol: 'error', texto: e.message || 'No pude completar la consulta.' }]
       ponerMensajes(lista); await guardar(lista)
     } finally { ocupado.current = false; setConsultando(false); entrada.current?.focus() }
@@ -118,7 +134,7 @@ export default function BS67({ app = 'bs67', pantalla = null, proyectoId = null,
 
   function enviar(valor = texto) {
     const mensaje = valor.trim()
-    if (!mensaje || ocupado.current) return
+    if (!mensaje || ocupado.current || enEspera()) return
     const previos = mensajesRef.current
     const lista = [...previos, { rol: 'user', texto: mensaje, at: new Date().toISOString() }]
     ponerMensajes(lista); setTexto('')
@@ -168,11 +184,12 @@ export default function BS67({ app = 'bs67', pantalla = null, proyectoId = null,
   }
 
   function alternarMenu() { setMenu(v => { if (!angosta()) guardarLocal('bs67-menu', v ? '0' : '1'); return !v }) }
-  function cerrar() { setAbierto(false); boton.current?.focus() }
+  function cerrar() { setAbierto(false); if (esperaRef.current?.limite === 'dia') ponerEspera(null); boton.current?.focus() }
 
   const grupos = agruparCharlas(filtrarCharlas(charlas, busqueda))
   const recientes = charlas.slice(0, 3)
   const actual = charlas.find(c => c.id === charlaId)
+  const bloqueado = consultando || !!espera
 
   return (
     <div className={`bs67 bs67-app-${app}`} onKeyDown={e => { if (e.key === 'Escape' && abierto) { e.stopPropagation(); cerrar() } }}>
@@ -236,7 +253,7 @@ export default function BS67({ app = 'bs67', pantalla = null, proyectoId = null,
               {!mensajes.length && (
                 <div className="bs67-bienvenida">
                   <p><b>¡Hola! Soy BS67.</b> Estoy en las tres apps y me acuerdo de lo que hablamos. Puedo leer tu información, buscar en internet y hacer cambios con tu OK.</p>
-                  <div className="bs67-sugerencias">{SUGERENCIAS[app].map(s => <button key={s} onClick={() => enviar(s)} disabled={consultando}>{s}</button>)}</div>
+                  <div className="bs67-sugerencias">{SUGERENCIAS[app].map(s => <button key={s} onClick={() => enviar(s)} disabled={bloqueado}>{s}</button>)}</div>
                   {recientes.length > 0 && (
                     <div className="bs67-retomar">
                       <span>Seguí una charla</span>
@@ -267,10 +284,15 @@ export default function BS67({ app = 'bs67', pantalla = null, proyectoId = null,
               <div ref={final} />
             </div>
 
+            {espera && (
+              <p className="bs67-espera" role="status">
+                {espera.limite === 'dia' ? 'Se agotó el cupo de hoy de la IA: no mando más mensajes hasta que cierres el chat o recargues.' : `Esperá ${reloj(espera.hasta - ahora)} para mandar otro mensaje.`}
+              </p>
+            )}
             <form className="bs67-pie" onSubmit={e => { e.preventDefault(); enviar() }}>
               <textarea ref={entrada} rows={2} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribile a BS67 o pegá un link…" maxLength={8000} aria-label="Mensaje para BS67"
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar() } }} />
-              <button type="submit" disabled={consultando || !texto.trim()} aria-label="Enviar">↑</button>
+              <button type="submit" disabled={bloqueado || !texto.trim()} aria-label="Enviar">↑</button>
             </form>
           </div>
         </section>

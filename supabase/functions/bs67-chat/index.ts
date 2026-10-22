@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   MAX_VUELTAS, ZONA, HERRAMIENTAS, ACCIONES, proveedor, sistema, validarAccion, describirAccion, urlPermitida, htmlATexto,
-  historialParaModelo, contiene, ultimoPorAgente, venceISO, slugProyecto, fragmentosDeCharla, APPS,
+  historialParaModelo, contiene, ultimoPorAgente, venceISO, slugProyecto, fragmentosDeCharla, APPS, errorDeIA, esperaParaReintento,
 } from "./logic.mjs";
 
 // BS67, el asistente de Second Brain en sus apps (bs67 y pdg; UP usa up-asistente). La app manda { mensaje, historial,
@@ -18,17 +18,33 @@ const inicioDia = (f: string) => new Date(`${f}T00:00:00-03:00`).toISOString();
 const esFecha = (f: any) => typeof f === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f);
 const hora = (iso: string) => new Date(iso).toLocaleString("es-AR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: ZONA });
 
+class ErrorIA extends Error {
+  constructor(public info: any) { super(info.mensaje); }
+}
+
+// prov.turno se crea con cada mensaje y lo comparten las copias de prov: el reintento por límite por minuto es uno solo por mensaje.
 async function modelo(prov: any, messages: any[], conHerramientas = true) {
-  const r = await fetch(prov.url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${prov.clave}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: prov.modelo, messages, temperature: 0.4, max_tokens: 2000, ...(conHerramientas && { tools: HERRAMIENTAS, tool_choice: "auto" }) }),
-    signal: AbortSignal.timeout(60000),
-  });
-  const data = await r.json().catch(() => null);
-  if (r.status === 429) throw new Error("La IA llegó a su límite de consultas gratis por ahora. Probá de nuevo en un rato.");
-  if (!r.ok) throw new Error(data?.error?.message || `La IA respondió HTTP ${r.status}.`);
-  return data?.choices?.[0]?.message ?? {};
+  const turno = prov.turno ?? { reintentos: 0 };
+  for (let reintentando = false; ; reintentando = true) {
+    const r = await fetch(prov.url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${prov.clave}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: prov.modelo, messages, temperature: 0.4, max_tokens: 2000, ...(conHerramientas && { tools: HERRAMIENTAS, tool_choice: "auto" }) }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const data = await r.json().catch(() => null);
+    if (r.ok) {
+      if (reintentando) console.warn(`bs67-chat: ${prov.nombre} ${prov.modelo} respondió al reintentar`);
+      return data?.choices?.[0]?.message ?? {};
+    }
+    const info = errorDeIA(r.status, data, r.headers.get("retry-after"));
+    console.error(`bs67-chat: ${prov.nombre} ${prov.modelo} ${info.detalle}`);
+    const espera = turno.reintentos ? null : esperaParaReintento(info);
+    if (espera === null) throw new ErrorIA(info);
+    turno.reintentos++;
+    console.warn(`bs67-chat: reintento en ${espera}s`);
+    await new Promise((listo) => setTimeout(listo, espera * 1000));
+  }
 }
 
 // Búsqueda web: con Groq, su modelo Compound (busca solo); con Gemini, la búsqueda de Google integrada.
@@ -44,7 +60,11 @@ async function buscarWeb(prov: any, consulta: string) {
     signal: AbortSignal.timeout(45000),
   });
   const data = await r.json().catch(() => null);
-  if (!r.ok) return { error: `La búsqueda web no está disponible ahora (${data?.error?.message || r.status}).` };
+  if (!r.ok) {
+    const info = errorDeIA(r.status, data, r.headers.get("retry-after"));
+    console.error(`bs67-chat: búsqueda web ${prov.nombre} ${info.detalle}`);
+    return { error: `La búsqueda web no está disponible ahora (${info.mensaje})` };
+  }
   const c = data?.candidates?.[0];
   const fuentes = (c?.groundingMetadata?.groundingChunks || []).map((g: any) => g.web && `${g.web.title}: ${g.web.uri}`).filter(Boolean).slice(0, 6);
   return { resultado: (c?.content?.parts || []).map((p: any) => p.text ?? "").join(""), fuentes };
@@ -340,9 +360,10 @@ Deno.serve(async (req: Request) => {
 
   const mensaje = typeof body?.mensaje === "string" ? body.mensaje.trim().slice(0, 8000) : "";
   if (!mensaje) return json({ error: "Escribí un mensaje para BS67." }, 400);
-  const prov = proveedor(env);
+  const prov: any = proveedor(env);
   if (!prov) { await registrar({ estado: "error", error: "Falta la clave de la IA." }); return json({ error: "BS67 no está configurado todavía (falta la clave de la IA)." }, 503); }
 
+  prov.turno = { reintentos: 0 };
   const proyectoId = typeof body.proyecto_id === "string" && /^[0-9a-f-]{36}$/i.test(body.proyecto_id) ? body.proyecto_id : null;
   const proyecto = proyectoId ? (await db.from("projects").select("name").eq("id", proyectoId).maybeSingle()).data?.name : null;
   const hoy = new Intl.DateTimeFormat("es-AR", { timeZone: ZONA, dateStyle: "full" }).format(new Date()) + ` (${hoyAR()})`;
@@ -386,6 +407,10 @@ Deno.serve(async (req: Request) => {
     }
     return await responder({ respuesta: "Me trabé buscando la respuesta. ¿Me lo pedís de otra forma?" });
   } catch (e) {
+    if (e instanceof ErrorIA) {
+      await registrar({ estado: "error", ia: prov.nombre, herramientas: usadas.length, error: e.info.detalle });
+      return json({ error: e.info.mensaje, limite: e.info.limite, esperar_s: e.info.esperar_s }, e.info.limite ? 429 : 502);
+    }
     const detalle = e instanceof Error ? e.message : String(e);
     console.error("bs67-chat:", detalle);
     await registrar({ estado: "error", ia: prov.nombre, herramientas: usadas.length, error: detalle.slice(0, 500) });
