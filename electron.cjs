@@ -22,7 +22,9 @@ const tipos = {
   '.webmanifest': 'application/manifest+json'
 }
 
-function servidor() {
+// Si el puerto está ocupado (la copia anterior todavía lo suelta al reiniciarse sola) reintenta unos segundos; si sigue
+// ocupado, la ventana abre igual con la versión web. Antes la app se quedaba esperando para siempre, sin ventana.
+function servidor(intentos = 10) {
   return new Promise((resolve) => {
     const s = http.createServer((req, res) => {
       let url = decodeURIComponent(req.url.split('?')[0])
@@ -33,6 +35,10 @@ function servidor() {
       const ext = path.extname(archivo).toLowerCase()
       res.writeHead(200, { 'Content-Type': tipos[ext] || 'application/octet-stream' })
       fs.createReadStream(archivo).pipe(res)
+    })
+    s.on('error', (e) => {
+      if (e.code === 'EADDRINUSE' && intentos > 1) setTimeout(() => servidor(intentos - 1).then(resolve), 500)
+      else resolve()
     })
     s.listen(PUERTO, '127.0.0.1', () => resolve())
   })
@@ -53,9 +59,11 @@ function observarActualizaciones(win) {
   })
 }
 
+let win = null
+
 async function ventana() {
   await servidor()
-  const win = new BrowserWindow({
+  win = new BrowserWindow({
     width: 1100,
     height: 820,
     minWidth: 380,
@@ -75,5 +83,16 @@ async function ventana() {
   observarActualizaciones(win)
 }
 
-app.whenReady().then(ventana)
-app.on('window-all-closed', () => app.quit())
+// Una sola copia: un segundo doble clic trae al frente la ventana abierta en vez de quedar como proceso invisible.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!win || win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+  })
+  app.whenReady().then(ventana)
+  app.on('window-all-closed', () => app.quit())
+}
