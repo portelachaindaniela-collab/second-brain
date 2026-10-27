@@ -14,7 +14,9 @@ const EXTERIOR = { rx: 348, ry: 232 }
 // Vertical: 340 de ancho (lo que entra en un celular sin achicar la letra), órbitas más altas que anchas y tarjetas
 // en dos columnas. El alto y el centro dependen de cuántas fuentes y destinos hay: los calcula disposicion().
 export const LIENZO_VERTICAL = { vertical: true, ancho: 340, cx: 170, nucleo: 54, nodo: 18, tarjeta: { ancho: 162, alto: 38 } }
-const VERTICAL = { base: 92, paso: 16, alargado: 1, margen: 6, hueco: 8, aireOrbita: 70 }
+// rxMax: la órbita más ancha deja el nodo (con su halo) entero dentro de los 340; con muchos trabajadores las órbitas
+// se juntan en vez de salirse por los costados, igual que en la compu.
+const VERTICAL = { base: 88, paso: 16, rxMax: 144, alargado: 1.25, margen: 6, hueco: 8, aireOrbita: 64 }
 // Vuelta completa en 20 minutos: se nota que se mueve, sin distraer.
 export const GRADOS_POR_SEGUNDO = 0.3
 
@@ -74,7 +76,7 @@ export function disposicion(trabajadores, { rotacion = 0, elegido = null, vertic
   const fuentes = [...new Set(recorridos.flatMap(r => r.fuentes))]
   const destinos = [...new Set([...recorridos.flatMap(r => r.destinos), REGISTRO])]
   const orbitaDe = vertical
-    ? i => ({ rx: VERTICAL.base + i * VERTICAL.paso, ry: (VERTICAL.base + i * VERTICAL.paso) * VERTICAL.alargado })
+    ? i => { const paso = n > 1 ? Math.min(VERTICAL.paso, (VERTICAL.rxMax - VERTICAL.base) / (n - 1)) : VERTICAL.paso; const rx = VERTICAL.base + i * paso; return { rx, ry: rx * VERTICAL.alargado } }
     : i => { const paso = n > 1 ? Math.min(ORBITA_PASO, (ORBITA_MAX - ORBITA_BASE) / (n - 1)) : ORBITA_PASO; return { rx: ORBITA_BASE + i * paso, ry: (ORBITA_BASE + i * paso) * ACHATADO } }
   let L = LIENZO
   if (vertical) {
@@ -203,25 +205,33 @@ export function ubicarEtiquetas(etiquetas, nodos, L = LIENZO) {
   const puestas = []
   const salida = {}
   // Busca lugar corriéndose en un sentido; null si se sale del lienzo antes de encontrarlo.
-  const centro = e => Math.min(Math.max(e.x, e.w / 2 + aire), L.ancho - e.w / 2 - aire)
+  const centro = (e, corrido = 0) => Math.min(Math.max(e.x + corrido, e.w / 2 + aire), L.ancho - e.w / 2 - aire)
+  // En cada altura prueba centrada y, si choca, corrida hacia un costado (sin dejar de quedar encima o debajo del nodo).
   const buscar = (e, arriba) => {
     let y = arriba ? e.y - radio - separacion - alto : e.y + radio + separacion
+    const corrimiento = Math.max(0, e.w / 2 - radio - 2)
     for (let i = 0; i < 24; i++) {
       if (y < aire || y + alto > L.alto - aire) return null
-      const caja = { x: centro(e) - e.w / 2, y, w: e.w, h: alto }
-      const golpe = [...fijos.filter(f => f.id !== e.id), ...puestas].find(o => choca(caja, o))
-      if (!golpe) return y
-      y = arriba ? golpe.y - alto - aire : golpe.y + golpe.h + aire
+      let primerGolpe = null
+      for (const corrido of [0, -corrimiento, corrimiento]) {
+        const x = centro(e, corrido)
+        if (Math.abs(x - e.x) > corrimiento) continue
+        const caja = { x: x - e.w / 2, y, w: e.w, h: alto }
+        const golpe = [...fijos.filter(f => f.id !== e.id), ...puestas].find(o => choca(caja, o))
+        if (!golpe) return { x, y }
+        primerGolpe ??= golpe
+      }
+      if (!primerGolpe) return null
+      y = arriba ? primerGolpe.y - alto - aire : primerGolpe.y + primerGolpe.h + aire
     }
     return null
   }
   for (const e of etiquetas) {
     // Primero del lado de afuera de la órbita; si ahí no hay lugar, del otro lado del nodo.
-    let y = buscar(e, e.arriba) ?? buscar(e, !e.arriba)
-    if (y == null) y = Math.min(Math.max(e.arriba ? e.y - radio - separacion - alto : e.y + radio + separacion, aire), L.alto - alto - aire)
-    const x = centro(e)
-    puestas.push({ x: x - e.w / 2, y, w: e.w, h: alto })
-    salida[e.id] = { x, y }
+    const lugar = buscar(e, e.arriba) ?? buscar(e, !e.arriba)
+      ?? { x: centro(e), y: Math.min(Math.max(e.arriba ? e.y - radio - separacion - alto : e.y + radio + separacion, aire), L.alto - alto - aire) }
+    puestas.push({ x: lugar.x - e.w / 2, y: lugar.y, w: e.w, h: alto })
+    salida[e.id] = lugar
   }
   return salida
 }

@@ -63,6 +63,15 @@ for (const vertical of [false, true]) {
   })
 }
 
+test('celular: con muchos trabajadores las órbitas se juntan y ningún nodo se sale por los costados', () => {
+  const muchos = Array.from({ length: 12 }, (_, i) => ({ clave: `t${i}`, nombre: `Trabajador ${i}`, color: 'azul', activo: true }))
+  for (let giro = 0; giro < 360; giro += 10) {
+    const dv = disposicion(muchos, { rotacion: giro, vertical: true })
+    const L = dv.lienzo
+    for (const n of dv.nodos.filter(x => x.tipo === 'trabajador')) assert.ok(n.x - L.nodo - 7 >= 0 && n.x + L.nodo + 7 <= L.ancho, `giro ${giro}: ${n.id} se sale`)
+  }
+})
+
 test('celular: fuentes arriba, destinos abajo, en dos columnas que entran en 340', () => {
   const dv = disposicion(trabajadores, { vertical: true })
   const L = dv.lienzo
