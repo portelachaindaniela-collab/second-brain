@@ -30,15 +30,25 @@ async function ultimoScraperEmpleo(admin: any) {
   return data?.payload ?? null;
 }
 
+// El semáforo de la app de Valentina lo arma `trabajador-agenda-valentina`; acá solo va su frase si es de las últimas 30 h.
+async function ultimaAgendaValentina(admin: any) {
+  const { data } = await admin.from('trabajos_corridas').select('payload,iniciado_at')
+    .eq('trabajador', 'agenda_valentina').eq('estado', 'ok')
+    .order('iniciado_at', { ascending: false }).limit(1).maybeSingle();
+  if (!data?.payload?.resumen || Date.now() - Date.parse(data.iniciado_at) > 30 * 3600_000) return null;
+  return data.payload.resumen as string;
+}
+
 async function construirResumen(admin: any, ownerId: string) {
   const inicioDia = new Date(); inicioDia.setUTCHours(0, 0, 0, 0);
   const finDia = new Date(inicioDia.getTime() + 24 * 3600_000);
-  const [eventos, tareas, mailsRaw, reglasRes, scraper] = await Promise.all([
+  const [eventos, tareas, mailsRaw, reglasRes, scraper, agendaValentina] = await Promise.all([
     admin.from('calendar_events').select('title,starts_at').eq('owner_id', ownerId).gte('starts_at', inicioDia.toISOString()).lt('starts_at', finDia.toISOString()).order('starts_at').limit(8),
     admin.from('tasks').select('title').eq('owner_id', ownerId).eq('done', false).order('touched_at', { ascending: true }).limit(5),
     admin.from('emails').select('subject,from_name,from_addr').eq('owner_id', ownerId).eq('is_unread', true).order('received_at', { ascending: false }).limit(200),
     admin.from('mail_reglas').select('tipo,patron').eq('owner_id', ownerId),
     ultimoScraperEmpleo(admin),
+    ultimaAgendaValentina(admin),
   ]);
   const evs = eventos.data || [];
   const tas = tareas.data || [];
@@ -63,6 +73,7 @@ async function construirResumen(admin: any, ownerId: string) {
       partes.push(nuevas ? `El buscador de empleo encontró ${nuevas} oferta${nuevas === 1 ? '' : 's'} nueva${nuevas === 1 ? '' : 's'}.` : 'El buscador de empleo no encontró ofertas nuevas.');
     }
   }
+  if (agendaValentina) partes.push(agendaValentina);
   return partes.join(' ');
 }
 

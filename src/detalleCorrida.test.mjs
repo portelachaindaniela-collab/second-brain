@@ -48,3 +48,21 @@ test('sin payload no hay detalle; texto sin fecha queda como está', () => {
   assert.deepEqual(detalleCorrida('maria', { payload: null }), { resumen: null, secciones: [] })
   assert.deepEqual(itemConFecha('suelto'), { dia: null, texto: 'suelto' })
 })
+
+test('agenda de Valentina: el resumen del semáforo, avisos arriba y el chat solo en números', () => {
+  const payload = {
+    semaforo: 'amarillo', resumen: '🟡 Agenda de Valentina: algo para mirar — 1 tarea atrasada.',
+    avisos: [{ nivel: 'amarillo', texto: '1 tarea atrasada' }],
+    sitio: { status: 200, manifest: 200, sw: 200, pages: 'built' },
+    backend: { funcion: 401, ics: true, groq: { ok: true, modelo: true, vision: true }, logs: 'sin acceso' },
+    uso: { dino_por_dia: [{ dia: '2026-10-26', cantidad: 3 }, { dia: '2026-10-27', cantidad: 210 }] },
+    cole: { atrasadas: [{ titulo: 'Geo: Mapa', fecha: '2026-10-25' }], proximos_examenes: [], notas_nuevas: [{ materia: 'Bio', nota: 9 }] },
+    chat: { mensajes_24h: 4, mama_sin_leer: 1, mama_sin_leer_viejos: 0 },
+  }
+  const d = detalleCorrida('agenda_valentina', { payload })
+  assert.equal(d.resumen, payload.resumen)
+  assert.deepEqual(d.secciones.map(s => s.titulo), ['para mirar', 'la app', 'mensajes al Dino por día', 'tareas atrasadas', 'notas nuevas', 'chat con mamá (solo cantidades)'])
+  assert.equal(d.secciones[0].items[0].nivel, 'aviso')
+  assert.equal(d.secciones[1].filas.find(f => f.etiqueta === 'logs').valor, 'sin acceso')
+  assert.equal(d.secciones[2].filas[1].estado, 'aviso')
+})

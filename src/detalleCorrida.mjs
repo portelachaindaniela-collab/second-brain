@@ -119,7 +119,41 @@ function canillita(p) {
   }
 }
 
-const FORMAS = { buscador_eventos: buscador, canillita, google_sync: google, maria, scraper_empleo: scraper }
+// Agenda de Valentina: el semáforo ya viene armado; del chat solo hay cantidades.
+const NIVEL_SEMAFORO = { rojo: 'error', amarillo: 'aviso' }
+const SI_NO = v => (v === 200 || v === true ? 'ok' : v == null ? '—' : String(v))
+
+function agendaValentina(p) {
+  const cole = p.cole ?? {}, chat = p.chat ?? {}, sitio = p.sitio ?? {}, backend = p.backend ?? {}
+  const logs = backend.logs && typeof backend.logs === 'object' ? backend.logs : null
+  const dino = p.uso?.dino_por_dia ?? []
+  const secciones = []
+  if (p.avisos?.length) secciones.push({ titulo: 'para mirar', items: p.avisos.map(a => ({ texto: a.texto, nivel: NIVEL_SEMAFORO[a.nivel] })) })
+  secciones.push({ titulo: 'la app', filas: [
+    { etiqueta: 'sitio', valor: SI_NO(sitio.status), texto: true, estado: sitio.status === 200 ? null : 'error' },
+    { etiqueta: 'manifest y sw.js', valor: sitio.manifest === 200 && sitio.sw === 200 ? 'ok' : 'falta', texto: true, estado: sitio.manifest === 200 && sitio.sw === 200 ? null : 'error' },
+    { etiqueta: 'build de Pages', valor: sitio.pages ?? '—', texto: true, estado: sitio.pages === 'errored' ? 'error' : null },
+    { etiqueta: 'función agenda-dulce', valor: backend.funcion === 401 ? 'ok' : SI_NO(backend.funcion), texto: true },
+    { etiqueta: 'calendario de mamá', valor: SI_NO(backend.ics), texto: true, estado: backend.ics === false ? 'error' : null },
+    { etiqueta: 'Groq', valor: !backend.groq?.ok ? 'no responde' : backend.groq.vision ? 'ok, con fotos' : 'ok, sin fotos', texto: true },
+    ...(logs ? [
+      { etiqueta: 'errores 5xx en 24 h', valor: n(logs.errores_5xx), estado: logs.errores_5xx ? 'error' : null },
+      { etiqueta: 'Groq ocupado (429) en 24 h', valor: n(logs.groq_429), tenue: !logs.groq_429 },
+    ] : [{ etiqueta: 'logs', valor: 'sin acceso', texto: true, tenue: true }]),
+  ] })
+  if (dino.length) secciones.push({ titulo: 'mensajes al Dino por día', filas: dino.map(d => ({ etiqueta: diaCorto(d.dia), valor: n(d.cantidad), estado: d.cantidad > 200 ? 'aviso' : null })) })
+  if (cole.atrasadas?.length) secciones.push({ titulo: 'tareas atrasadas', items: cole.atrasadas.map(t => ({ dia: diaCorto(t.fecha), texto: t.titulo, nivel: 'aviso' })) })
+  if (cole.proximos_examenes?.length) secciones.push({ titulo: 'exámenes que se vienen', items: cole.proximos_examenes.map(e => ({ dia: diaCorto(e.fecha), texto: e.titulo })) })
+  if (cole.notas_nuevas?.length) secciones.push({ titulo: 'notas nuevas', filas: cole.notas_nuevas.map(x => ({ etiqueta: x.materia, valor: n(x.nota) })) })
+  secciones.push({ titulo: 'chat con mamá (solo cantidades)', filas: [
+    { etiqueta: 'mensajes en 24 h', valor: n(chat.mensajes_24h) },
+    { etiqueta: 'de mamá sin leer', valor: n(chat.mama_sin_leer), tenue: !chat.mama_sin_leer },
+    { etiqueta: 'de mamá sin leer hace horas', valor: n(chat.mama_sin_leer_viejos), estado: chat.mama_sin_leer_viejos ? 'aviso' : null },
+  ] })
+  return { resumen: p.resumen ?? null, secciones }
+}
+
+const FORMAS = { agenda_valentina: agendaValentina, buscador_eventos: buscador, canillita, google_sync: google, maria, scraper_empleo: scraper }
 
 const legible = k => String(k).replace(/_/g, ' ')
 

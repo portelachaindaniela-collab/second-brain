@@ -25,6 +25,7 @@ export const DESCRIPCION_FUENTE = {
   tareas: 'Tareas quietas',
   eventbrite: 'Eventos y actividades',
   medios: 'Webs, X y Bluesky',
+  agenda_valentina: 'Su app, Dino y chat',
 }
 // Nombre de cada destino para la persona (la clave es la tabla adonde escribe).
 export const NOMBRE_DESTINO = {

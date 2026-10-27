@@ -197,3 +197,15 @@ update public.trabajadores
 set parametros = jsonb_set(parametros, '{palabras_clave}',
   (select jsonb_agg(case when p = 'digital' then 'transformación digital' else p end) from jsonb_array_elements_text(parametros->'palabras_clave') p))
 where clave = 'buscador_eventos' and parametros->'palabras_clave' ? 'digital';
+
+-- ---------- Agenda de Valentina (migración trabajador_agenda_valentina, 2026-10-27) ----------
+-- Vigila Mi Agenda Dulce (otro repo, backend agenda-dulce + tablas dulce_* en este proyecto). Solo lee: no escribe
+-- en dulce_*, no le manda nada a Valentina ni a mamá. Cada 3 h (UTC); el semáforo entra en resumen-diario.
+alter table public.trabajadores drop constraint trabajadores_color_check;
+alter table public.trabajadores add constraint trabajadores_color_check
+  check (color in ('ambar', 'azul', 'violeta', 'rosa', 'cian', 'lima', 'arena', 'fucsia'));
+insert into public.trabajadores (clave, funcion, nombre, descripcion, tipo, activo, frecuencia, minutos_trabado, color, parametros) values
+('agenda_valentina', 'trabajador-agenda-valentina', 'Agenda de Valentina',
+ 'Vigila la app de Valentina: sitio y build de Pages, función agenda-dulce y Groq, si la usa, el cole y el chat (solo cantidades). Solo lee.',
+ 'monitor', true, '23 */3 * * *', 5, 'fucsia',
+ '{"familia": "Valentina", "dias_sin_abrir": 3, "horas_sin_leer": 6, "dias_examenes": 3, "dino_aviso": 200}'::jsonb);

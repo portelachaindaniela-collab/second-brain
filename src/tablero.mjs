@@ -61,6 +61,7 @@ export const FUENTES = {
   tareas: 'Tus tareas',
   eventbrite: 'Eventbrite',
   medios: 'Fuentes de noticias',
+  agenda_valentina: 'Agenda de Valentina',
 }
 // María no lee una fuente de afuera: consolida lo que dejan Sitios, Tareas y Google en trabajos_corridas.
 export const RECORRIDOS = {
@@ -71,6 +72,7 @@ export const RECORRIDOS = {
   tareas_estancadas: { fuentes: ['tareas'], destinos: ['process_reports'] },
   buscador_eventos: { fuentes: ['eventbrite'], destinos: ['eventos'] },
   canillita: { fuentes: ['medios'], destinos: ['noticias'] },
+  agenda_valentina: { fuentes: ['agenda_valentina'], destinos: [] },
 }
 export const REGISTRO = 'trabajos_corridas'
 
