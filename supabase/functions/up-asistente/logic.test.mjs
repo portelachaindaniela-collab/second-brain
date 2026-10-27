@@ -1,11 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { proveedor, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo, HERRAMIENTAS, ACCIONES, validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente, buscarPlan, bloqueoDeDia } from './logic.mjs'
+import { proveedores, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo, HERRAMIENTAS, ACCIONES, validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente, buscarPlan, bloqueoDeDia } from './logic.mjs'
 
-test('usa Groq si hay clave y si no, Gemini', () => {
-  assert.equal(proveedor({ GROQ_API_KEY: 'g', GEMINI_API_KEY: 'x' }).nombre, 'groq')
-  assert.equal(proveedor({ GEMINI_API_KEY: 'x' }).nombre, 'gemini')
-  assert.equal(proveedor({}), null)
+test('Groq primero y Gemini de respaldo; UP_ASISTENTE_MODELO va al proveedor que corresponde', () => {
+  const modelos = env => proveedores(env).map(p => `${p.nombre} ${p.modelo}`)
+  assert.deepEqual(modelos({ GROQ_API_KEY: 'g', GEMINI_API_KEY_BS67: 'x' }), ['groq openai/gpt-oss-120b', 'gemini gemini-3.6-flash'])
+  assert.deepEqual(modelos({ GROQ_API_KEY: 'g', GEMINI_API_KEY_BS67: 'x', UP_ASISTENTE_MODELO: 'llama-x', UP_MODEL: 'gemini-up' }), ['groq llama-x', 'gemini gemini-up'])
+  assert.deepEqual(modelos({ GROQ_API_KEY: 'g', GEMINI_API_KEY_BS67: 'x', UP_ASISTENTE_MODELO: 'gemini-elegido' }), ['groq openai/gpt-oss-120b', 'gemini gemini-elegido'])
+  assert.deepEqual(proveedores({}), [])
 })
 
 test('todas las acciones están entre las herramientas', () => {

@@ -1,16 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  proveedor, sistema, HERRAMIENTAS, ACCIONES, validarAccion, describirAccion, normalizarEvento, venceISO, slugProyecto,
-  urlPermitida, htmlATexto, historialParaModelo, contiene, ultimoPorAgente, fragmentosDeCharla, errorDeIA, esperaParaReintento, sinSecretos,
+  proveedores, sistema, HERRAMIENTAS, ACCIONES, validarAccion, describirAccion, normalizarEvento, venceISO, slugProyecto,
+  urlPermitida, htmlATexto, historialParaModelo, contiene, ultimoPorAgente, fragmentosDeCharla,
 } from './logic.mjs'
 
 const ID = '11111111-2222-3333-4444-555555555555'
 
-test('usa Groq si hay clave y si no, Gemini', () => {
-  assert.equal(proveedor({ GROQ_API_KEY: 'g', GEMINI_API_KEY: 'x' }).nombre, 'groq')
-  assert.equal(proveedor({ GEMINI_API_KEY: 'x' }).nombre, 'gemini')
-  assert.equal(proveedor({}), null)
+test('Groq primero y Gemini de respaldo, con sus modelos de siempre', () => {
+  assert.deepEqual(proveedores({ GROQ_API_KEY: 'g', GEMINI_API_KEY_BS67: 'x' }).map(p => `${p.nombre} ${p.modelo}`), ['groq openai/gpt-oss-120b', 'gemini gemini-3.6-flash'])
+  assert.deepEqual(proveedores({ GEMINI_API_KEY_BS67: 'x', BS67_MODEL: 'gemini-otro' }).map(p => p.modelo), ['gemini-otro'])
+  assert.deepEqual(proveedores({}), [])
 })
 
 test('el sistema dice quién es, la fecha y dónde está Daniela', () => {
@@ -111,51 +111,4 @@ test('encuentra lo hablado en charlas viejas', () => {
   assert.equal(r.encontrada, true)
   assert.deepEqual(r.fragmentos, ['Daniela: Quiero hablar del Olé Summit'])
   assert.equal(fragmentosDeCharla(charla, 'presupuesto').encontrada, false)
-})
-
-const groq429 = texto => ({ error: { message: texto, type: 'requests', code: 'rate_limit_exceeded' } })
-
-test('Groq: distingue límite por minuto y por día', () => {
-  const rpm = errorDeIA(429, groq429('Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01abcXYZ` service tier `on_demand` on requests per minute (RPM): Limit 30, Used 30, Requested 1. Please try again in 2s.'), '2')
-  assert.equal(rpm.limite, 'minuto')
-  assert.equal(rpm.esperar_s, 2)
-  assert.match(rpm.mensaje, /Esperá un minuto/)
-  assert.match(rpm.detalle, /^HTTP 429 rate_limit_exceeded esperar=2s: Rate limit/)
-  assert.doesNotMatch(rpm.detalle, /org_01abcXYZ/)
-  const tpd = errorDeIA(429, groq429('Rate limit reached for model `openai/gpt-oss-120b` on tokens per day (TPD): Limit 200000, Used 199500, Requested 900. Please try again in 7m12.5s.'), null)
-  assert.equal(tpd.limite, 'dia')
-  assert.equal(tpd.esperar_s, 433)
-  assert.match(tpd.mensaje, /cupo de hoy/)
-  assert.equal(errorDeIA(429, groq429('... on tokens per minute (TPM) ... Please try again in 450ms.')).esperar_s, 1)
-})
-
-test('Gemini: lee QuotaFailure y RetryInfo, también dentro de un array', () => {
-  const cuerpo = cuota => [{ error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'You exceeded your current quota.', details: [
-    { '@type': 'type.googleapis.com/google.rpc.QuotaFailure', violations: [{ quotaMetric: 'generativelanguage.googleapis.com/generate_content_free_tier_requests', quotaId: cuota }] },
-    { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '37s' },
-  ] } }]
-  const min = errorDeIA(429, cuerpo('GenerateRequestsPerMinutePerProjectPerModel-FreeTier'))
-  assert.equal(min.limite, 'minuto')
-  assert.equal(min.esperar_s, 37)
-  assert.match(min.detalle, /RESOURCE_EXHAUSTED cuota=GenerateRequestsPerMinute/)
-  assert.equal(errorDeIA(429, cuerpo('GenerateRequestsPerDayPerProjectPerModel-FreeTier')).limite, 'dia')
-})
-
-test('otros errores no son límite y no muestran claves', () => {
-  const e = errorDeIA(503, { error: { message: 'Overloaded, key=AIzaSyA1234567890abcdefghijk' } })
-  assert.equal(e.limite, null)
-  assert.match(e.mensaje, /HTTP 503/)
-  assert.doesNotMatch(e.detalle + e.mensaje, /AIzaSy/)
-  assert.equal(errorDeIA(500, null).detalle, 'HTTP 500')
-  assert.equal(errorDeIA(429, null).limite, 'minuto')
-  assert.equal(sinSecretos('Bearer gsk_abc123 y ?key=xyz&a=1'), 'Bearer [clave] y ?key=[clave]&a=1')
-})
-
-test('reintenta solo el límite por minuto y con espera corta', () => {
-  assert.equal(esperaParaReintento({ limite: 'minuto', esperar_s: null }), 5)
-  assert.equal(esperaParaReintento({ limite: 'minuto', esperar_s: 0 }), 1)
-  assert.equal(esperaParaReintento({ limite: 'minuto', esperar_s: 12 }), 12)
-  assert.equal(esperaParaReintento({ limite: 'minuto', esperar_s: 45 }), null)
-  assert.equal(esperaParaReintento({ limite: 'dia', esperar_s: 3 }), null)
-  assert.equal(esperaParaReintento({ limite: null }), null)
 })

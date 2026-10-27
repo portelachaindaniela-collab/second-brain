@@ -1,8 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
-  MAX_VUELTAS, HERRAMIENTAS, ACCIONES, proveedor, sistema, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo,
+  MAX_VUELTAS, HERRAMIENTAS, ACCIONES, proveedores, sistema, validarAccion, describirAccion, urlPermitida, htmlATexto, historialParaModelo,
   validarRedaccion, mensajesRedactar, limpiarPropuesta, numerosSinFuente, buscarPlan, bloqueoDeDia, fragmentosDeCharla } from "./logic.mjs";
+import { ErrorIA, conRespaldo, llamarModelo, buscarWeb } from "../_shared/ia.mjs";
 
 // BS67 en UP. La app manda { mensajes } (la conversación), { ejecutar: { nombre, args } } (una acción que la
 // dueña confirmó) o { redactar: { fecha, red, texto, pedido } } (una versión para la mesa de trabajo).
@@ -16,37 +17,8 @@ const hoyAR = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: T
 const masDias = (f: string, n: number) => { const d = new Date(`${f}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const env = Deno.env.toObject();
 
-async function modelo(prov: any, messages: any[], conHerramientas = true) {
-  const r = await fetch(prov.url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${prov.clave}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: prov.modelo, messages, temperature: 0.4, max_tokens: 1500, ...(conHerramientas && { tools: HERRAMIENTAS, tool_choice: "auto" }) }),
-    signal: AbortSignal.timeout(60000),
-  });
-  const data = await r.json().catch(() => null);
-  if (r.status === 429) throw new Error("La IA llegó a su límite de consultas gratis por ahora. Probá de nuevo en un rato.");
-  if (!r.ok) throw new Error(data?.error?.message || `La IA respondió HTTP ${r.status}.`);
-  return data?.choices?.[0]?.message ?? {};
-}
-
-// Búsqueda web: con Groq, su modelo Compound (busca solo); con Gemini, la búsqueda de Google integrada.
-async function buscarWeb(prov: any, consulta: string) {
-  if (prov.nombre === "groq") {
-    const m = await modelo({ ...prov, modelo: "groq/compound" }, [{ role: "user", content: `Buscá en internet y respondé en español con las fuentes (URLs): ${consulta}` }], false);
-    return { resultado: m.content || "Sin resultados." };
-  }
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(prov.modelo)}:generateContent?key=${prov.clave}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: `Buscá en internet y respondé en español: ${consulta}` }] }], tools: [{ google_search: {} }] }),
-    signal: AbortSignal.timeout(45000),
-  });
-  const data = await r.json().catch(() => null);
-  if (!r.ok) return { error: `La búsqueda web no está disponible ahora (${data?.error?.message || r.status}).` };
-  const c = data?.candidates?.[0];
-  const fuentes = (c?.groundingMetadata?.groundingChunks || []).map((g: any) => g.web && `${g.web.title}: ${g.web.uri}`).filter(Boolean).slice(0, 6);
-  return { resultado: (c?.content?.parts || []).map((p: any) => p.text ?? "").join(""), fuentes };
-}
+const modelo = (prov: any, messages: any[], conHerramientas = true) =>
+  llamarModelo(prov, { messages, temperature: 0.4, max_tokens: 1500, ...(conHerramientas && { tools: HERRAMIENTAS, tool_choice: "auto" }) });
 
 async function leerLink(valor: string) {
   const url = urlPermitida(valor);
@@ -78,7 +50,7 @@ async function correrPipeline(jwt: string, fecha: string, calendarioId?: string)
 }
 
 // Herramientas de lectura: corren solas y devuelven datos para el modelo.
-async function leer(db: any, prov: any, nombre: string, a: any) {
+async function leer(db: any, provs: any[], prov: any, nombre: string, a: any) {
   const hoy = hoyAR();
   switch (nombre) {
     case "estado_hoy": {
@@ -142,7 +114,7 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
         ? { charlas: encontradas.map(({ c, f }: any) => ({ titulo: c.titulo, app: c.app, cuando: c.updated_at, fragmentos: f.fragmentos })) }
         : { charlas: [], nota: "No encontré charlas sobre eso." };
     }
-    case "buscar_web": return await buscarWeb(prov, String(a?.consulta ?? "").slice(0, 500));
+    case "buscar_web": return await buscarWeb(provs, prov, String(a?.consulta ?? "").slice(0, 500), modelo);
     case "leer_link": return await leerLink(String(a?.url ?? ""));
     default: return { error: "Herramienta desconocida." };
   }
@@ -266,8 +238,9 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const prov = proveedor(env);
-  if (!prov) { await registrar({ estado: "error", error: "Falta la clave de la IA." }); return json({ error: "Falta configurar la IA (GROQ_API_KEY o GEMINI_API_KEY)." }, 503); }
+  const provs = proveedores(env);
+  if (!provs.length) { await registrar({ estado: "error", error: "Falta la clave de la IA." }); return json({ error: "Falta configurar la IA (GROQ_API_KEY, OPENROUTER_API_KEY o GEMINI_API_KEY_BS67)." }, 503); }
+  const errorIA = (e: ErrorIA) => json({ error: e.info.mensaje, limite: e.info.limite, esperar_s: e.info.esperar_s }, e.info.limite ? 429 : 502);
   if (body?.redactar) {
     const v: any = validarRedaccion(body.redactar);
     if (!v.ok) return json({ error: v.error }, 400);
@@ -279,25 +252,26 @@ Deno.serve(async (req: Request) => {
     const ficha = f.data || [];
     const tema = v.args.red === "instagram" && d.data?.tema_instagram ? d.data.tema_instagram : d.data?.tema_dia;
     try {
-      const m = await modelo(prov, mensajesRedactar({ ...v.args, tema, ficha }), false);
+      const { resultado: m, ia } = await conRespaldo(provs, (prov: any) => modelo(prov, mensajesRedactar({ ...v.args, tema, ficha }), false));
       const propuesta = limpiarPropuesta(m.content || "");
       if (!propuesta) return json({ error: "La IA no devolvió una versión. Probá de nuevo." }, 502);
-      return json({ propuesta, numeros_sin_fuente: numerosSinFuente(propuesta, [v.args.texto, ...ficha.map((x: any) => x.dato)]), ia: prov.nombre });
+      return json({ propuesta, numeros_sin_fuente: numerosSinFuente(propuesta, [v.args.texto, ...ficha.map((x: any) => x.dato)]), ia });
     } catch (e) {
+      if (e instanceof ErrorIA) return errorIA(e);
       return json({ error: e instanceof Error ? e.message : String(e) }, 502);
     }
   }
 
-  const mensajes: any[] = [{ role: "system", content: sistema(hoyAR()) }, ...historialParaModelo(body?.mensajes)];
-  const usadas: string[] = [];
-  try {
+  const inicial: any[] = [{ role: "system", content: sistema(hoyAR()) }, ...historialParaModelo(body?.mensajes)];
+  // Un intento completo con un proveedor; si falla, conRespaldo lo repite de cero con el siguiente (las lecturas no
+  // cambian nada y las acciones solo se proponen).
+  const conversar = async (prov: any) => {
+    const mensajes = [...inicial];
+    const usadas: string[] = [];
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
       const m = await modelo(prov, mensajes);
       const llamadas = m.tool_calls || [];
-      if (!llamadas.length) {
-        await registrar({ estado: "ok", ia: prov.nombre, herramientas: usadas.length });
-        return json({ respuesta: (m.content || "").trim() || "No tengo una respuesta para eso.", herramientas: usadas, ia: prov.nombre });
-      }
+      if (!llamadas.length) return { respuesta: (m.content || "").trim() || "No tengo una respuesta para eso.", herramientas: usadas };
       const accion = llamadas.find((l: any) => ACCIONES.has(l.function?.name));
       if (accion) {
         let args: any = {};
@@ -307,26 +281,36 @@ Deno.serve(async (req: Request) => {
           mensajes.push({ role: "assistant", content: m.content ?? "", tool_calls: [accion] }, { role: "tool", tool_call_id: accion.id, content: JSON.stringify({ error: v.error }) });
           continue;
         }
-        await registrar({ estado: "ok", ia: prov.nombre, herramientas: usadas.length });
-        return json({
-          respuesta: (m.content || "").trim(), herramientas: usadas, ia: prov.nombre,
+        return {
+          respuesta: (m.content || "").trim(), herramientas: usadas,
           propuesta: { nombre: accion.function.name, args: v.args, descripcion: describirAccion(accion.function.name, v.args) },
-        });
+        };
       }
       mensajes.push({ role: "assistant", content: m.content ?? "", tool_calls: llamadas });
       for (const l of llamadas) {
         let args: any = {};
         try { args = JSON.parse(l.function?.arguments || "{}"); } catch { /* args vacíos */ }
         usadas.push(l.function?.name);
-        const resultado = await leer(db, prov, l.function?.name, args);
+        const resultado = await leer(db, provs, prov, l.function?.name, args);
         mensajes.push({ role: "tool", tool_call_id: l.id, content: JSON.stringify(resultado).slice(0, 16000) });
       }
     }
-    await registrar({ estado: "error", ia: prov.nombre, herramientas: usadas.length, error: "Se trabó: demasiadas vueltas de herramientas." });
-    return json({ respuesta: "Me trabé buscando la respuesta. ¿Me lo pedís de otra forma?", herramientas: usadas, ia: prov.nombre });
+    return { respuesta: "Me trabé buscando la respuesta. ¿Me lo pedís de otra forma?", herramientas: usadas, trabado: true };
+  };
+
+  try {
+    const { resultado: { trabado, ...resultado }, ia, respaldo } = await conRespaldo(provs, conversar);
+    await registrar(trabado
+      ? { estado: "error", ia, herramientas: resultado.herramientas.length, respaldo, error: "Se trabó: demasiadas vueltas de herramientas." }
+      : { estado: "ok", ia, herramientas: resultado.herramientas.length, respaldo });
+    return json({ ...resultado, ia });
   } catch (e) {
+    if (e instanceof ErrorIA) {
+      await registrar({ estado: "error", ia: e.info.ia, error: e.info.detalle, respaldo: e.info.respaldo });
+      return errorIA(e);
+    }
     const detalle = e instanceof Error ? e.message : String(e);
-    await registrar({ estado: "error", ia: prov.nombre, herramientas: usadas.length, error: detalle.slice(0, 500) });
+    await registrar({ estado: "error", error: detalle.slice(0, 500) });
     return json({ error: detalle }, 502);
   }
 });

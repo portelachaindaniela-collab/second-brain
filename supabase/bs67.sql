@@ -35,3 +35,6 @@ create table public.bs67_registro (
 create index bs67_registro_owner_idx on public.bs67_registro (owner_id, at desc);
 alter table public.bs67_registro enable row level security;
 create policy "dueña lee su registro de bs67" on public.bs67_registro for select to authenticated using (owner_id = (select auth.uid()));
+
+-- respaldo: cuando Groq falla y el mensaje lo responde Gemini (o fallan los dos), el motivo, p. ej. «groq 429 TPM → gemini».
+alter table public.bs67_registro add column if not exists respaldo text;

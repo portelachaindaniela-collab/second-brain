@@ -144,10 +144,10 @@ export function reporteMaria(saludes) {
 
 // BS67, el asistente de las tres apps: es lo primero que controla María. Mira lo que BS67 registró en las últimas 24 h
 // (cada respuesta y cada acción) y la prueba que hace ella misma en cada vuelta: que las funciones de BS67 respondan y
-// que haya alguna IA disponible.
-// prueba: { funciones: { 'bs67-chat': bool, 'up-asistente': bool }, ias: { groq: 'ok'|'error'|'sin_clave', gemini: ... } }
+// que haya alguna IA disponible. Si Groq falla y responde OpenRouter o Gemini, el registro trae el motivo en respaldo.
+// prueba: { funciones: { 'bs67-chat': bool, 'up-asistente': bool }, ias: { groq: 'ok'|'error'|'sin_clave', openrouter: ..., gemini: ... } }
 const NOMBRE_APP = { bs67: 'BS67', up: 'UP', pdg: 'PDG' }
-const NOMBRE_IA = { groq: 'Groq', gemini: 'Gemini' }
+const NOMBRE_IA = { groq: 'Groq', openrouter: 'OpenRouter', gemini: 'Gemini' }
 export const BS67_LENTO_MS = 30_000
 
 export function reporteBS67(registros = [], prueba = {}, ahora = Date.now()) {
@@ -162,6 +162,9 @@ export function reporteBS67(registros = [], prueba = {}, ahora = Date.now()) {
   const iasOk = ias.filter(([, e]) => e === 'ok').map(([ia]) => NOMBRE_IA[ia] ?? ia)
   const iasMal = ias.filter(([, e]) => e !== 'ok').map(([ia]) => NOMBRE_IA[ia] ?? ia)
   const cuota = errores.filter(r => /l[íi]mite|quota|429|cuota/i.test(r.error ?? '')).length
+  const respaldos = recientes.filter(r => r.estado === 'ok' && r.respaldo)
+  const porRespaldo = {}
+  for (const r of respaldos) porRespaldo[r.ia] = (porRespaldo[r.ia] ?? 0) + 1
 
   const problemas = []
   let estado = 'ok'
@@ -176,15 +179,17 @@ export function reporteBS67(registros = [], prueba = {}, ahora = Date.now()) {
   const uso = recientes.length
     ? `${recientes.length} ${recientes.length === 1 ? 'respuesta' : 'respuestas'} en 24 h (${Object.entries(porApp).map(([a, n]) => `${NOMBRE_APP[a] ?? a} ${n}`).join(' · ')})`
     : 'sin uso en 24 h'
+  const deRespaldo = Object.entries(porRespaldo).map(([ia, n]) => `${n} ${n === 1 ? 'respondida' : 'respondidas'} por ${NOMBRE_IA[ia] ?? ia} de respaldo`).join(', ')
   const ultimo = errores.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]
   return {
     agente: 'bs67',
     estado,
     resumen: estado === 'ok'
-      ? `BS67 funciona: ${uso}${mediana !== null ? `, contesta en ~${Math.max(1, Math.round(mediana / 1000))} s` : ''}${iasOk.length ? `. IA: ${iasOk.join(' y ')}` : ''}.`
-      : `BS67: ${problemas.join('; ')}. ${uso}.`,
+      ? `BS67 funciona: ${uso}${deRespaldo ? ` (${deRespaldo})` : ''}${mediana !== null ? `, contesta en ~${Math.max(1, Math.round(mediana / 1000))} s` : ''}${iasOk.length ? `. IA: ${iasOk.join(' y ')}` : ''}.`
+      : `BS67: ${problemas.join('; ')}. ${uso}${deRespaldo ? ` (${deRespaldo})` : ''}.`,
     datos: {
-      total: recientes.length, errores: errores.length, por_app: porApp, mediana_ms: mediana, prueba,
+      total: recientes.length, errores: errores.length, por_app: porApp, mediana_ms: mediana, prueba, respaldos: respaldos.length,
+      ultimo_respaldo: respaldos.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]?.respaldo ?? null,
       ultimo_error: ultimo ? { app: ultimo.app, error: ultimo.error, cuando: hace(Date.parse(ultimo.at), ahora) } : null,
     },
   }

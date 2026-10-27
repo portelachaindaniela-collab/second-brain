@@ -24,7 +24,8 @@ async function ultimaCorrida(admin: any, clave: string, soloOk = false) {
 }
 
 // La prueba de BS67 que hace María en cada vuelta, sin gastar consultas de IA: que las funciones de BS67 arranquen
-// (sin sesión contestan "Iniciá sesión") y que las claves de Groq y Gemini sigan valiendo (listar modelos es gratis).
+// (sin sesión contestan "Iniciá sesión") y que las claves de Groq, OpenRouter y Gemini sigan valiendo (listar modelos o
+// ver los créditos es gratis). OpenRouter da "error" también si se quedó sin créditos.
 async function probarBS67() {
   const url = Deno.env.get("SUPABASE_URL")!;
   const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -39,12 +40,19 @@ async function probarBS67() {
     if (!clave) return "sin_clave";
     try { return (await pedir(clave)).ok ? "ok" : "error"; } catch { return "error"; }
   };
-  const [chat, up, groq, gemini] = await Promise.all([
+  const [chat, up, groq, openrouter, gemini] = await Promise.all([
     funcion("bs67-chat"), funcion("up-asistente"),
     ia(Deno.env.get("GROQ_API_KEY"), c => fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${c}` }, signal: AbortSignal.timeout(15000) })),
-    ia(Deno.env.get("GEMINI_API_KEY"), c => fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${c}`, { signal: AbortSignal.timeout(15000) })),
+    ia(Deno.env.get("OPENROUTER_API_KEY"), async c => {
+      const pedir = (ruta: string) => fetch(`https://openrouter.ai/api/v1/${ruta}`, { headers: { Authorization: `Bearer ${c}` }, signal: AbortSignal.timeout(15000) });
+      const r = await pedir("credits");
+      if (!r.ok) return pedir("key");
+      const d = (await r.json().catch(() => null))?.data;
+      return new Response(null, { status: d && d.total_credits - d.total_usage <= 0 ? 402 : 200 });
+    }),
+    ia(Deno.env.get("GEMINI_API_KEY_BS67"), c => fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${c}`, { signal: AbortSignal.timeout(15000) })),
   ]);
-  return { funciones: { "bs67-chat": chat, "up-asistente": up }, ias: { groq, gemini } };
+  return { funciones: { "bs67-chat": chat, "up-asistente": up }, ias: { groq, openrouter, gemini } };
 }
 
 async function consolidar(admin: any, ownerId: string) {
@@ -74,7 +82,7 @@ async function consolidar(admin: any, ownerId: string) {
     ultimaCorrida(admin, "tareas_estancadas", true),
     ultimaCorrida(admin, "google_sync"),
     ultimaCorrida(admin, "google_sync", true),
-    admin.from("bs67_registro").select("app,tipo,estado,ia,ms,error,at").eq("owner_id", ownerId).gte("at", new Date(ahora - 24 * 3600_000).toISOString()).limit(2000),
+    admin.from("bs67_registro").select("app,tipo,estado,ia,ms,error,respaldo,at").eq("owner_id", ownerId).gte("at", new Date(ahora - 24 * 3600_000).toISOString()).limit(2000),
     probarBS67(),
   ]);
   // BS67 va primero: es la prioridad de María.

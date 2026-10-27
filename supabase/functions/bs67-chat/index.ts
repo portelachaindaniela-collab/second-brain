@@ -1,9 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
-  MAX_VUELTAS, ZONA, HERRAMIENTAS, ACCIONES, proveedor, sistema, validarAccion, describirAccion, urlPermitida, htmlATexto,
-  historialParaModelo, contiene, ultimoPorAgente, venceISO, slugProyecto, fragmentosDeCharla, APPS, errorDeIA, esperaParaReintento,
+  MAX_VUELTAS, ZONA, HERRAMIENTAS, ACCIONES, proveedores, sistema, validarAccion, describirAccion, urlPermitida, htmlATexto,
+  historialParaModelo, contiene, ultimoPorAgente, venceISO, slugProyecto, fragmentosDeCharla, APPS,
 } from "./logic.mjs";
+import { ErrorIA, conRespaldo, llamarModelo, buscarWeb } from "../_shared/ia.mjs";
 
 // BS67, el asistente de Second Brain en sus apps (bs67 y pdg; UP usa up-asistente). La app manda { mensaje, historial,
 // pantalla, proyecto_id, app } (la conversación) o { ejecutar: { nombre, args }, app } (una acción que Daniela confirmó).
@@ -18,57 +19,8 @@ const inicioDia = (f: string) => new Date(`${f}T00:00:00-03:00`).toISOString();
 const esFecha = (f: any) => typeof f === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f);
 const hora = (iso: string) => new Date(iso).toLocaleString("es-AR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: ZONA });
 
-class ErrorIA extends Error {
-  constructor(public info: any) { super(info.mensaje); }
-}
-
-// prov.turno se crea con cada mensaje y lo comparten las copias de prov: el reintento por límite por minuto es uno solo por mensaje.
-async function modelo(prov: any, messages: any[], conHerramientas = true) {
-  const turno = prov.turno ?? { reintentos: 0 };
-  for (let reintentando = false; ; reintentando = true) {
-    const r = await fetch(prov.url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${prov.clave}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: prov.modelo, messages, temperature: 0.4, max_tokens: 2000, ...(conHerramientas && { tools: HERRAMIENTAS, tool_choice: "auto" }) }),
-      signal: AbortSignal.timeout(60000),
-    });
-    const data = await r.json().catch(() => null);
-    if (r.ok) {
-      if (reintentando) console.warn(`bs67-chat: ${prov.nombre} ${prov.modelo} respondió al reintentar`);
-      return data?.choices?.[0]?.message ?? {};
-    }
-    const info = errorDeIA(r.status, data, r.headers.get("retry-after"));
-    console.error(`bs67-chat: ${prov.nombre} ${prov.modelo} ${info.detalle}`);
-    const espera = turno.reintentos ? null : esperaParaReintento(info);
-    if (espera === null) throw new ErrorIA(info);
-    turno.reintentos++;
-    console.warn(`bs67-chat: reintento en ${espera}s`);
-    await new Promise((listo) => setTimeout(listo, espera * 1000));
-  }
-}
-
-// Búsqueda web: con Groq, su modelo Compound (busca solo); con Gemini, la búsqueda de Google integrada.
-async function buscarWeb(prov: any, consulta: string) {
-  if (prov.nombre === "groq") {
-    const m = await modelo({ ...prov, modelo: "groq/compound" }, [{ role: "user", content: `Buscá en internet y respondé en español con las fuentes (URLs): ${consulta}` }], false);
-    return { resultado: m.content || "Sin resultados." };
-  }
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(prov.modelo)}:generateContent?key=${prov.clave}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: `Buscá en internet y respondé en español: ${consulta}` }] }], tools: [{ google_search: {} }] }),
-    signal: AbortSignal.timeout(45000),
-  });
-  const data = await r.json().catch(() => null);
-  if (!r.ok) {
-    const info = errorDeIA(r.status, data, r.headers.get("retry-after"));
-    console.error(`bs67-chat: búsqueda web ${prov.nombre} ${info.detalle}`);
-    return { error: `La búsqueda web no está disponible ahora (${info.mensaje})` };
-  }
-  const c = data?.candidates?.[0];
-  const fuentes = (c?.groundingMetadata?.groundingChunks || []).map((g: any) => g.web && `${g.web.title}: ${g.web.uri}`).filter(Boolean).slice(0, 6);
-  return { resultado: (c?.content?.parts || []).map((p: any) => p.text ?? "").join(""), fuentes };
-}
+const modelo = (prov: any, messages: any[], conHerramientas = true) =>
+  llamarModelo(prov, { messages, temperature: 0.4, max_tokens: 2000, ...(conHerramientas && { tools: HERRAMIENTAS, tool_choice: "auto" }) });
 
 async function leerLink(valor: string) {
   const url = urlPermitida(valor);
@@ -89,7 +41,7 @@ async function leerLink(valor: string) {
 const nombresProyectos = async (db: any) => new Map(((await db.from("projects").select("id,name")).data || []).map((p: any) => [p.id, p.name]));
 
 // Herramientas de lectura: corren solas y devuelven datos para el modelo.
-async function leer(db: any, prov: any, nombre: string, a: any) {
+async function leer(db: any, provs: any[], prov: any, nombre: string, a: any) {
   const hoy = hoyAR();
   switch (nombre) {
     case "resumen_del_dia": {
@@ -211,7 +163,7 @@ async function leer(db: any, prov: any, nombre: string, a: any) {
         ? { charlas: encontradas.map(({ c, f }: any) => ({ titulo: c.titulo, app: APPS[c.app] ?? c.app, cuando: hora(c.updated_at), fragmentos: f.fragmentos })) }
         : { charlas: [], nota: "No encontré charlas sobre eso." };
     }
-    case "buscar_web": return await buscarWeb(prov, String(a?.consulta ?? "").slice(0, 500));
+    case "buscar_web": return await buscarWeb(provs, prov, String(a?.consulta ?? "").slice(0, 500), modelo);
     case "leer_link": return await leerLink(String(a?.url ?? ""));
     default: return { error: "Herramienta desconocida." };
   }
@@ -360,29 +312,27 @@ Deno.serve(async (req: Request) => {
 
   const mensaje = typeof body?.mensaje === "string" ? body.mensaje.trim().slice(0, 8000) : "";
   if (!mensaje) return json({ error: "Escribí un mensaje para BS67." }, 400);
-  const prov: any = proveedor(env);
-  if (!prov) { await registrar({ estado: "error", error: "Falta la clave de la IA." }); return json({ error: "BS67 no está configurado todavía (falta la clave de la IA)." }, 503); }
+  const provs = proveedores(env);
+  if (!provs.length) { await registrar({ estado: "error", error: "Falta la clave de la IA." }); return json({ error: "BS67 no está configurado todavía (falta la clave de la IA)." }, 503); }
 
-  prov.turno = { reintentos: 0 };
   const proyectoId = typeof body.proyecto_id === "string" && /^[0-9a-f-]{36}$/i.test(body.proyecto_id) ? body.proyecto_id : null;
   const proyecto = proyectoId ? (await db.from("projects").select("name").eq("id", proyectoId).maybeSingle()).data?.name : null;
   const hoy = new Intl.DateTimeFormat("es-AR", { timeZone: ZONA, dateStyle: "full" }).format(new Date()) + ` (${hoyAR()})`;
-  const mensajes: any[] = [
+  const inicial: any[] = [
     { role: "system", content: sistema({ hoy, pantalla: typeof body.pantalla === "string" ? body.pantalla.slice(0, 60) : null, proyecto, app }) },
     ...historialParaModelo(body.historial),
     { role: "user", content: mensaje },
   ];
-  const usadas: string[] = [];
-  const responder = async (resp: any) => {
-    await registrar({ estado: "ok", ia: prov.nombre, herramientas: usadas.length });
-    return json({ ...resp, herramientas: usadas, ia: prov.nombre });
-  };
 
-  try {
+  // Un intento completo con un proveedor; si falla, conRespaldo lo repite de cero con el siguiente (las lecturas no
+  // cambian nada y las acciones solo se proponen).
+  const conversar = async (prov: any) => {
+    const mensajes = [...inicial];
+    const usadas: string[] = [];
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
       const m = await modelo(prov, mensajes);
       const llamadas = m.tool_calls || [];
-      if (!llamadas.length) return await responder({ respuesta: (m.content || "").trim() || "No tengo una respuesta para eso." });
+      if (!llamadas.length) return { respuesta: (m.content || "").trim() || "No tengo una respuesta para eso.", herramientas: usadas };
       const accion = llamadas.find((l: any) => ACCIONES.has(l.function?.name));
       if (accion) {
         let args: any = {};
@@ -393,7 +343,7 @@ Deno.serve(async (req: Request) => {
           continue;
         }
         const descripcion = describirAccion(accion.function.name, v.args, await nombresDe(db, accion.function.name, v.args));
-        return await responder({ respuesta: (m.content || "").trim(), propuesta: { nombre: accion.function.name, args: v.args, descripcion } });
+        return { respuesta: (m.content || "").trim(), propuesta: { nombre: accion.function.name, args: v.args, descripcion }, herramientas: usadas };
       }
       mensajes.push({ role: "assistant", content: m.content ?? "", tool_calls: llamadas });
       for (const l of llamadas) {
@@ -401,19 +351,25 @@ Deno.serve(async (req: Request) => {
         try { args = JSON.parse(l.function?.arguments || "{}"); } catch { /* args vacíos */ }
         usadas.push(l.function?.name);
         let resultado: any;
-        try { resultado = await leer(db, prov, l.function?.name, args); } catch (e) { resultado = { error: e instanceof Error ? e.message : String(e) }; }
+        try { resultado = await leer(db, provs, prov, l.function?.name, args); } catch (e) { resultado = { error: e instanceof Error ? e.message : String(e) }; }
         mensajes.push({ role: "tool", tool_call_id: l.id, content: JSON.stringify(resultado).slice(0, 16000) });
       }
     }
-    return await responder({ respuesta: "Me trabé buscando la respuesta. ¿Me lo pedís de otra forma?" });
+    return { respuesta: "Me trabé buscando la respuesta. ¿Me lo pedís de otra forma?", herramientas: usadas };
+  };
+
+  try {
+    const { resultado, ia, respaldo } = await conRespaldo(provs, conversar);
+    await registrar({ estado: "ok", ia, herramientas: resultado.herramientas.length, respaldo });
+    return json({ ...resultado, ia });
   } catch (e) {
     if (e instanceof ErrorIA) {
-      await registrar({ estado: "error", ia: prov.nombre, herramientas: usadas.length, error: e.info.detalle });
+      await registrar({ estado: "error", ia: e.info.ia, error: e.info.detalle, respaldo: e.info.respaldo });
       return json({ error: e.info.mensaje, limite: e.info.limite, esperar_s: e.info.esperar_s }, e.info.limite ? 429 : 502);
     }
     const detalle = e instanceof Error ? e.message : String(e);
     console.error("bs67-chat:", detalle);
-    await registrar({ estado: "error", ia: prov.nombre, herramientas: usadas.length, error: detalle.slice(0, 500) });
+    await registrar({ estado: "error", error: detalle.slice(0, 500) });
     return json({ error: `No pude responder en este momento (${detalle}).` }, 502);
   }
 });

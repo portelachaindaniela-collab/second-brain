@@ -53,6 +53,8 @@ export function contarLogs({ mensajes = [], errores5xx = 0 } = {}) {
     groq_429: texto.filter(t => /agenda-dulce IA 429\b/.test(t)).length,
     groq_otros: texto.filter(t => /agenda-dulce IA (?!429\b)\d{3}\b/.test(t)).length,
     cambios_vision: texto.filter(t => /no anda, paso a/.test(t)).length,
+    respaldos_openrouter: texto.filter(t => /→ openrouter/.test(t)).length,
+    fallos_openrouter: texto.filter(t => /agenda-dulce OpenRouter/.test(t)).length,
   }
 }
 
@@ -117,7 +119,7 @@ const SEMAFORO = { verde: '🟢', amarillo: '🟡', rojo: '🔴' }
 // chequeos: lo que juntó index.ts. Devuelve el semáforo, una frase corta para el resumen diario y la lista de avisos.
 export function evaluar(chequeos, parametros = PARAMETROS_DEFECTO, ahora = Date.now()) {
   const p = parametros
-  const { sitio = {}, pages = null, pagesError = null, funcion = {}, ics = {}, groq = null, logs = null, agenda = null, cole = null, chat = null, dino = [] } = chequeos
+  const { sitio = {}, pages = null, pagesError = null, funcion = {}, ics = {}, groq = null, openrouter = null, logs = null, agenda = null, cole = null, chat = null, dino = [] } = chequeos
   const rojos = [], amarillos = [], info = []
 
   if (sitio.status !== 200) rojos.push(`el sitio no responde${sitio.status ? ` (${sitio.status})` : ''}`)
@@ -130,16 +132,19 @@ export function evaluar(chequeos, parametros = PARAMETROS_DEFECTO, ahora = Date.
   if (ics.probado === false) amarillos.push('no pude probar el calendario de mamá (no hay familia cargada)')
   else if (!ics.ok) rojos.push(`el calendario de mamá no devuelve text/calendar${ics.status ? ` (${ics.status})` : ''}`)
 
-  if (!groq?.ok) rojos.push('Groq no responde: el Dino no puede contestar')
-  else {
-    if (!groq.modelo) rojos.push(`Groq ya no tiene ${p.modelo}: el Dino no puede contestar`)
-    if (!groq.vision) amarillos.push('Groq no tiene ningún modelo de visión: las fotos no van a andar')
-  }
+  // openrouter: 'ok' | 'error' | 'sin_clave' (el respaldo del Dino). Con respaldo andando, Groq caído no rompe la app.
+  const sinGroq = !groq?.ok ? 'Groq no responde' : !groq.modelo ? `Groq ya no tiene ${p.modelo}` : null
+  if (sinGroq && openrouter === 'ok') amarillos.push(`${sinGroq}: el Dino contesta por OpenRouter`)
+  else if (sinGroq) rojos.push(`${sinGroq}: el Dino no puede contestar`)
+  else if (!groq.vision && openrouter !== 'ok') amarillos.push('Groq no tiene ningún modelo de visión: las fotos no van a andar')
+  if (openrouter === 'error') amarillos.push('OpenRouter no responde o se quedó sin créditos: el Dino no tiene respaldo')
   if (logs) {
     if (logs.errores_5xx) rojos.push(`${plural(logs.errores_5xx, 'error 5xx', 'errores 5xx')} en 24 h`)
     if (logs.groq_429) amarillos.push(`Groq dijo "ocupado" ${plural(logs.groq_429, 'vez', 'veces')} en 24 h`)
     if (logs.groq_otros) amarillos.push(`${plural(logs.groq_otros, 'error', 'errores')} de Groq en 24 h`)
     if (logs.cambios_vision) amarillos.push('el modelo de visión configurado dejó de andar y la función eligió otro')
+    if (logs.fallos_openrouter) amarillos.push(`OpenRouter también falló ${plural(logs.fallos_openrouter, 'vez', 'veces')} en 24 h`)
+    if (logs.respaldos_openrouter) info.push(`${plural(logs.respaldos_openrouter, 'respuesta', 'respuestas')} del Dino por OpenRouter`)
   }
 
   if (!agenda) amarillos.push('Valentina todavía no sincronizó la agenda')
@@ -172,14 +177,14 @@ export function evaluar(chequeos, parametros = PARAMETROS_DEFECTO, ahora = Date.
 // no una falla de la corrida.
 export function resultadoAgenda(chequeos, parametros = PARAMETROS_DEFECTO, ahora = Date.now()) {
   const ev = evaluar(chequeos, parametros, ahora)
-  const { sitio, pages, funcion, ics, groq, logs, agenda, cole, chat, dino } = chequeos
+  const { sitio, pages, funcion, ics, groq, openrouter, logs, agenda, cole, chat, dino } = chequeos
   return {
     estado: 'ok',
     cantidad: ev.avisos.length,
     payload: {
       ...ev,
       sitio: { ...sitio, pages: pages?.estado ?? null },
-      backend: { funcion: funcion?.status ?? null, ics: ics?.ok ?? null, groq: groq ?? null, logs: logs ?? 'sin acceso' },
+      backend: { funcion: funcion?.status ?? null, ics: ics?.ok ?? null, groq: groq ?? null, openrouter: openrouter ?? null, logs: logs ?? 'sin acceso' },
       uso: {
         ultima_sincronizacion: agenda?.actualizado ?? null,
         dino_por_dia: dino ?? [],

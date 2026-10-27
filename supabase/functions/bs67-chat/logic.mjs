@@ -2,6 +2,8 @@
 // hace cambios por Daniela. Lo que cambia algo (ACCIONES) nunca se ejecuta solo: BS67 lo propone y ella confirma.
 // Todo lo que no llama al modelo ni a la base vive acá para probarlo con node --test.
 
+import { armarProveedores } from '../_shared/ia.mjs'
+
 export const MAX_VUELTAS = 7
 export const MAX_MENSAJES = 20
 export const MAX_TEXTO_LINK = 12_000
@@ -9,16 +11,8 @@ export const ZONA = 'America/Argentina/Buenos_Aires'
 export const APPS = { bs67: 'BS67 (Second Brain)', up: 'UP', pdg: 'PDG comercial' }
 export const ETAPAS_PDG = ['prospecto', 'contactada', 'demo', 'propuesta', 'negociacion', 'ganada', 'perdida']
 
-// Con GROQ_API_KEY usa Groq (búsqueda web con Compound); si no, Gemini por su API compatible con OpenAI.
-export function proveedor(env) {
-  if (env.GROQ_API_KEY) {
-    return { nombre: 'groq', url: 'https://api.groq.com/openai/v1/chat/completions', clave: env.GROQ_API_KEY, modelo: env.BS67_MODELO_GROQ || 'openai/gpt-oss-120b' }
-  }
-  if (env.GEMINI_API_KEY) {
-    return { nombre: 'gemini', url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', clave: env.GEMINI_API_KEY, modelo: env.BS67_MODEL || 'gemini-3.6-flash' }
-  }
-  return null
-}
+// Groq primero (búsqueda web con Compound), OpenRouter con el mismo modelo y Gemini de respaldo. Ver _shared/ia.mjs.
+export const proveedores = env => armarProveedores(env, 'bs67-chat', { groq: env.BS67_MODELO_GROQ || 'openai/gpt-oss-120b', gemini: env.BS67_MODEL || 'gemini-3.6-flash' })
 
 export const GUIA = `Second Brain tiene tres apps y vos estás en las tres (Daniela entra a cada una desde Inicio):
 - Hoy: el resumen del día (agenda, tareas, mails, avisos).
@@ -322,53 +316,4 @@ export function fragmentosDeCharla(charla, buscado, max = 3) {
   const palabras = plano(buscado).split(/\s+/).filter(Boolean)
   const coinciden = lineas.filter(l => palabras.some(p => plano(l).includes(p)))
   return { encontrada: contiene(`${charla.titulo} ${lineas.join(' ')}`, buscado), fragmentos: (coinciden.length ? coinciden : lineas).slice(0, max) }
-}
-
-// Errores de la IA. Groq: 429 con header retry-after y el límite en el mensaje («on requests per minute (RPM)»,
-// «tokens per day (TPD)», «Please try again in 7m12s»). Gemini: 429 RESOURCE_EXHAUSTED con QuotaFailure (quotaId
-// …PerMinute… o …PerDay…) y RetryInfo.retryDelay; su API compatible con OpenAI a veces manda el error dentro de un array.
-export const ESPERA_REINTENTO_S = 5
-export const MAX_ESPERA_REINTENTO_S = 20
-
-const segundosDe = t => {
-  const ms = String(t ?? '').match(/^(\d+(?:\.\d+)?)ms$/)
-  if (ms) return Math.ceil(+ms[1] / 1000)
-  const m = String(t ?? '').match(/^(?:(\d+(?:\.\d+)?)h)?(?:(\d+(?:\.\d+)?)m(?!s))?(?:(\d+(?:\.\d+)?)s)?$/)
-  if (!m || !(m[1] || m[2] || m[3])) return null
-  return Math.ceil((+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0))
-}
-
-export const sinSecretos = t => String(t ?? '')
-  .replace(/AIza[0-9A-Za-z_-]{20,}/g, '[clave]').replace(/gsk_[0-9A-Za-z]+/g, '[clave]').replace(/Bearer\s+\S+/gi, 'Bearer [clave]')
-  .replace(/([?&]key=)[^&\s"']+/gi, '$1[clave]').replace(/\borg_[0-9A-Za-z]+/g, 'org_[oculto]')
-
-export function errorDeIA(status, cuerpo, retryAfter = null) {
-  const c = Array.isArray(cuerpo) ? cuerpo[0] : cuerpo
-  const e = c?.error ?? c ?? {}
-  const texto = typeof e === 'string' ? e : String(e.message ?? '')
-  const detalles = Array.isArray(e.details) ? e.details : []
-  const cuotas = detalles.flatMap(d => d?.violations ?? []).map(v => `${v?.quotaId ?? ''} ${v?.quotaMetric ?? ''}`.trim()).filter(Boolean)
-  const espera = [
-    Number.isFinite(+retryAfter) && retryAfter !== null && retryAfter !== '' ? Math.ceil(+retryAfter) : null,
-    segundosDe(detalles.find(d => d?.retryDelay)?.retryDelay),
-    segundosDe(texto.match(/try again in ((?:\d+(?:\.\d+)?(?:ms|[hms]))+)/i)?.[1]),
-  ].find(s => s !== null) ?? null
-  const pistas = `${cuotas.join(' ')} ${texto}`
-  // Un 429 sin pistas de límite diario se toma como por minuto: avisar «se agotó el cupo de hoy» de más es peor.
-  const limite = status !== 429 ? null : /per ?day|\b(RPD|TPD)\b|daily/i.test(pistas) ? 'dia' : 'minuto'
-  const codigo = [typeof e === 'object' && e.status, typeof e === 'object' && e.code].filter(x => x && x !== status).join(' ')
-  const detalle = sinSecretos([`HTTP ${status}`, codigo, cuotas.length && `cuota=${cuotas.join(',')}`, espera !== null && `esperar=${espera}s`].filter(Boolean).join(' ') + (texto ? `: ${texto}` : '')).slice(0, 500)
-  const mensaje = limite === 'minuto'
-    ? 'BS67 recibió demasiadas consultas seguidas (límite por minuto de la IA gratis). Esperá un minuto y probá de nuevo.'
-    : limite === 'dia'
-      ? 'Se agotó el cupo de hoy de la IA gratis. Probá más tarde o mañana.'
-      : `La IA respondió con un error (HTTP ${status}${texto ? `: ${sinSecretos(texto).slice(0, 200)}` : ''}).`
-  return { status, limite, esperar_s: espera, detalle, mensaje }
-}
-
-// Solo el límite por minuto se reintenta, una vez, y si la espera es corta (la función tiene tiempo máximo).
-export function esperaParaReintento(info) {
-  if (info?.limite !== 'minuto') return null
-  const s = info.esperar_s ?? ESPERA_REINTENTO_S
-  return s <= MAX_ESPERA_REINTENTO_S ? Math.max(1, s) : null
 }

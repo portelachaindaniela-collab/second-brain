@@ -68,6 +68,19 @@ async function modelosGroq() {
   } catch { return null; }
 }
 
+// El respaldo del Dino: que la clave de OpenRouter valga y queden créditos. Leer los créditos no gasta.
+async function revisarOpenRouter() {
+  const clave = Deno.env.get("OPENROUTER_API_KEY");
+  if (!clave) return "sin_clave";
+  try {
+    const pedir = (ruta: string) => fetch(`https://openrouter.ai/api/v1/${ruta}`, { headers: { Authorization: `Bearer ${clave}` }, signal: AbortSignal.timeout(15000) });
+    const r = await pedir("credits");
+    if (!r.ok) return (await pedir("key")).ok ? "ok" : "error";
+    const d = (await r.json().catch(() => null))?.data;
+    return d && d.total_credits - d.total_usage > 0 ? "ok" : "error";
+  } catch { return "error"; }
+}
+
 // Los logs de agenda-dulce salen de la Management API: hace falta un token personal en el secreto SUPABASE_GESTION_TOKEN.
 // Sin él, el resto de los chequeos sigue y el reporte dice "sin acceso".
 async function leerLogs(funcion: string, ahora: number) {
@@ -83,7 +96,7 @@ async function leerLogs(funcion: string, ahora: number) {
   try {
     const [cincos, mensajes] = await Promise.all([
       pedir(`select count(*) as n from function_edge_logs cross join unnest(metadata) as m cross join unnest(m.request) as q cross join unnest(m.response) as r where q.pathname like '%/${funcion}%' and r.status_code >= 500`),
-      pedir(`select event_message from function_logs where event_message like '%${funcion}%' and (event_message like '%IA %' or event_message like '%no anda, paso a%') limit 1000`),
+      pedir(`select event_message from function_logs where event_message like '%${funcion}%' and (event_message like '%IA %' or event_message like '%no anda, paso a%' or event_message like '%openrouter%' or event_message like '%OpenRouter%') limit 1000`),
     ]);
     return contarLogs({ errores5xx: cincos[0]?.n ?? 0, mensajes });
   } catch (e) {
@@ -139,12 +152,13 @@ Deno.serve(async (req: Request) => {
     const desde24 = new Date(ahora - 24 * 3600_000).toISOString();
     const desdeUso = new Date(ahora - 8 * 24 * 3600_000);
     const sinFamilia = Promise.resolve({ data: null });
-    const [sitio, pagesRes, funcion, ics, ids, logs, agendaRes, recientesRes, sinLeerRes, usoRes] = await Promise.all([
+    const [sitio, pagesRes, funcion, ics, ids, openrouter, logs, agendaRes, recientesRes, sinLeerRes, usoRes] = await Promise.all([
       revisarSitio(p.url),
       revisarPages(p.repo),
       revisarFuncion(base, p.funcion, Deno.env.get("SUPABASE_ANON_KEY")!),
       revisarIcs(base, p.funcion, familia?.ics_token ?? null),
       modelosGroq(),
+      revisarOpenRouter(),
       leerLogs(p.funcion, ahora),
       familia ? admin.from("dulce_agenda").select("datos,actualizado").eq("familia_id", familia.id).maybeSingle() : sinFamilia,
       familia ? admin.from("dulce_mensajes").select("id,de,leido,creado").eq("familia_id", familia.id).gte("creado", desde24).limit(2000) : sinFamilia,
@@ -158,6 +172,7 @@ Deno.serve(async (req: Request) => {
     const chequeos = {
       sitio, ...pagesRes, funcion, ics,
       groq: ids ? revisarGroq(ids, p.modelo) : null,
+      openrouter,
       logs,
       agenda: agenda ? { actualizado: agenda.actualizado } : null,
       cole: agenda ? revisarCole(agenda, { ahora, diasExamenes: p.dias_examenes, idsConNotaAntes: anterior?.payload?.cole?.ids_con_nota ?? null }) : null,

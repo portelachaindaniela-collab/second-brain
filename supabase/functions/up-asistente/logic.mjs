@@ -2,6 +2,8 @@
 // Las herramientas que cambian algo (ACCIONES) nunca se ejecutan solas: el agente las propone y la dueña confirma.
 // Todo lo que no llama al modelo ni a la base vive acá para probarlo con node --test.
 
+import { armarProveedores } from '../_shared/ia.mjs'
+
 export const MAX_VUELTAS = 6
 export const MAX_MENSAJES = 20
 export const MAX_TEXTO_LINK = 12_000
@@ -9,15 +11,16 @@ export const GRUPOS_FICHA = ['ReporTV', 'San Luis FC', 'AFA', 'DeporTV', 'Colegi
 const REDES = ['linkedin', 'x', 'instagram']
 const NOMBRE_RED = { linkedin: 'LinkedIn', x: 'X', instagram: 'Instagram' }
 
-// Con GROQ_API_KEY usa Groq (cuota propia, búsqueda web con Compound); si no, Gemini por su API compatible con OpenAI.
-export function proveedor(env) {
-  if (env.GROQ_API_KEY) {
-    return { nombre: 'groq', url: 'https://api.groq.com/openai/v1/chat/completions', clave: env.GROQ_API_KEY, modelo: env.UP_ASISTENTE_MODELO || 'openai/gpt-oss-120b' }
-  }
-  if (env.GEMINI_API_KEY) {
-    return { nombre: 'gemini', url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', clave: env.GEMINI_API_KEY, modelo: env.UP_ASISTENTE_MODELO || env.UP_MODEL || 'gemini-3.6-flash' }
-  }
-  return null
+// Groq primero (cuota propia, búsqueda web con Compound), OpenRouter con el mismo modelo y Gemini de respaldo. Ver _shared/ia.mjs.
+// UP_ASISTENTE_MODELO elegía el modelo del único proveedor en uso; ahora corren varios, así que vale para el que
+// corresponda según su nombre (gemini-… es de Gemini; si no, es el de Groq y OpenRouter).
+export function proveedores(env) {
+  const elegido = env.UP_ASISTENTE_MODELO
+  const deGemini = /^gemini/i.test(elegido ?? '')
+  return armarProveedores(env, 'up-asistente', {
+    groq: (!deGemini && elegido) || 'openai/gpt-oss-120b',
+    gemini: (deGemini && elegido) || env.UP_MODEL || 'gemini-3.6-flash',
+  })
 }
 
 export const GUIA = `Cómo funciona UP (app de publicaciones de Daniela en LinkedIn, X e Instagram, dentro de Second Brain):

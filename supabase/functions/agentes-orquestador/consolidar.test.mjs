@@ -131,3 +131,16 @@ test('BS67: funciona, avisa y falla según el registro y la prueba de María', a
   assert.equal(reporteBS67([], { ias: { groq: 'sin_clave', gemini: 'ok' } }, ahora).estado, 'ok')
   assert.equal(reporteBS67([r('ok', 'bs67', 45000)], sana, ahora).estado, 'aviso')
 })
+
+test('BS67: cuenta las respuestas que dio Gemini de respaldo y guarda el último motivo', async () => {
+  const { reporteBS67 } = await import('./consolidar.mjs')
+  const ahora = Date.parse('2026-10-22T15:00:00Z')
+  const r = (ia, respaldo = null, horas = 1) => ({ estado: 'ok', app: 'bs67', ms: 4000, ia, respaldo, tipo: 'charla', at: new Date(ahora - horas * 3600_000).toISOString() })
+  const sana = { funciones: { 'bs67-chat': true, 'up-asistente': true }, ias: { groq: 'ok', gemini: 'ok' } }
+  const rep = reporteBS67([r('groq'), r('gemini', 'groq 429 TPM → gemini', 2), r('gemini', 'groq 503 → gemini')], sana, ahora)
+  assert.equal(rep.estado, 'ok')
+  assert.match(rep.resumen, /3 respuestas en 24 h \(BS67 3\) \(2 respondidas por Gemini de respaldo\), contesta en ~4 s/)
+  assert.equal(rep.datos.respaldos, 2)
+  assert.equal(rep.datos.ultimo_respaldo, 'groq 503 → gemini')
+  assert.doesNotMatch(reporteBS67([r('groq')], sana, ahora).resumen, /respaldo/)
+})

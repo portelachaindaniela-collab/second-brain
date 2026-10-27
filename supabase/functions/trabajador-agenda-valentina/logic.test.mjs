@@ -44,7 +44,10 @@ test('contarLogs cuenta 429, otros errores de Groq y cambios de visión sin guar
     'agenda-dulce: meta-llama/llama-4-scout no anda, paso a qwen/qwen3.8-27b',
     'agenda-dulce modelos groq: a, b',
   ] })
-  assert.deepEqual(c, { errores_5xx: 2, groq_429: 2, groq_otros: 1, cambios_vision: 1 })
+  assert.deepEqual(c, { errores_5xx: 2, groq_429: 2, groq_otros: 1, cambios_vision: 1, respaldos_openrouter: 0, fallos_openrouter: 0 })
+  const o = contarLogs({ mensajes: ['agenda-dulce: groq 429 → openrouter', 'agenda-dulce: groq 503 → openrouter', 'agenda-dulce OpenRouter 402 {}'] })
+  assert.equal(o.respaldos_openrouter, 2)
+  assert.equal(o.fallos_openrouter, 1)
 })
 
 test('revisarGroq pide el modelo del Dino y alguno de visión', () => {
@@ -162,4 +165,19 @@ test('avisarYa: push solo al pasar a rojo', () => {
   assert.equal(avisarYa('rojo', undefined), true)
   assert.equal(avisarYa('rojo', 'rojo'), false)
   assert.equal(avisarYa('amarillo', 'verde'), false)
+})
+
+test('evaluar: Groq caído con OpenRouter andando es amarillo; sin respaldo es rojo', () => {
+  const c = sano(); c.groq = null; c.openrouter = 'ok'
+  const e = evaluar(c, PARAMETROS_DEFECTO, ahora)
+  assert.equal(e.semaforo, 'amarillo')
+  assert.match(e.resumen, /Groq no responde: el Dino contesta por OpenRouter/)
+  c.openrouter = 'sin_clave'
+  assert.equal(evaluar(c, PARAMETROS_DEFECTO, ahora).semaforo, 'rojo')
+  const sinCreditos = sano(); sinCreditos.openrouter = 'error'
+  assert.match(evaluar(sinCreditos, PARAMETROS_DEFECTO, ahora).resumen, /OpenRouter no responde o se quedó sin créditos/)
+  const respaldo = sano(); respaldo.logs.respaldos_openrouter = 3
+  const r = evaluar(respaldo, PARAMETROS_DEFECTO, ahora)
+  assert.equal(r.semaforo, 'verde')
+  assert.match(r.resumen, /3 respuestas del Dino por OpenRouter/)
 })

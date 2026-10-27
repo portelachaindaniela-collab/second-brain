@@ -136,6 +136,7 @@ function agendaValentina(p) {
     { etiqueta: 'función agenda-dulce', valor: backend.funcion === 401 ? 'ok' : SI_NO(backend.funcion), texto: true },
     { etiqueta: 'calendario de mamá', valor: SI_NO(backend.ics), texto: true, estado: backend.ics === false ? 'error' : null },
     { etiqueta: 'Groq', valor: !backend.groq?.ok ? 'no responde' : backend.groq.vision ? 'ok, con fotos' : 'ok, sin fotos', texto: true },
+    { etiqueta: 'OpenRouter (respaldo)', valor: { ok: 'ok', error: 'caído o sin créditos', sin_clave: 'sin clave' }[backend.openrouter] ?? '—', texto: true, estado: backend.openrouter === 'error' ? 'aviso' : null },
     ...(logs ? [
       { etiqueta: 'errores 5xx en 24 h', valor: n(logs.errores_5xx), estado: logs.errores_5xx ? 'error' : null },
       { etiqueta: 'Groq ocupado (429) en 24 h', valor: n(logs.groq_429), tenue: !logs.groq_429 },
