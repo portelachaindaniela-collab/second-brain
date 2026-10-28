@@ -62,7 +62,7 @@ export const FUENTES = {
   eventbrite: 'Eventbrite',
   medios: 'Fuentes de noticias',
   agenda_valentina: 'Agenda de Valentina',
-  cartelera: 'Cartelera (Complejo Teatral, Movistar Arena)',
+  cartelera: 'Cartelera (Complejo Teatral, Movistar Arena, Alternativa Teatral)',
 }
 // María no lee una fuente de afuera: consolida lo que dejan Sitios, Tareas y Google en trabajos_corridas.
 export const RECORRIDOS = {
