@@ -9,6 +9,7 @@ import { duracionCorta, resumenTrabajador } from '../panorama.mjs'
 import { detalleCorrida } from '../detalleCorrida.mjs'
 import { estadoTrabajador, pasaFiltro, coincideBusqueda, contarFiltros, disposicion, FILTROS, DESCRIPCION_FUENTE, DESCRIPCION_DESTINO } from '../orbital.mjs'
 import { PanelesPanorama, Linea } from './Panorama.jsx'
+import { MapaCalor } from './MapaCalor.jsx'
 import { SistemaOrbital, IconoTrabajador } from './SistemaOrbital.jsx'
 import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
 import './Trabajadores.css'
@@ -337,6 +338,37 @@ function TarjetaRobot({ trabajador, corridas, resumen, ahora, actualizado, abrir
   </section>
 }
 
+// Anillo de salud: la parte llena es la proporción de corridas ok en 24 h; vacío si no corrió.
+function Anillo({ ok, total }) {
+  const p = total ? ok / total : 0
+  const largo = 2 * Math.PI * 9
+  return <svg className={`monitor-anillo${total && ok < total ? ' is-falla' : ''}`} viewBox="0 0 24 24" width="24" height="24" role="img" aria-label={total ? `${ok} de ${total} corridas ok` : 'sin corridas en 24 h'}>
+    <circle cx="12" cy="12" r="9" className="monitor-anillo-fondo" />
+    {total > 0 && <circle cx="12" cy="12" r="9" className="monitor-anillo-lleno" strokeDasharray={`${p * largo} ${largo}`} transform="rotate(-90 12 12)" />}
+  </svg>
+}
+
+// Una pantallita por trabajador en la pared de monitores; al tocarla se abre su tarjeta completa en el lugar.
+function Monitor({ trabajador, corridas, resumen, ahora, abrir }) {
+  const ultima = corridas[0]
+  const ultimaTerminada = corridas.find(c => c.estado !== 'corriendo')
+  const cara = estadoCara(trabajador, ultima)
+  const color = colorIdentidad(trabajador.color)
+  const filas = corridas.filter(c => c.estado !== 'corriendo').slice(0, ULTIMAS).map(c => c.cantidad_resultados).reverse()
+  const estado = !trabajador.activo ? 'pausado' : ultima ? (trabada(ultima, ahora, trabajador.minutos_trabado) ? 'trabado' : ESTADO_TEXTO[ultima.estado]) : 'sin corridas'
+  const cuando = ultima?.estado === 'corriendo' ? `lleva ${duracionLegible(ahora - Date.parse(ultima.iniciado_at))}` : ultima ? haceCuanto(ultima.finalizado_at || ultima.iniciado_at, ahora) : ''
+  return <button type="button" className={`monitor${ultima?.estado === 'corriendo' ? ' is-corriendo' : ''}${ultimaTerminada?.estado === 'error' ? ' is-error' : ''}`} style={{ '--id': color }}
+    onClick={abrir} aria-label={`${trabajador.nombre}: ${estado}. Abrir tarjeta`}>
+    <span className="monitor-cabeza">
+      <Cara estado={cara} color={trabajador.color} nombre={trabajador.nombre} />
+      <span className="monitor-nombre"><strong>{trabajador.nombre}</strong><span className={`txt-${cara === 'pausado' ? 'vacio' : ultima?.estado}`}>{estado}</span></span>
+      <Anillo ok={resumen?.ok ?? 0} total={resumen?.corridas ?? 0} />
+    </span>
+    <span className="monitor-pantalla"><Linea valores={filas} color={color} ancho={200} alto={34} relleno /></span>
+    <span className="monitor-pie"><b>{(resumen?.resultados ?? 0).toLocaleString('es-AR')}</b><span>resultados 24 h</span><span className="monitor-cuando">{cuando}</span></span>
+  </button>
+}
+
 function LineaTail({ corrida, nombre, ahora, abrir }) {
   const detalle = corrida.estado === 'error' ? corrida.error
     : corrida.estado === 'corriendo' ? `lleva ${duracionLegible(ahora - Date.parse(corrida.iniciado_at))}`
@@ -553,6 +585,7 @@ export default function Trabajadores() {
   const [elegido, setElegido] = useState(null)
   const [filtro, setFiltro] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
+  const [monitorAbierto, setMonitorAbierto] = useState(null)
   const bloqueSistema = useRef(null)
   const ahora = useReloj()
 
@@ -622,31 +655,37 @@ export default function Trabajadores() {
 
     {error && <p className="txt-error">{error}</p>}
     {cargando && <p className="tenue">cargando…</p>}
-    <div ref={bloqueSistema}>
-      <Bloques>
-        <Bloque titulo="Sistema" ancho="completo" accion={<span className="bloque-nota">fuentes → trabajadores → destinos · el grosor es lo que movió en 24 h · {elegidoT ? 'tocá el fondo para volver a ver todo' : 'tocá un trabajador para ver su detalle'} · {c.ok} corridas ok{c.trabados > 0 && <span className="txt-corriendo"> · {c.trabados} trabado{c.trabados === 1 ? '' : 's'}</span>}</span>}>
-          {!cargando && !error && trabajadores.length === 0 && <p className="tenue">no hay trabajadores configurados.</p>}
-          {trabajadores.length > 0 && <div className={`sistema-cuerpo${elegidoT ? ' con-panel' : ''}`}>
-            <SistemaOrbital trabajadores={trabajadores} corridasPor={corridasPor} resumenes={resumenes} ahora={ahora} elegido={elegido} onElegir={setElegido} filtro={filtro} busqueda={busqueda} />
-            {elegidoT && <aside className="sistema-panel" aria-label={`Detalle de ${elegidoT.nombre}`}>
-              <PanelTrabajador key={elegidoT.clave} trabajador={elegidoT} corridas={corridasPor[elegidoT.clave] || []} ahora={ahora} actualizado={actualizado}
-                abrirCorrida={setAbierta} verHistorial={() => setSeleccionado(elegidoT.clave)} cerrar={() => setElegido(null)} />
-            </aside>}
-          </div>}
-        </Bloque>
-      </Bloques>
-    </div>
-
-    {trabajadores.length > 0 && <>
-      <PanelesPanorama trabajadores={trabajadores} corridasPor={corridasPor} resumenes={resumenes} ahora={ahora} salud={salud} alertas={pendientes} />
-    </>}
+    {!cargando && !error && trabajadores.length === 0 && <p className="tenue">no hay trabajadores configurados.</p>}
+    {trabajadores.length > 0 && <PanelesPanorama trabajadores={trabajadores} corridasPor={corridasPor} resumenes={resumenes} ahora={ahora} salud={salud} alertas={pendientes}>
+      <div ref={bloqueSistema} className="cabina-sistema">
+        <Bloques>
+          <Bloque titulo="Sistema" ancho="completo" accion={<span className="bloque-nota">fuentes → trabajadores → destinos · el grosor es lo que movió en 24 h · {elegidoT ? 'tocá el fondo para volver a ver todo' : 'tocá un trabajador para ver su detalle'} · {c.ok} corridas ok{c.trabados > 0 && <span className="txt-corriendo"> · {c.trabados} trabado{c.trabados === 1 ? '' : 's'}</span>}</span>}>
+            <div className={`sistema-cuerpo${elegidoT ? ' con-panel' : ''}`}>
+              <SistemaOrbital trabajadores={trabajadores} corridasPor={corridasPor} resumenes={resumenes} ahora={ahora} elegido={elegido} onElegir={setElegido} filtro={filtro} busqueda={busqueda} />
+              {elegidoT && <aside className="sistema-panel" aria-label={`Detalle de ${elegidoT.nombre}`}>
+                <PanelTrabajador key={elegidoT.clave} trabajador={elegidoT} corridas={corridasPor[elegidoT.clave] || []} ahora={ahora} actualizado={actualizado}
+                  abrirCorrida={setAbierta} verHistorial={() => setSeleccionado(elegidoT.clave)} cerrar={() => setElegido(null)} />
+              </aside>}
+            </div>
+          </Bloque>
+        </Bloques>
+      </div>
+    </PanelesPanorama>}
 
     <Bloques>
-      <Bloque titulo="Trabajadores" ancho="completo" accion={filtrados.length < trabajadores.length && <span className="bloque-nota">{filtrados.length} de {trabajadores.length}</span>}>
+      {trabajadores.length > 0 && <Bloque titulo="Mapa de calor, 24 h" ancho="completo" accion={<span className="bloque-nota">más color, más resultados · rojo, falló · gris, no corrió y le tocaba{filtrados.length < trabajadores.length && ` · ${filtrados.length} de ${trabajadores.length}`}</span>}>
+        <MapaCalor trabajadores={filtrados} corridasPor={corridasPor} ahora={ahora} abrirCorrida={setAbierta} elegir={clave => { setElegido(clave); bloqueSistema.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }} />
+      </Bloque>}
+      <Bloque titulo="Trabajadores" ancho="completo" accion={<span className="bloque-nota">tocá un monitor para abrir su tarjeta{filtrados.length < trabajadores.length && ` · ${filtrados.length} de ${trabajadores.length}`}</span>}>
         {!cargando && filtrados.length === 0 && trabajadores.length > 0 && <p className="tenue">ningún trabajador coincide con el filtro.</p>}
-        <div className="tablero-grilla">
-          {filtrados.map(t => <TarjetaRobot key={t.id} trabajador={t} corridas={corridasPor[t.clave] || []} resumen={resumenes[t.clave]} ahora={ahora}
-            actualizado={actualizado} abrirDetalle={() => setSeleccionado(t.clave)} abrirCorrida={setAbierta} />)}
+        <div className="monitores">
+          {filtrados.map(t => monitorAbierto === t.clave
+            ? <div key={t.id} className="monitor-abierto">
+              <button type="button" className="consola-boton monitor-cerrar" onClick={() => setMonitorAbierto(null)}>[cerrar]</button>
+              <TarjetaRobot trabajador={t} corridas={corridasPor[t.clave] || []} resumen={resumenes[t.clave]} ahora={ahora}
+                actualizado={actualizado} abrirDetalle={() => setSeleccionado(t.clave)} abrirCorrida={setAbierta} />
+            </div>
+            : <Monitor key={t.id} trabajador={t} corridas={corridasPor[t.clave] || []} resumen={resumenes[t.clave]} ahora={ahora} abrir={() => setMonitorAbierto(t.clave)} />)}
         </div>
       </Bloque>
       <Bloque titulo="Actividad reciente" ancho="completo" accion={<span className="actividad-vivo">en tiempo real</span>}>

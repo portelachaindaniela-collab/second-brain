@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { nombreCorto, resumenTrabajador, proximas, temasDeCanillita, duracionCorta, puntosDeLinea } from './panorama.mjs'
+import { nombreCorto, resumenTrabajador, proximas, temasDeCanillita, duracionCorta, puntosDeLinea, celdasDeCalor } from './panorama.mjs'
 
 const AHORA = Date.parse('2026-10-04T15:20:00Z')
 const hace = h => new Date(AHORA - h * 3_600_000).toISOString()
@@ -45,4 +45,25 @@ test('temasDeCanillita, duracionCorta y puntosDeLinea', () => {
 test('nombreCorto: saca la aclaración entre paréntesis', () => {
   assert.equal(nombreCorto('Google (calendario y mail)'), 'Google')
   assert.equal(nombreCorto('Canillita'), 'Canillita')
+})
+
+test('celdasDeCalor: suma lo de cada hora y escala el nivel contra la mejor hora', () => {
+  const ahora = Date.parse('2026-10-27T15:30:00Z')
+  const corridas = [
+    { iniciado_at: '2026-10-27T15:05:00Z', estado: 'ok', cantidad_resultados: 100 },
+    { iniciado_at: '2026-10-27T14:10:00Z', estado: 'ok', cantidad_resultados: 20 },
+    { iniciado_at: '2026-10-27T14:40:00Z', estado: 'ok', cantidad_resultados: 5 },
+    { iniciado_at: '2026-10-27T13:10:00Z', estado: 'ok', cantidad_resultados: 0 },
+    { iniciado_at: '2026-10-27T12:10:00Z', estado: 'error', cantidad_resultados: null },
+  ]
+  const celdas = celdasDeCalor(corridas, ahora)
+  assert.equal(celdas.length, 24)
+  const [error, vacia, dos, actual] = celdas.slice(-4)
+  assert.equal(actual.resultados, 100)
+  assert.equal(actual.nivel, 1)
+  assert.equal(dos.resultados, 25)
+  assert.equal(dos.nivel, 0.3 + 0.7 * 0.5)
+  assert.equal(vacia.nivel, 0.18)
+  assert.equal(error.estado, 'error')
+  assert.equal(error.nivel, 0)
 })

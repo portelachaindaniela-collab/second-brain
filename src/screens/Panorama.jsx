@@ -140,24 +140,46 @@ function SaludPorTrabajador({ trabajadores, resumenes, salud, alertas }) {
 
 const nota = texto => <span className="bloque-nota">{texto}</span>
 
-export function PanelesPanorama({ trabajadores, corridasPor, resumenes, ahora, salud, alertas }) {
+// La cabina: informes a la izquierda, el sistema (children) al centro y lo que falla a la derecha, sin scroll.
+// Debajo quedan los paneles que no preguntan por hoy sino por el ritmo.
+export function PanelesPanorama({ trabajadores, corridasPor, resumenes, ahora, salud, alertas, children }) {
   const canillita = corridasPor.canillita ?? SIN_CORRIDAS
   const versionCanillita = canillita.find(c => c.estado !== 'corriendo')?.id ?? 0
   const datos = useFuentesCanillita(versionCanillita)
   const hora = Math.floor(ahora / 3600_000)
   const temas = useMemo(() => temasDeCanillita(canillita, hora * 3600_000), [canillita, hora])
   const totalTemas = temas.reduce((s, [, v]) => s + v, 0)
-  return <Bloques disposicion="tres">
-    <Bloque titulo="Duración, últimas 40" accion={nota('por trabajador')}><Duraciones trabajadores={trabajadores} resumenes={resumenes} /></Bloque>
-    <Bloque titulo="Qué trajo cada uno" accion={nota('resultados 24 h')}><QueTrajo trabajadores={trabajadores} resumenes={resumenes} /></Bloque>
-    <Bloque titulo="Actividad por hora" accion={nota('corridas 24 h')}><Actividad compacto trabajadores={trabajadores} corridasPor={corridasPor} ahora={ahora} /></Bloque>
-    <Bloque titulo="Canillita por tema" accion={nota(`${n(totalTemas)} notas 24 h`)}><Temas temas={temas} /></Bloque>
-    <Bloque titulo="Canillita por canal" accion={nota('notas 24 h')}><Canales datos={datos} /></Bloque>
-    <Bloque titulo="Dónde falla" accion={nota(datos ? `${datos.fallan.length} de ${datos.total} fuentes` : '…')}><Fallas datos={datos} /></Bloque>
-    <Bloque titulo="La próxima hora" accion={nota('qué corre y cuándo')}><ProximaHora trabajadores={trabajadores} ahora={ahora} /></Bloque>
-    <Bloque titulo="Salud" accion={nota('corridas ok, 24 h')}><SaludPorTrabajador trabajadores={trabajadores} resumenes={resumenes} salud={salud} alertas={alertas} /></Bloque>
-    <Bloque titulo="La regla" accion={nota('una por capa')}>
-      <div className="pano-regla"><div><small>los trabajadores</small><b>escriben</b></div><div><small>María</small><b className="c2">consolida</b></div><div><small>BS67</small><b className="c3">comunica</b></div></div>
-    </Bloque>
-  </Bloques>
+  const fallas = (datos?.fallan.length ?? 0) + alertas.length
+  return <>
+    <div className="cabina">
+      <div className="cabina-lado cabina-informes" aria-label="Informes">
+        <div className="cabina-rollo">
+          <p className="cabina-rotulo">informes</p>
+          <Bloques>
+            <Bloque titulo="Qué trajo cada uno" accion={nota('resultados 24 h')}><QueTrajo trabajadores={trabajadores} resumenes={resumenes} /></Bloque>
+            <Bloque titulo="Canillita por canal" accion={nota('notas 24 h')}><Canales datos={datos} /></Bloque>
+            <Bloque titulo="Canillita por tema" accion={nota(`${n(totalTemas)} notas 24 h`)}><Temas temas={temas} /></Bloque>
+          </Bloques>
+        </div>
+      </div>
+      <div className="cabina-centro">{children}</div>
+      <div className="cabina-lado cabina-errores" aria-label="Errores">
+        <div className="cabina-rollo">
+          <p className={`cabina-rotulo${fallas ? ' is-alerta' : ''}`}>errores{fallas > 0 && <b>{fallas}</b>}</p>
+          <Bloques>
+            <Bloque titulo="Dónde falla" accion={nota(datos ? `${datos.fallan.length} de ${datos.total} fuentes` : '…')}><Fallas datos={datos} /></Bloque>
+            <Bloque titulo="Salud" accion={nota('corridas ok, 24 h')}><SaludPorTrabajador trabajadores={trabajadores} resumenes={resumenes} salud={salud} alertas={alertas} /></Bloque>
+            <Bloque titulo="La próxima hora" accion={nota('qué corre y cuándo')}><ProximaHora trabajadores={trabajadores} ahora={ahora} /></Bloque>
+          </Bloques>
+        </div>
+      </div>
+    </div>
+    <Bloques disposicion="tres">
+      <Bloque titulo="Actividad por hora" accion={nota('corridas 24 h')}><Actividad compacto trabajadores={trabajadores} corridasPor={corridasPor} ahora={ahora} /></Bloque>
+      <Bloque titulo="Duración, últimas 40" accion={nota('por trabajador')}><Duraciones trabajadores={trabajadores} resumenes={resumenes} /></Bloque>
+      <Bloque titulo="La regla" accion={nota('una por capa')}>
+        <div className="pano-regla"><div><small>los trabajadores</small><b>escriben</b></div><div><small>María</small><b className="c2">consolida</b></div><div><small>BS67</small><b className="c3">comunica</b></div></div>
+      </Bloque>
+    </Bloques>
+  </>
 }

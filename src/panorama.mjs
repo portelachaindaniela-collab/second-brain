@@ -1,6 +1,6 @@
 // Cálculos de los paneles de gráficos de Trabajadores (el volumen de 24 h también lo usa el sistema orbital).
 // Todo sale de `trabajadores` y `trabajos_corridas`; acá no se toca la red.
-import { parsearCron, minutosProgramados } from './trabajadores.mjs'
+import { parsearCron, minutosProgramados, franjaHoras } from './trabajadores.mjs'
 
 const HORA_MS = 3600_000
 const MIN_MS = 60_000
@@ -66,4 +66,16 @@ export function puntosDeLinea(valores, ancho, alto, margen = 2) {
   if (v.length < 2) return ''
   const min = Math.min(...v), max = Math.max(...v)
   return v.map((x, i) => `${((i / (v.length - 1)) * ancho).toFixed(1)},${(alto - margen - ((x - min) / ((max - min) || 1)) * (alto - 2 * margen)).toFixed(1)}`).join(' ')
+}
+
+// Mapa de calor: las 24 franjas de un trabajador con lo que trajo en cada hora y un nivel de 0 a 1 para el color
+// (raíz cuadrada, así una hora floja no desaparece al lado de una enorme). Una hora ok sin resultados queda tenue.
+export function celdasDeCalor(corridas, ahora = Date.now(), programa = null) {
+  const celdas = franjaHoras(corridas, ahora, programa).map(b => ({
+    ...b,
+    resultados: corridas.filter(c => { const t = Date.parse(c.iniciado_at); return t >= b.inicio && t < b.inicio + HORA_MS })
+      .reduce((s, c) => s + (Number(c.cantidad_resultados) || 0), 0),
+  }))
+  const maximo = Math.max(0, ...celdas.map(c => c.resultados))
+  return celdas.map(c => ({ ...c, nivel: c.resultados > 0 ? 0.3 + 0.7 * Math.sqrt(c.resultados / maximo) : c.estado === 'ok' ? 0.18 : 0 }))
 }

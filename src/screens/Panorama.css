@@ -3,7 +3,7 @@
 .bloques-tres .tablero-barras { height: 140px; }
 @media (max-width: 1180px) { .pantalla-bloques.bloques-tres { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .pantalla-bloques.bloques-tres { grid-template-columns: minmax(0, 1fr); } }
-.bloques-tres .bloque-cabecera h2, .pano-bloque .bloque-cabecera h2 { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gray-700); }
+.bloques-tres .bloque-cabecera h2, .pano-bloque .bloque-cabecera h2, .cabina-lado .bloque-cabecera h2 { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gray-700); }
 
 .pano-flujo { display: block; width: 100%; height: auto; font-family: var(--font-mono); font-size: 10.5px; }
 .pano-hilo { fill: none; stroke-opacity: .55; stroke-linecap: round; }
@@ -76,3 +76,78 @@
 .robot-graficos .pano-linea { width: 100%; }
 .robot-error { margin: 0; font-family: var(--font-mono); font-size: 11px; color: var(--red-600); overflow-wrap: anywhere; }
 .robot-tarjeta .consola-eje { font-family: var(--font-mono); font-size: 9.5px; }
+
+/* Cabina: informes | sistema | errores en una pantalla. Los costados no estiran la fila: se desplazan por dentro
+   y el alto lo pone el sistema. En pantallas medianas los informes bajan; en el celular todo se apila. */
+.cabina { display: grid; grid-template-columns: 280px minmax(0, 1fr) 280px; grid-template-areas: "inf centro err"; gap: 16px; margin: 16px 0; }
+.cabina-informes { grid-area: inf; }
+.cabina-centro { grid-area: centro; min-width: 0; }
+.cabina-errores { grid-area: err; }
+.cabina-centro .pantalla-bloques { margin: 0; }
+.cabina-lado { position: relative; min-width: 0; }
+.cabina-rollo { position: absolute; inset: 0; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; }
+.cabina-lado .pantalla-bloques { grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0; }
+.cabina-rotulo { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--gray-500); }
+.cabina-rotulo::after { content: ''; flex: 1; height: 1px; background: var(--gray-200); }
+.cabina-rotulo b { padding: 0 6px; border-radius: 8px; background: var(--red-600); color: #fff; font-size: 10px; letter-spacing: 0; }
+.cabina-rotulo.is-alerta { color: var(--red-600); }
+@media (max-width: 1500px) {
+  .cabina { grid-template-columns: minmax(0, 1fr) 280px; grid-template-areas: "centro err" "inf inf"; }
+  .cabina-informes .cabina-rollo { position: static; overflow: visible; padding: 0; }
+  .cabina-informes .pantalla-bloques { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1000px) {
+  .cabina { grid-template-columns: minmax(0, 1fr); grid-template-areas: "centro" "err" "inf"; }
+  .cabina-rollo { position: static; overflow: visible; padding: 0; }
+  .cabina-informes .pantalla-bloques { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Mapa de calor: el color de identidad mezclado según lo que trajo cada hora; la cruz sigue al mouse. */
+.calor { font-family: var(--font-mono); font-size: 10.5px; }
+.calor-lectura { margin: 0 0 8px; min-height: 1.5em; color: var(--gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calor-lectura.is-activa { color: var(--gray-900); }
+.calor-grilla { display: grid; grid-template-columns: minmax(70px, 130px) repeat(var(--horas), minmax(0, 1fr)) 56px; gap: 2px; align-items: center; }
+.calor-hora { height: 14px; text-align: center; color: var(--gray-500); }
+.calor-hora.is-foco { color: var(--gray-900); font-weight: 600; }
+.calor-hora-total, .calor-total { text-align: right; }
+.calor-nombre { height: 18px; padding: 0 6px 0 0; border: none; background: none; font: inherit; color: var(--gray-700); text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calor-nombre i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--id); }
+.calor-nombre:hover, .calor-nombre:focus-visible, .calor-nombre.is-foco { color: var(--gray-900); }
+.calor-celda { display: block; height: 18px; padding: 0; border: none; border-radius: 2px; background: var(--gray-100); }
+.calor-ok, .calor-corriendo { background: color-mix(in srgb, var(--id) calc(var(--nivel) * 100%), var(--gray-100)); }
+.calor-corriendo { animation: consola-latido 1.1s ease-in-out infinite; }
+.calor-error { background: var(--red-600); }
+.calor-hueco { background: transparent; box-shadow: inset 0 0 0 1px var(--gray-300); }
+.calor-libre { opacity: .45; }
+.calor-celda.en-cruz { box-shadow: inset 0 0 0 1px var(--gray-500); }
+.calor-libre.en-cruz { opacity: .8; }
+button.calor-celda { cursor: pointer; }
+button.calor-celda:hover, button.calor-celda:focus-visible { outline: 1px solid var(--gray-900); outline-offset: 1px; }
+.calor-total { color: var(--gray-900); font-variant-numeric: tabular-nums; }
+
+/* Pared de monitores: una pantallita por robot, con líneas de barrido; tocarla abre la tarjeta completa. */
+.monitores { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.monitor { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--surface-inset); font: inherit; color: inherit; text-align: left; cursor: pointer; overflow: hidden; transition: transform .15s ease, border-color .15s ease; }
+.monitor::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: var(--id); }
+.monitor:hover, .monitor:focus-visible { z-index: 1; transform: translateY(-2px) scale(1.03); border-color: var(--id); outline: none; }
+.monitor.is-corriendo { border-color: var(--id); }
+.monitor.is-error { border-color: var(--red-600); }
+.monitor-cabeza { display: grid; grid-template-columns: 22px minmax(0, 1fr) 24px; gap: 8px; align-items: center; }
+.monitor .cara { width: 22px; align-self: center; }
+.monitor-nombre { min-width: 0; font-family: var(--font-mono); }
+.monitor-nombre strong { display: block; overflow: hidden; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; text-overflow: ellipsis; white-space: nowrap; }
+.monitor-nombre span { display: block; font-size: 10px; }
+.monitor-pantalla { display: block; padding: 6px 4px; border-radius: 4px; background-color: var(--surface); background-image: repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--id) 8%, transparent) 3px 4px); }
+.monitor-pantalla .pano-linea { width: 100%; }
+.monitor.is-corriendo .monitor-pantalla { animation: consola-latido 1.6s ease-in-out infinite; }
+.monitor-pie { display: flex; align-items: baseline; gap: 6px; font-family: var(--font-mono); font-size: 10px; color: var(--gray-500); white-space: nowrap; }
+.monitor-pie b { font-size: 16px; color: var(--gray-900); font-variant-numeric: tabular-nums; }
+.monitor-cuando { margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
+.monitor-anillo { display: block; }
+.monitor-anillo-fondo { fill: none; stroke: var(--gray-200); stroke-width: 3; }
+.monitor-anillo-lleno { fill: none; stroke: var(--green-600); stroke-width: 3; stroke-linecap: round; }
+.monitor-anillo.is-falla .monitor-anillo-lleno { stroke: var(--amber-600); }
+.monitor-abierto { position: relative; grid-column: span 2; }
+.monitor-abierto .robot-tarjeta { height: 100%; }
+.monitor-cerrar { position: absolute; right: 12px; bottom: 12px; z-index: 1; }
+@media (max-width: 560px) { .monitor-abierto { grid-column: auto; } }
