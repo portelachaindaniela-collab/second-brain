@@ -1,7 +1,6 @@
 // Adaptación de maria/checks.py y sitios.yml. Solo consulta destinos fijos.
 export const sites = [
   {nombre:'Radar Laboral (scraper de empleos)',url:'https://portelachaindaniela-collab.github.io/scraper-busquedas-laborales/',extras:true},
-  {nombre:'ODBA - Arma mi dia',url:'https://odba.netlify.app'},
   {nombre:'Portfolio Daniela',url:'https://danielaportelachain.vercel.app'},
   {nombre:'Point Data Global',url:'https://pointdataglobal.netlify.app'},
   {nombre:'Primera AFA Femenina',url:'https://primeraafem.netlify.app'},

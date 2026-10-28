@@ -223,3 +223,14 @@ insert into public.trabajadores (clave, funcion, nombre, descripcion, tipo, acti
  'Arma la cartelera de ODBA (Complejo Teatral y Movistar Arena) desde GitHub Actions y avisa acá. Solo publica la app si la cartelera cambió. Si lo pausás, el workflow no corre.',
  'scraper', true, '0 9 * * *', 15, 'bordo',
  '{"repo": "portelachaindaniela-collab/arma-mi-dia", "workflow": "opera.yml", "hora_ar": "06:00"}'::jsonb);
+
+-- ---------- ODBA pasa a Ópera (2026-10-28, cargado por SQL) ----------
+-- Ópera revisa cada hora que odba.netlify.app ande (corrida con payload.tipo 'sitio'); el monitor de sitios y María
+-- dejan de mirarlo. La cartelera sigue corriendo una vez por día en GitHub Actions.
+update public.trabajadores set frecuencia = '41 * * * *',
+  descripcion = 'Arma la cartelera de ODBA (Complejo Teatral y Movistar Arena) desde GitHub Actions y avisa acá; solo publica la app si la cartelera cambió. Cada hora revisa que el sitio ande. Si lo pausás, el workflow no corre.'
+where clave = 'opera';
+update public.trabajadores
+set parametros = jsonb_set(parametros, '{sitios}',
+  (select coalesce(jsonb_agg(s), '[]'::jsonb) from jsonb_array_elements(parametros->'sitios') s where s->>'url' <> 'https://odba.netlify.app'))
+where clave = 'monitor_sitios';

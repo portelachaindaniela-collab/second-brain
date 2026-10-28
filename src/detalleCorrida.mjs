@@ -154,8 +154,9 @@ function agendaValentina(p) {
   return { resumen: p.resumen ?? null, secciones }
 }
 
-// Ópera: cartelera de teatros y estadios para ODBA. Solo publica la app si la cartelera cambió.
+// Ópera: cartelera de teatros y estadios para ODBA (solo publica la app si cambió) y, cada hora, si el sitio anda.
 function opera(p) {
+  if (p.tipo === 'sitio') return { resumen: `${p.nivel === 'error' ? 'ODBA no anda' : p.nivel === 'aviso' ? 'ODBA anda, con un aviso' : 'ODBA anda'}: ${p.detalle}`, secciones: [] }
   const fuentes = p.fuentes ?? []
   const caidas = fuentes.filter(f => f.estado !== 'ok')
   const dudas = fuentes.flatMap(f => (f.sin_entender ?? []).map(t => ({ texto: `${f.nombre}: ${t}`, nivel: 'aviso' })))

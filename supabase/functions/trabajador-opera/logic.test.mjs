@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { armarCorrida, claimsValidos, REPO, WORKFLOW } from './logic.mjs';
+import { armarCorrida, claimsValidos, corridaDeSitio, REPO, WORKFLOW } from './logic.mjs';
 
 const fuente = (clave, estado, funciones, extra = {}) => ({ clave, nombre: clave, estado, funciones, segundos: 1, ...extra });
 
@@ -34,4 +34,17 @@ test('armarCorrida es error si no se pudo leer ninguna fuente', () => {
 test('armarCorrida rechaza un reporte sin fuentes', () => {
   assert.throws(() => armarCorrida({}), /no trae fuentes/);
   assert.throws(() => armarCorrida(null), /no trae fuentes/);
+});
+
+test('corridaDeSitio: caído es error, lento queda ok con el aviso a la vista', () => {
+  const ok = corridaDeSitio({ nivel: 'ok', chequeos: [{ nivel: 'ok', detalle: 'HTTP 200 en 300 ms.', latencia_ms: 300 }] });
+  assert.equal(ok.estado, 'ok');
+  assert.equal(ok.error, null);
+  assert.deepEqual(ok.payload, { tipo: 'sitio', url: 'https://odba.netlify.app', nivel: 'ok', detalle: 'HTTP 200 en 300 ms.', latencia_ms: 300 });
+  const lento = corridaDeSitio({ nivel: 'aviso', chequeos: [{ nivel: 'aviso', detalle: 'HTTP 200 en 5000 ms.', latencia_ms: 5000 }] });
+  assert.equal(lento.estado, 'ok');
+  assert.equal(lento.error, 'HTTP 200 en 5000 ms.');
+  const caido = corridaDeSitio({ nivel: 'error', chequeos: [{ nivel: 'error', detalle: 'No se pudo consultar el sitio dentro de 12 segundos.' }] });
+  assert.equal(caido.estado, 'error');
+  assert.equal(caido.payload.latencia_ms, null);
 });

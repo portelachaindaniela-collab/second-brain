@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5.9.6";
-import { TRABAJADOR, OIDC_EMISOR, OIDC_AUDIENCIA, HORAS_SIN_AVISO, claimsValidos, armarCorrida } from './logic.mjs';
+import { monitor } from '../maria-agent/checks.mjs';
+import { TRABAJADOR, OIDC_EMISOR, OIDC_AUDIENCIA, HORAS_SIN_AVISO, SITIO, claimsValidos, armarCorrida, corridaDeSitio } from './logic.mjs';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -15,7 +16,8 @@ const jwks = createRemoteJWKSet(new URL(`${OIDC_EMISOR}/.well-known/jwks`));
 // - GitHub Actions (workflow opera.yml), con su token OIDC en Authorization:
 //     {"accion": "consultar"} -> dice si Ópera está activo (si lo pausaste acá, el workflow no corre);
 //     {"accion": "reportar", "reporte": {...}} -> anota la corrida en trabajos_corridas.
-// - pg_cron, a la hora de `frecuencia`: si Ópera no avisó en las últimas 26 h, anota una corrida con error.
+// - pg_cron, a la hora de `frecuencia` (cada hora): revisa que ODBA ande y lo anota como corrida (payload.tipo 'sitio');
+//   además, si la cartelera no avisó en las últimas 26 h, anota una corrida con error.
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -53,20 +55,29 @@ Deno.serve(async (req: Request) => {
     return json({ id: fila.id, estado: corrida.estado });
   }
 
-  // Llamada de pg_cron: solo valida que Ópera haya avisado.
+  // Llamada de pg_cron: revisa el sitio y que la cartelera haya avisado.
   const secreto = req.headers.get('x-trabajador-secreto') ?? '';
   const { data: valido } = await admin.rpc('trabajador_secreto_valido', { p_secreto: secreto });
   if (!valido) return json({ error: 'No autorizado.' }, 401);
 
+  const inicio = Date.now();
+  const { sitios: [sitio] } = await monitor(fetch, [SITIO]);
+  const deSitio = corridaDeSitio(sitio);
+  const fin = Date.now();
+  await admin.from('trabajos_corridas').insert({
+    trabajador: TRABAJADOR, ...deSitio,
+    iniciado_at: new Date(inicio).toISOString(), finalizado_at: new Date(fin).toISOString(), duracion_ms: fin - inicio,
+  });
+
   const desde = new Date(Date.now() - HORAS_SIN_AVISO * 3600_000).toISOString();
   const { data: recientes } = await admin.from('trabajos_corridas').select('id')
-    .eq('trabajador', TRABAJADOR).gte('iniciado_at', desde).limit(1);
-  if (recientes?.length) return json({ ok: 'Ópera avisó en las últimas horas.' });
+    .eq('trabajador', TRABAJADOR).gte('iniciado_at', desde).is('payload->>tipo', null).limit(1);
+  if (recientes?.length) return json({ sitio: deSitio.estado, cartelera: 'avisó en las últimas horas' }, deSitio.estado === 'ok' ? 200 : 502);
 
   const ahora = new Date().toISOString();
   await admin.from('trabajos_corridas').insert({
     trabajador: TRABAJADOR, estado: 'error', iniciado_at: ahora, finalizado_at: ahora, duracion_ms: 0,
     error: `Ópera no avisó en ${HORAS_SIN_AVISO} h: revisá el workflow opera.yml en GitHub Actions (repo arma-mi-dia).`,
   });
-  return json({ error: 'Ópera no avisó.' }, 502);
+  return json({ sitio: deSitio.estado, error: 'Ópera no avisó.' }, 502);
 });

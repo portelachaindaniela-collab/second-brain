@@ -45,3 +45,17 @@ export function armarCorrida(reporte) {
     },
   };
 }
+
+// Además de la cartelera, Ópera revisa cada hora que ODBA ande (antes lo hacía el monitor de sitios para María).
+export const SITIO = { nombre: 'ODBA - Arma mi dia', url: 'https://odba.netlify.app' };
+
+// `sitio` es lo que devuelve monitor() de maria-agent/checks.mjs para ODBA. Un aviso (lento, redirige) no es error.
+export function corridaDeSitio(sitio) {
+  const chequeo = sitio?.chequeos?.[0] ?? { nivel: 'error', detalle: 'No hubo chequeo del sitio.' };
+  return {
+    estado: sitio?.nivel === 'error' ? 'error' : 'ok',
+    cantidad_resultados: null,
+    error: sitio?.nivel === 'ok' ? null : chequeo.detalle,
+    payload: { tipo: 'sitio', url: SITIO.url, nivel: sitio?.nivel ?? 'error', detalle: chequeo.detalle, latencia_ms: chequeo.latencia_ms ?? null },
+  };
+}
