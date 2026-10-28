@@ -209,3 +209,17 @@ insert into public.trabajadores (clave, funcion, nombre, descripcion, tipo, acti
  'Vigila la app de Valentina: sitio y build de Pages, función agenda-dulce y Groq, si la usa, el cole y el chat (solo cantidades). Solo lee.',
  'monitor', true, '23 */3 * * *', 5, 'fucsia',
  '{"familia": "Valentina", "dias_sin_abrir": 3, "horas_sin_leer": 6, "dias_examenes": 3, "dino_aviso": 200}'::jsonb);
+
+-- ---------- Ópera (migración trabajador_opera, 2026-10-28) ----------
+-- Arma la cartelera de ODBA (repo arma-mi-dia, workflow opera.yml) en GitHub Actions: lee el Complejo Teatral y
+-- Movistar Arena y solo publica la app si la cartelera cambió. Antes de correr le pregunta a trabajador-opera si
+-- está activo (pausarlo acá frena el workflow) y al terminar le manda el reporte. Se autentica con el token OIDC
+-- de GitHub (sin secretos). El job de pg_cron solo anota un error si Ópera no avisó en 26 h. 09:00 UTC = 06:00 AR.
+alter table public.trabajadores drop constraint trabajadores_color_check;
+alter table public.trabajadores add constraint trabajadores_color_check
+  check (color in ('ambar', 'azul', 'violeta', 'rosa', 'cian', 'lima', 'arena', 'fucsia', 'bordo'));
+insert into public.trabajadores (clave, funcion, nombre, descripcion, tipo, activo, frecuencia, minutos_trabado, color, parametros) values
+('opera', 'trabajador-opera', 'Ópera',
+ 'Arma la cartelera de ODBA (Complejo Teatral y Movistar Arena) desde GitHub Actions y avisa acá. Solo publica la app si la cartelera cambió. Si lo pausás, el workflow no corre.',
+ 'scraper', true, '0 9 * * *', 15, 'bordo',
+ '{"repo": "portelachaindaniela-collab/arma-mi-dia", "workflow": "opera.yml", "hora_ar": "06:00"}'::jsonb);

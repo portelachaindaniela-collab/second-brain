@@ -62,6 +62,7 @@ export const FUENTES = {
   eventbrite: 'Eventbrite',
   medios: 'Fuentes de noticias',
   agenda_valentina: 'Agenda de Valentina',
+  cartelera: 'Cartelera (Complejo Teatral, Movistar Arena)',
 }
 // María no lee una fuente de afuera: consolida lo que dejan Sitios, Tareas y Google en trabajos_corridas.
 export const RECORRIDOS = {
@@ -73,6 +74,8 @@ export const RECORRIDOS = {
   buscador_eventos: { fuentes: ['eventbrite'], destinos: ['eventos'] },
   canillita: { fuentes: ['medios'], destinos: ['noticias'] },
   agenda_valentina: { fuentes: ['agenda_valentina'], destinos: [] },
+  // Ópera no escribe en una tabla: deja la cartelera en el repo de ODBA (arma-mi-dia).
+  opera: { fuentes: ['cartelera'], destinos: [] },
 }
 export const REGISTRO = 'trabajos_corridas'
 

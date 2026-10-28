@@ -28,6 +28,7 @@ export const DESCRIPCION_FUENTE = {
   eventbrite: 'Eventos y actividades',
   medios: 'Webs, X y Bluesky',
   agenda_valentina: 'Su app, Dino y chat',
+  cartelera: 'Teatros y estadios',
 }
 // Nombre de cada destino para la persona (la clave es la tabla adonde escribe).
 export const NOMBRE_DESTINO = {

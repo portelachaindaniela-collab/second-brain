@@ -154,7 +154,23 @@ function agendaValentina(p) {
   return { resumen: p.resumen ?? null, secciones }
 }
 
-const FORMAS = { agenda_valentina: agendaValentina, buscador_eventos: buscador, canillita, google_sync: google, maria, scraper_empleo: scraper }
+// Ópera: cartelera de teatros y estadios para ODBA. Solo publica la app si la cartelera cambió.
+function opera(p) {
+  const fuentes = p.fuentes ?? []
+  const caidas = fuentes.filter(f => f.estado !== 'ok')
+  const dudas = fuentes.flatMap(f => (f.sin_entender ?? []).map(t => ({ texto: `${f.nombre}: ${t}`, nivel: 'aviso' })))
+  return {
+    resumen: `Encontró ${plural(p.total, 'función', 'funciones')}. `
+      + (p.cambio ? (p.publicado ? 'La cartelera cambió y se publicó ODBA.' : 'La cartelera cambió pero no se publicó.') : 'Sin cambios: no se publicó nada.')
+      + (caidas.length ? ` No pudo leer: ${caidas.map(f => f.nombre).join(', ')}.` : ''),
+    secciones: [
+      { titulo: 'fuentes · funciones', filas: fuentes.map(f => ({ etiqueta: f.nombre, detalle: f.error, valor: n(f.funciones), estado: f.estado === 'ok' ? null : 'error' })) },
+      ...(dudas.length ? [{ titulo: 'horarios que no entendió', items: dudas }] : []),
+    ],
+  }
+}
+
+const FORMAS = { agenda_valentina: agendaValentina, opera, buscador_eventos: buscador, canillita, google_sync: google, maria, scraper_empleo: scraper }
 
 const legible = k => String(k).replace(/_/g, ' ')
 
