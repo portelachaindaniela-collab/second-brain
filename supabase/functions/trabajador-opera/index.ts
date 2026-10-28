@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5.9.6";
 import { monitor } from '../maria-agent/checks.mjs';
-import { TRABAJADOR, OIDC_EMISOR, OIDC_AUDIENCIA, HORAS_SIN_AVISO, SITIO, claimsValidos, armarCorrida, corridaDeSitio } from './logic.mjs';
+import { TRABAJADOR, OIDC_EMISOR, OIDC_AUDIENCIA, HORAS_SIN_AVISO, SITIO, claimsValidos, esAuditoriaOrigen, armarCorrida, armarAuditoria, conAuditoria, corridaDeSitio } from './logic.mjs';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -12,10 +12,19 @@ const cors = {
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const jwks = createRemoteJWKSet(new URL(`${OIDC_EMISOR}/.well-known/jwks`));
 
+async function ultimaAuditoria(admin: any) {
+  const { data } = await admin.from('trabajos_corridas').select('estado,iniciado_at,error,payload')
+    .eq('trabajador', TRABAJADOR).eq('payload->>tipo', 'auditoria')
+    .order('iniciado_at', { ascending: false }).limit(1).maybeSingle();
+  return data;
+}
+
 // Dos formas de llamarlo (verify_jwt false):
 // - GitHub Actions (workflow opera.yml), con su token OIDC en Authorization:
 //     {"accion": "consultar"} -> dice si Ópera está activo (si lo pausaste acá, el workflow no corre);
 //     {"accion": "reportar", "reporte": {...}} -> anota la corrida en trabajos_corridas.
+//   La auditoría de ORIGEN (auditoria-periodica.yml de creando_sentido) usa el mismo "reportar" con sus hallazgos;
+//   las corridas de cartelera y sitio arrastran el estado de la última auditoría (ver conAuditoria).
 // - pg_cron, a la hora de `frecuencia` (cada hora): revisa que ODBA ande y lo anota como corrida (payload.tipo 'sitio');
 //   además, si la cartelera no avisó en las últimas 26 h, anota una corrida con error.
 Deno.serve(async (req: Request) => {
@@ -30,10 +39,11 @@ Deno.serve(async (req: Request) => {
     } catch {
       claims = null;
     }
-    if (!claimsValidos(claims)) return json({ error: 'Token de GitHub no válido para Ópera.' }, 401);
+    const auditoria = esAuditoriaOrigen(claims);
+    if (!auditoria && !claimsValidos(claims)) return json({ error: 'Token de GitHub no válido para Ópera.' }, 401);
 
     const cuerpo = await req.json().catch(() => ({}));
-    if (cuerpo.accion === 'consultar') {
+    if (cuerpo.accion === 'consultar' && !auditoria) {
       const { data } = await admin.from('trabajadores').select('activo').eq('clave', TRABAJADOR).single();
       return json({ activo: data?.activo ?? true });
     }
@@ -41,9 +51,10 @@ Deno.serve(async (req: Request) => {
 
     let corrida;
     try {
-      corrida = armarCorrida(cuerpo.reporte);
+      corrida = auditoria ? armarAuditoria(cuerpo.reporte) : conAuditoria(armarCorrida(cuerpo.reporte), await ultimaAuditoria(admin));
     } catch (e) {
-      corrida = { estado: 'error', cantidad_resultados: null, payload: null, error: e instanceof Error ? e.message : String(e) };
+      const payload = auditoria ? { tipo: 'auditoria', run_url: cuerpo.reporte?.run_url ?? null } : null;
+      corrida = { estado: 'error', cantidad_resultados: null, payload, error: e instanceof Error ? e.message : String(e) };
     }
     const fin = Date.now();
     const inicio = Date.parse(cuerpo.reporte?.inicio ?? '') || fin;
@@ -62,7 +73,7 @@ Deno.serve(async (req: Request) => {
 
   const inicio = Date.now();
   const { sitios: [sitio] } = await monitor(fetch, [SITIO]);
-  const deSitio = corridaDeSitio(sitio);
+  const deSitio = conAuditoria(corridaDeSitio(sitio), await ultimaAuditoria(admin));
   const fin = Date.now();
   await admin.from('trabajos_corridas').insert({
     trabajador: TRABAJADOR, ...deSitio,

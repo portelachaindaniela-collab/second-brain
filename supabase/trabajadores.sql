@@ -234,3 +234,11 @@ update public.trabajadores
 set parametros = jsonb_set(parametros, '{sitios}',
   (select coalesce(jsonb_agg(s), '[]'::jsonb) from jsonb_array_elements(parametros->'sitios') s where s->>'url' <> 'https://odba.netlify.app'))
 where clave = 'monitor_sitios';
+
+-- ---------- Ópera recibe la auditoría de ORIGEN (2026-10-28) ----------
+-- La auditoría de ORIGEN (repo creando_sentido, workflow auditoria-periodica.yml) antes mandaba el reporte por mail.
+-- Ahora le avisa a trabajador-opera con el token OIDC de GitHub (payload.tipo 'auditoria'); las corridas de cartelera
+-- y sitio arrastran su estado, así María ve el fallo hasta que una auditoría salga limpia. Se reactivó Ópera.
+update public.trabajadores set activo = true,
+  descripcion = 'Arma la cartelera de ODBA (Complejo Teatral y Movistar Arena) desde GitHub Actions y avisa acá; cada hora revisa que ODBA ande. También recibe la auditoría de ORIGEN (repo creando_sentido, cada ~3 días): si encuentra algo queda en error hasta que una salga limpia. Si lo pausás, el workflow de la cartelera no corre.'
+  where clave = 'opera';

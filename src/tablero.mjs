@@ -63,6 +63,7 @@ export const FUENTES = {
   medios: 'Fuentes de noticias',
   agenda_valentina: 'Agenda de Valentina',
   cartelera: 'Cartelera (Complejo Teatral, Movistar Arena, Alternativa Teatral)',
+  origen: 'Auditoría de ORIGEN',
 }
 // María no lee una fuente de afuera: consolida lo que dejan Sitios, Tareas y Google en trabajos_corridas.
 export const RECORRIDOS = {
@@ -74,8 +75,9 @@ export const RECORRIDOS = {
   buscador_eventos: { fuentes: ['eventbrite'], destinos: ['eventos'] },
   canillita: { fuentes: ['medios'], destinos: ['noticias'] },
   agenda_valentina: { fuentes: ['agenda_valentina'], destinos: [] },
-  // Ópera no escribe en una tabla: deja la cartelera en el repo de ODBA (arma-mi-dia).
-  opera: { fuentes: ['cartelera'], destinos: [] },
+  // Ópera no escribe en una tabla: deja la cartelera en el repo de ODBA (arma-mi-dia). Además recibe la auditoría
+  // de ORIGEN que corre en GitHub Actions (repo creando_sentido).
+  opera: { fuentes: ['cartelera', 'origen'], destinos: [] },
 }
 export const REGISTRO = 'trabajos_corridas'
 

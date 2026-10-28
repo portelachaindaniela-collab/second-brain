@@ -29,6 +29,7 @@ export const DESCRIPCION_FUENTE = {
   medios: 'Webs, X y Bluesky',
   agenda_valentina: 'Su app, Dino y chat',
   cartelera: 'Teatros y estadios',
+  origen: 'Guías revisadas con reglas',
 }
 // Nombre de cada destino para la persona (la clave es la tabla adonde escribe).
 export const NOMBRE_DESTINO = {

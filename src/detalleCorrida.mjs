@@ -156,6 +156,16 @@ function agendaValentina(p) {
 
 // Ópera: cartelera de teatros y estadios para ODBA (solo publica la app si cambió) y, cada hora, si el sitio anda.
 function opera(p) {
+  // También recibe la auditoría de ORIGEN (GitHub Actions, repo creando_sentido); cada corrida arrastra su estado.
+  if (p.tipo === 'auditoria') {
+    const hallazgos = p.hallazgos ?? []
+    return {
+      resumen: `Auditoría de ORIGEN: revisó ${plural(p.total, 'regla', 'reglas')}; ${n(p.ok)} bien, ${n(hallazgos.length)} con hallazgos y ${n(p.no_aplica)} no aplican.`,
+      secciones: hallazgos.length
+        ? [{ titulo: 'hallazgos en ORIGEN', filas: hallazgos.map(h => ({ etiqueta: h.regla, detalle: h.detalle, valor: [h.pagina, h.viewport].filter(Boolean).join(' · '), texto: true, estado: 'error' })) }]
+        : [],
+    }
+  }
   if (p.tipo === 'sitio') return { resumen: `${p.nivel === 'error' ? 'ODBA no anda' : p.nivel === 'aviso' ? 'ODBA anda, con un aviso' : 'ODBA anda'}: ${p.detalle}`, secciones: [] }
   const fuentes = p.fuentes ?? []
   const caidas = fuentes.filter(f => f.estado !== 'ok')
