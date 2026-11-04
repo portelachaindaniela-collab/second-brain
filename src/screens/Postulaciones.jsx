@@ -18,6 +18,8 @@ async function llamar(body) {
 }
 
 const SEMAFOROS = ['verde', 'amarillo', 'rojo', 'negro']
+// "Lo que falta enviar": cuántas tarjetas se ven antes de tocar "Ver más".
+const FALTA_VISIBLES = 3
 
 function Contacto({ valor }) {
   if (!valor) return null
@@ -113,6 +115,7 @@ export default function Postulaciones() {
   const [abierta, setAbierta] = useState(null)
   // Grupos abiertos (listas desplegables). Arrancan todos cerrados: se ve una línea por grupo con su cantidad.
   const [abiertos, setAbiertos] = useState(() => new Set())
+  const [verTodasFalta, setVerTodasFalta] = useState(false)
   const alternar = clave => setAbiertos(a => { const b = new Set(a); if (b.has(clave)) b.delete(clave); else b.add(clave); return b })
   const [vista, setVista] = useState('seguimiento')
 
@@ -171,8 +174,8 @@ export default function Postulaciones() {
     {listo && vista === 'seguimiento' && <>
       {pendientes.length > 0 && <section className="postu-falta">
         <h2>Lo que falta enviar · empezá por acá</h2>
-        <div className="postu-falta-lista">{pendientes.slice(0, 6).map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} destacada />)}</div>
-        {pendientes.length > 6 && <p className="postu-nota">Y {pendientes.length - 6} más en Para hacer.</p>}
+        <div className="postu-falta-lista">{(verTodasFalta ? pendientes : pendientes.slice(0, FALTA_VISIBLES)).map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} destacada />)}</div>
+        {pendientes.length > FALTA_VISIBLES && <button className="btn btn-sm postu-falta-mas" onClick={() => setVerTodasFalta(v => !v)}>{verTodasFalta ? 'Ver menos' : `Ver ${pendientes.length - FALTA_VISIBLES} más`}</button>}
       </section>}
 
       <div className="postu-filtros">

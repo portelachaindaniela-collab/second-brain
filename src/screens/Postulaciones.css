@@ -56,3 +56,4 @@
 .postu-desplegables { display:flex; flex-direction:column; gap:8px; }
 .postu-desplegables .postu-cerradas { margin-top:0; }
 .postu-vacio-desplegable { margin:0 16px 16px; }
+.postu-falta-mas { margin-top:10px; font-size:13px; }
