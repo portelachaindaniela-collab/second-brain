@@ -101,16 +101,6 @@ export function estadisticas(filasPreparadas) {
     tasaRechazo: enviadas.length ? rechazos.length / enviadas.length : null,
   }
 
-  // 1. Enviadas por mes (según la columna Fecha). "Sin fecha" va aparte, al final.
-  const meses = new Map()
-  for (const p of enviadas) {
-    const m = meses.get(p.mes) || { mes: p.mes, rechazadas: 0, sinDecision: 0 }
-    if (p.categoria === 'rechazada') m.rechazadas++; else m.sinDecision++
-    meses.set(p.mes, m)
-  }
-  const porMes = [...meses.values()].filter(m => m.mes !== SIN_FECHA).sort((a, b) => a.mes.localeCompare(b.mes))
-  const enviadasSinFecha = meses.get(SIN_FECHA) || null
-
   // 2. Rechazos por fuente, con cuántas se enviaron por esa fuente.
   const enviadasPorCanal = contar(enviadas, p => p.canal)
   const porFuente = [...contar(rechazos, p => p.canal)].map(([canal, n]) => ({ canal, rechazos: n, enviadas: enviadasPorCanal.get(canal) || 0 }))
@@ -143,10 +133,89 @@ export function estadisticas(filasPreparadas) {
   const porCv = [...cvs.values()].sort((a, b) => b.enviadas - a.enviadas || a.cv.localeCompare(b.cv))
 
   return {
-    cifras, porMes, enviadasSinFecha, porFuente, embudo, porSemaforo, porCv,
+    cifras, porFuente, embudo, porSemaforo, porCv,
     sinFecha: f.filter(p => p.mes === SIN_FECHA),
     otros: f.filter(p => p.categoria === 'otro'),
   }
+}
+
+// Grupos de puesto por palabra clave (la columna Puesto es texto libre). Gana el primero que coincide, en este orden.
+// Para mover un puesto de grupo o sumar uno nuevo, se cambia solo esta lista.
+export const GRUPOS_PUESTO = [
+  ['Community Manager / Redes', /community|\bcm\b|social media|redes sociales/],
+  ['Contenidos y redacción', /contenid|content|copywrit|redact|creador|periodist|editor|columnist/],
+  ['Comunicación', /comunicac|communication|prensa/],
+  ['Marketing y medios', /marketing|paid media|media|performance|seo|growth|campan|planning|trafficker|go to market/],
+  ['Datos y calidad', /dato|data|calidad|documental|referencias comerciales/],
+  ['RRHH', /rrhh|recursos humanos|recruiter|relaciones laborales|desarrollo rh/],
+  ['Eventos y producción', /evento|productor|produccion|producer/],
+  ['Administración y atención', /administra|recepcion|asistente|secretari|atencion|customer|office|auxiliar/],
+]
+export const OTROS_PUESTOS = 'Otros puestos'
+
+export function grupoPuesto(puesto) {
+  const t = normal(puesto)
+  return GRUPOS_PUESTO.find(([, re]) => re.test(t))?.[0] ?? OTROS_PUESTOS
+}
+
+// Enviadas por grupo de puesto, partidas en rechazadas y sin decisión. Lo que más se mandó, arriba.
+export function porGrupoPuesto(filasPreparadas) {
+  const m = new Map()
+  for (const p of filasPreparadas) {
+    if (!esEnviada(p.categoria)) continue
+    const g = grupoPuesto(p.puesto)
+    const x = m.get(g) || { grupo: g, enviadas: 0, rechazadas: 0, sinDecision: 0 }
+    x.enviadas++
+    if (p.categoria === 'rechazada') x.rechazadas++; else x.sinDecision++
+    m.set(g, x)
+  }
+  return [...m.values()].sort((a, b) => (a.grupo === OTROS_PUESTOS) - (b.grupo === OTROS_PUESTOS) || b.enviadas - a.enviadas || a.grupo.localeCompare(b.grupo))
+}
+
+// Enviadas por día (últimos 30), semana (últimas 16, de lunes a domingo) o mes (todos, sin saltear meses vacíos).
+// Día y semana necesitan el día exacto: "marzo 2026" entra en el mes pero cuenta como sin fecha en las otras dos.
+export const PERIODOS = [['dia', 'Día'], ['semana', 'Semana'], ['mes', 'Mes']]
+const dos = n => String(n).padStart(2, '0')
+const aDate = f => new Date(f.anio, f.mes - 1, f.dia)
+const lunes = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x }
+const claveDia = d => `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`
+
+export function enviadasPorPeriodo(filasPreparadas, periodo, hoy = new Date()) {
+  const enviadas = filasPreparadas.filter(p => esEnviada(p.categoria))
+  const columnas = []
+  if (periodo === 'mes') {
+    const meses = enviadas.map(p => p.mes).filter(m => m !== SIN_FECHA).sort()
+    if (meses.length) {
+      let [a, m] = meses[0].split('-').map(Number)
+      const ultimo = meses[meses.length - 1]
+      const actual = `${hoy.getFullYear()}-${dos(hoy.getMonth() + 1)}`
+      const fin = ultimo > actual ? ultimo : actual
+      for (let k = `${a}-${dos(m)}`; k <= fin; m === 12 ? (a++, m = 1) : m++, k = `${a}-${dos(m)}`) {
+        columnas.push({ clave: k, etiqueta: [MESES_CORTOS[m - 1], String(a)] })
+      }
+    }
+  } else {
+    const paso = periodo === 'semana' ? 7 : 1
+    const cuantas = periodo === 'semana' ? 16 : 30
+    const ultimo = periodo === 'semana' ? lunes(hoy) : new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+    for (let i = cuantas - 1; i >= 0; i--) {
+      const d = new Date(ultimo.getFullYear(), ultimo.getMonth(), ultimo.getDate() - i * paso)
+      columnas.push({ clave: claveDia(d), etiqueta: [dos(d.getDate()), MESES_CORTOS[d.getMonth()]] })
+    }
+  }
+  const porClave = new Map(columnas.map(c => [c.clave, Object.assign(c, { rechazadas: 0, sinDecision: 0 })]))
+  let sinFecha = 0, fueraDeRango = 0
+  for (const p of enviadas) {
+    const f = p.fechaLeida
+    let clave = null
+    if (periodo === 'mes') clave = f ? p.mes : null
+    else if (f?.dia) clave = claveDia(periodo === 'semana' ? lunes(aDate(f)) : aDate(f))
+    if (!clave) { sinFecha++; continue }
+    const c = porClave.get(clave)
+    if (!c) { fueraDeRango++; continue }
+    if (p.categoria === 'rechazada') c.rechazadas++; else c.sinDecision++
+  }
+  return { columnas, sinFecha, fueraDeRango }
 }
 
 // Link a la fila en Google Sheets. Sin gid abre la primera pestaña, que es la que lee la función postulaciones.

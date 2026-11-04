@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bloques, Bloque } from '../estructura.jsx'
 import { Barra } from './Panorama.jsx'
-import { CATEGORIAS, tituloCategoria, prepararFilas, estadisticas, etiquetaMes, linkFila, SIN_FECHA } from '../busquedaLaboral.mjs'
+import { CATEGORIAS, PERIODOS, tituloCategoria, prepararFilas, estadisticas, etiquetaMes, linkFila, porGrupoPuesto, enviadasPorPeriodo, SIN_FECHA } from '../busquedaLaboral.mjs'
 import './BusquedaEstadisticas.css'
 
 // Estadísticas de la búsqueda laboral, dentro de Postulaciones. Usa las filas que la pantalla ya leyó de la planilla.
@@ -14,22 +14,57 @@ function Leyenda() {
   return <p className="busq-leyenda"><span><i style={{ background: ROJO }} />rechazadas</span><span><i style={{ background: AZUL }} />sin decisión</span></p>
 }
 
-function PorMes({ meses, sinFecha }) {
-  const todos = sinFecha ? [...meses, sinFecha] : meses
-  if (!todos.length) return <p className="pano-vacio">todavía no hay postulaciones enviadas</p>
-  const max = Math.max(1, ...todos.map(m => m.rechazadas + m.sinDecision))
+function PorPeriodo({ filas }) {
+  const [periodo, setPeriodo] = useState('mes')
+  const { columnas, sinFecha, fueraDeRango } = useMemo(() => enviadasPorPeriodo(filas, periodo), [filas, periodo])
+  // En pantallas angostas el gráfico se desplaza: se arranca mostrando lo más reciente (a la derecha).
+  const caja = useRef(null)
+  useEffect(() => { if (caja.current) caja.current.scrollLeft = caja.current.scrollWidth }, [columnas])
+  const max = Math.max(1, ...columnas.map(c => c.rechazadas + c.sinDecision))
+  const total = columnas.reduce((s, c) => s + c.rechazadas + c.sinDecision, 0)
+  const rango = periodo === 'dia' ? 'en los últimos 30 días' : periodo === 'semana' ? 'en las últimas 16 semanas' : 'en total'
+  return <>
+    <div className="busq-periodo">
+      <div className="postu-chips-filtro" role="tablist" aria-label="Período">
+        {PERIODOS.map(([v, t]) => <button key={v} role="tab" aria-selected={periodo === v} className={periodo === v ? 'activo' : ''} onClick={() => setPeriodo(v)}>{t}</button>)}
+      </div>
+      <span className="busq-nota"><strong>{total}</strong> enviadas {rango}</span>
+    </div>
+    <Leyenda />
+    {columnas.length ? <div ref={caja} className={`busq-columnas busq-columnas-${periodo}`} role="img" aria-label={columnas.map(c => `${c.etiqueta.join(' ')}: ${c.rechazadas} rechazadas, ${c.sinDecision} sin decisión`).join('; ')}>
+      {columnas.map(c => <div key={c.clave} className="busq-col" title={`${c.etiqueta.join(' ')}: ${c.rechazadas + c.sinDecision} enviadas (${c.rechazadas} rechazadas, ${c.sinDecision} sin decisión)`}>
+        <span className="busq-col-num">{c.rechazadas + c.sinDecision || ''}</span>
+        <div className="busq-col-barra">
+          <span style={{ height: `${(c.sinDecision / max) * 100}%`, background: AZUL }} />
+          <span style={{ height: `${(c.rechazadas / max) * 100}%`, background: ROJO }} />
+        </div>
+        <span className="busq-col-mes">{c.etiqueta[0]}<br />{c.etiqueta[1]}</span>
+      </div>)}
+    </div> : <p className="pano-vacio">todavía no hay postulaciones enviadas</p>}
+    <p className="busq-nota">
+      Según la columna Fecha (en los rechazos de LinkedIn es el día del rechazo).
+      {sinFecha > 0 && ` ${sinFecha} sin ${periodo === 'mes' ? 'fecha legible' : 'día exacto'}.`}
+      {fueraDeRango > 0 && ` ${fueraDeRango} fuera de este rango.`}
+    </p>
+  </>
+}
+
+function PorPuesto({ grupos }) {
+  if (!grupos.length) return <p className="pano-vacio">todavía no hay postulaciones enviadas</p>
+  const max = Math.max(1, ...grupos.map(g => g.enviadas))
   return <>
     <Leyenda />
-    <div className="busq-columnas" role="img" aria-label={todos.map(m => `${etiquetaMes(m.mes)}: ${m.rechazadas} rechazadas, ${m.sinDecision} sin decisión`).join('; ')}>
-      {todos.map(m => <div key={m.mes} className={m.mes === SIN_FECHA ? 'busq-col busq-col-sin' : 'busq-col'} title={`${etiquetaMes(m.mes)}: ${m.rechazadas} rechazadas, ${m.sinDecision} sin decisión`}>
-        <span className="busq-col-num">{m.rechazadas + m.sinDecision}</span>
-        <div className="busq-col-barra">
-          <span style={{ height: `${(m.sinDecision / max) * 100}%`, background: AZUL }} />
-          <span style={{ height: `${(m.rechazadas / max) * 100}%`, background: ROJO }} />
-        </div>
-        <span className="busq-col-mes">{m.mes === SIN_FECHA ? <>sin<br />fecha</> : <>{etiquetaMes(m.mes).split(' ')[0]}<br />{m.mes.slice(0, 4)}</>}</span>
+    <div className="busq-puestos">
+      {grupos.map(g => <div key={g.grupo} className="busq-puesto" title={`${g.grupo}: ${g.enviadas} enviadas, ${g.rechazadas} rechazadas, ${g.sinDecision} sin decisión`}>
+        <span className="busq-puesto-nombre">{g.grupo}</span>
+        <div className="busq-puesto-barra"><div style={{ width: `${(g.enviadas / max) * 100}%` }}>
+          {g.rechazadas > 0 && <span style={{ flex: g.rechazadas, background: ROJO }}>{g.rechazadas}</span>}
+          {g.sinDecision > 0 && <span style={{ flex: g.sinDecision, background: AZUL }}>{g.sinDecision}</span>}
+        </div></div>
+        <span className="busq-puesto-num"><b>{g.enviadas}</b> env. · <span className="busq-rojo">{pct(g.rechazadas / g.enviadas)}</span> rech.</span>
       </div>)}
     </div>
+    <p className="busq-nota">Solo las enviadas, agrupadas por palabras del puesto. Adentro de cada barra: rechazadas y sin decisión.</p>
   </>
 }
 
@@ -97,6 +132,7 @@ function Tabla({ filas, url }) {
 export default function BusquedaEstadisticas({ filas: filasPlanilla, url }) {
   const filas = useMemo(() => prepararFilas(filasPlanilla), [filasPlanilla])
   const s = useMemo(() => estadisticas(filas), [filas])
+  const grupos = useMemo(() => porGrupoPuesto(filas), [filas])
   const maxFuente = Math.max(1, ...s.porFuente.map(f => f.rechazos))
   const maxSemaforo = Math.max(1, ...s.porSemaforo.map(x => x.n))
   const maxCv = Math.max(1, ...s.porCv.map(c => c.enviadas))
@@ -118,8 +154,11 @@ export default function BusquedaEstadisticas({ filas: filasPlanilla, url }) {
     </div>}
 
     <Bloques>
-      <Bloque titulo="Enviadas por mes">
-        <PorMes meses={s.porMes} sinFecha={s.enviadasSinFecha} />
+      <Bloque titulo="Enviadas por puesto" ancho="completo">
+        <PorPuesto grupos={grupos} />
+      </Bloque>
+      <Bloque titulo="Enviadas por día, semana y mes" ancho="completo">
+        <PorPeriodo filas={filas} />
         {s.sinFecha.length > 0 && <p className="busq-nota">{s.sinFecha.length} {s.sinFecha.length === 1 ? 'fila tiene' : 'filas tienen'} una fecha que no se puede leer: {s.sinFecha.map(p => `fila ${p.fila} (“${p.fecha || 'vacía'}”)`).join(', ')}.</p>}
       </Bloque>
       <Bloque titulo="Embudo">
