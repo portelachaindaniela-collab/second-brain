@@ -33,10 +33,10 @@ function PorPeriodo({ filas }) {
     <Leyenda />
     {columnas.length ? <div ref={caja} className={`busq-columnas busq-columnas-${periodo}`} role="img" aria-label={columnas.map(c => `${c.etiqueta.join(' ')}: ${c.rechazadas} rechazadas, ${c.sinDecision} sin decisión`).join('; ')}>
       {columnas.map(c => <div key={c.clave} className="busq-col" title={`${c.etiqueta.join(' ')}: ${c.rechazadas + c.sinDecision} enviadas (${c.rechazadas} rechazadas, ${c.sinDecision} sin decisión)`}>
-        <span className="busq-col-num">{c.rechazadas + c.sinDecision || ''}</span>
         <div className="busq-col-barra">
-          <span style={{ height: `${(c.sinDecision / max) * 100}%`, background: AZUL }} />
-          <span style={{ height: `${(c.rechazadas / max) * 100}%`, background: ROJO }} />
+          <span className="busq-col-num">{c.rechazadas + c.sinDecision || ''}</span>
+          <span style={{ height: `calc((100% - 20px) * ${c.sinDecision / max})`, background: AZUL }} />
+          <span style={{ height: `calc((100% - 20px) * ${c.rechazadas / max})`, background: ROJO }} />
         </div>
         <span className="busq-col-mes">{c.etiqueta[0]}<br />{c.etiqueta[1]}</span>
       </div>)}
@@ -58,13 +58,13 @@ function PorPuesto({ grupos }) {
       {grupos.map(g => <div key={g.grupo} className="busq-puesto" title={`${g.grupo}: ${g.enviadas} enviadas, ${g.rechazadas} rechazadas, ${g.sinDecision} sin decisión`}>
         <span className="busq-puesto-nombre">{g.grupo}</span>
         <div className="busq-puesto-barra"><div style={{ width: `${(g.enviadas / max) * 100}%` }}>
-          {g.rechazadas > 0 && <span style={{ flex: g.rechazadas, background: ROJO }}>{g.rechazadas}</span>}
-          {g.sinDecision > 0 && <span style={{ flex: g.sinDecision, background: AZUL }}>{g.sinDecision}</span>}
+          {g.rechazadas > 0 && <span style={{ flex: g.rechazadas, background: ROJO }} />}
+          {g.sinDecision > 0 && <span style={{ flex: g.sinDecision, background: AZUL }} />}
         </div></div>
-        <span className="busq-puesto-num"><b>{g.enviadas}</b> {g.enviadas === 1 ? 'enviada' : 'enviadas'} · <span className="busq-rojo">{pct(g.rechazadas / g.enviadas)}</span> rechazo</span>
+        <span className="busq-puesto-num"><b>{g.enviadas}</b> · <span className="busq-rojo">{g.rechazadas} {g.rechazadas === 1 ? 'rechazada' : 'rechazadas'}</span> · <span className="busq-azul">{g.sinDecision} sin decisión</span> · {pct(g.rechazadas / g.enviadas)}</span>
       </div>)}
     </div>
-    <p className="busq-nota">Solo las enviadas, agrupadas por palabras del puesto. Adentro de cada barra: rechazadas y sin decisión.</p>
+    <p className="busq-nota">Solo las enviadas, agrupadas por palabras del puesto. Números: enviadas · rechazadas · sin decisión · tasa de rechazo.</p>
   </>
 }
 

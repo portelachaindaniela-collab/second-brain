@@ -17,20 +17,22 @@
 
 /* Filas de barras del panorama, más grandes acá. */
 .busq .pano-fila { grid-template-columns:minmax(0, 150px) minmax(0, 1fr) 76px; height:auto; min-height:28px; font-size:13px; color:var(--gray-900); }
-.busq .pano-barra { height:8px; border-radius:4px; }
+.busq .pano-barra { height:6px; border-radius:3px; }
 .busq .pano-num { font-size:13.5px; }
 .busq .pano-num small { font-size:12px; color:var(--gray-700); }
 .busq .pano-quien i { width:9px; height:9px; }
 .busq .pano-vacio { font-size:13px; color:var(--gray-700); }
 
 /* Columnas verticales (día, semana, mes). */
-.busq-columnas { display:flex; gap:6px; align-items:stretch; height:200px; overflow-x:auto; }
-.busq-columnas-dia { gap:4px; }
-.busq-columnas-dia .busq-col { flex-basis:28px; min-width:28px; }
-.busq-col { display:flex; flex-direction:column; align-items:center; gap:4px; flex:1 0 40px; min-width:40px; }
-.busq-col-num { min-height:16px; font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--gray-900); }
-.busq-col-barra { flex:1; width:100%; max-width:34px; display:flex; flex-direction:column; justify-content:flex-end; border-radius:4px; background:var(--gray-200); overflow:hidden; }
-.busq-col-barra span { display:block; width:100%; }
+.busq-columnas { display:flex; gap:0; align-items:stretch; height:150px; overflow-x:auto; }
+.busq-columnas-dia .busq-col { flex-basis:26px; min-width:26px; }
+.busq-col { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1 0 36px; min-width:36px; padding:0 2px; border-radius:3px; }
+.busq-col:hover { background:var(--gray-50); }
+.busq-col-barra .busq-col-num { min-height:15px; max-width:none; margin-bottom:2px; border-radius:0; background:none; font-family:var(--font-mono); font-size:12px; text-align:center; color:var(--gray-900); }
+.busq-col-barra { flex:1; align-self:stretch; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:1px; margin:0 -2px; border-bottom:1px solid var(--gray-300); }
+.busq-col-barra span { display:block; flex-shrink:0; width:100%; max-width:16px; border-radius:2px 2px 0 0; }
+.busq-col-barra span:last-child { border-radius:0; }
+.busq-columnas { padding-top:4px; }
 .busq-col-mes { font-family:var(--font-mono); font-size:12px; line-height:1.3; text-align:center; color:var(--gray-700); white-space:nowrap; }
 
 .busq-periodo { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; }
@@ -39,14 +41,15 @@
 .busq-periodo .postu-chips-filtro button { padding:6px 14px; font-size:13.5px; }
 
 /* Barras horizontales por puesto. */
-.busq-puestos { display:flex; flex-direction:column; gap:10px; }
+.busq-puestos { display:flex; flex-direction:column; gap:6px; }
 .busq-puesto { display:grid; grid-template-columns:minmax(0, 220px) minmax(0, 1fr) auto; gap:12px; align-items:center; }
-.busq-puesto-nombre { font-size:14px; color:var(--gray-900); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.busq-puesto-barra { height:26px; border-radius:4px; background:var(--gray-200); overflow:hidden; }
-.busq-puesto-barra > div { display:flex; height:100%; min-width:26px; }
-.busq-puesto-barra span { display:flex; align-items:center; justify-content:center; min-width:22px; font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--ink-900); }
-.busq-puesto-num { min-width:190px; font-family:var(--font-mono); font-size:13px; color:var(--gray-700); text-align:right; white-space:nowrap; }
-.busq-puesto-num b { font-size:16px; color:var(--gray-900); }
+.busq-puesto-nombre { font-size:13.5px; color:var(--gray-900); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.busq-puesto-barra { height:8px; border-radius:4px; background:var(--gray-200); overflow:hidden; }
+.busq-puesto-barra > div { display:flex; gap:1px; height:100%; }
+.busq-puesto-barra span { display:block; height:100%; }
+.busq-puesto-num { min-width:330px; font-family:var(--font-mono); font-size:12.5px; color:var(--gray-700); text-align:right; white-space:nowrap; }
+.busq-puesto-num b { font-size:13.5px; color:var(--gray-900); }
+.busq-azul { color:var(--accent); }
 .busq-rojo { color:var(--red-600); font-weight:600; }
 
 /* Por CV: barra partida. */
@@ -78,10 +81,11 @@
   .busq .pano-fila, .busq .busq-fila-cv { grid-template-columns:minmax(0, 1fr) auto; gap:4px 10px; }
   .busq .pano-fila .pano-barra { grid-column:1 / -1; grid-row:2; }
   .busq .pano-fila { margin-bottom:6px; }
-  .busq-puesto { grid-template-columns:minmax(0, 1fr) auto; gap:4px 8px; align-items:end; }
+  /* Nombre, barra y números uno debajo del otro. */
+  .busq-puestos { gap:12px; }
+  .busq-puesto { grid-template-columns:minmax(0, 1fr); gap:4px; }
   .busq-puesto-nombre { white-space:normal; line-height:1.3; }
-  .busq-puesto-num { min-width:0; }
-  .busq-puesto-barra { grid-column:1 / -1; grid-row:2; }
+  .busq-puesto-num { min-width:0; text-align:left; white-space:normal; }
   .busq-columnas-dia .busq-col { flex-basis:30px; min-width:30px; }
   .busq-tabla th:nth-child(6), .busq-tabla td:nth-child(6) { display:none; }
 }
