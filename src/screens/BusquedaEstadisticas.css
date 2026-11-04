@@ -1,0 +1,106 @@
+/* Estadísticas de la búsqueda laboral. Usa las filas y barras del panorama (Panorama.css); acá lo propio.
+   Legibilidad: nada por debajo de 12px, notas y ejes en --gray-700 y texto oscuro sobre las barras de color. */
+.busq { font-size:14px; }
+.busq-cifras { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:1px; margin:0 0 8px; border:1px solid var(--gray-200); border-radius:var(--radius); background:var(--gray-200); overflow:hidden; }
+.busq-cifras div { padding:10px 14px; background:var(--white); min-width:0; }
+.busq-cifras dt { font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--gray-700); }
+.busq-cifras dd { margin:2px 0 0; font-family:var(--font-mono); font-size:24px; color:var(--gray-900); font-variant-numeric:tabular-nums; }
+.busq-nota { margin:8px 0 0; font-size:13px; line-height:1.45; color:var(--gray-700); }
+.busq > .busq-nota { margin:6px 0 14px; }
+
+.busq-aviso { margin:0 0 16px; padding:12px 14px; border:1px solid var(--amber-600); border-radius:var(--radius); font-size:14px; line-height:1.45; color:var(--gray-900); }
+.busq-aviso ul { margin:6px 0 0; padding-left:18px; }
+.busq-aviso a { color:var(--accent); }
+
+.busq-leyenda { display:flex; flex-wrap:wrap; gap:4px 16px; margin:0 0 8px; font-size:13px; color:var(--gray-700); }
+.busq-leyenda i { display:inline-block; width:10px; height:10px; margin-right:6px; border-radius:2px; vertical-align:-1px; }
+
+/* Filas de barras del panorama, más grandes acá. */
+.busq .pano-fila { grid-template-columns:minmax(0, 130px) minmax(0, 1fr) 70px; height:auto; min-height:24px; font-size:13px; color:var(--gray-900); }
+.busq .pano-barra { height:6px; border-radius:3px; }
+.busq .pano-num { font-size:13.5px; }
+.busq .pano-num small { font-size:12px; color:var(--gray-700); }
+.busq .pano-quien i { width:9px; height:9px; }
+.busq .pano-vacio { font-size:13px; color:var(--gray-700); }
+
+/* Columnas verticales (día, semana, mes). */
+.busq-columnas { display:flex; gap:0; align-items:stretch; height:150px; }
+.busq-col { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1 1 0; min-width:0; padding:0 1px; border-radius:3px; }
+.busq-col:hover { background:var(--gray-50); }
+.busq-col-barra .busq-col-num { min-height:15px; max-width:none; margin-bottom:2px; border-radius:0; background:none; font-family:var(--font-mono); font-size:12px; text-align:center; color:var(--gray-900); }
+.busq-col-barra { flex:1; align-self:stretch; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:1px; margin:0 -1px; border-bottom:1px solid var(--gray-300); }
+.busq-col-barra span { display:block; flex-shrink:0; width:70%; max-width:16px; border-radius:2px 2px 0 0; }
+.busq-col-barra .busq-col-num { width:auto; white-space:nowrap; }
+.busq-col-barra span:last-child { border-radius:0; }
+.busq-columnas { padding-top:4px; }
+.busq-col-mes-opcional { visibility:hidden; }
+.busq-col-mes { min-height:2.6em; font-family:var(--font-mono); font-size:12px; line-height:1.3; text-align:center; color:var(--gray-700); white-space:nowrap; }
+
+.busq-periodo { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.busq-periodo .busq-nota { margin:0; font-size:14px; }
+.busq-periodo strong { color:var(--gray-900); font-family:var(--font-mono); font-size:16px; }
+.busq-periodo .postu-chips-filtro button { padding:5px 12px; font-size:13px; }
+
+/* Barras horizontales por puesto. */
+.busq-puestos { display:flex; flex-direction:column; gap:4px; }
+.busq-puesto { display:grid; grid-template-columns:minmax(0, 150px) minmax(0, 1fr) auto; gap:10px; align-items:center; min-height:24px; }
+.busq-puesto-nombre { font-size:13px; line-height:1.25; color:var(--gray-900); }
+.busq-puesto-barra { height:8px; border-radius:4px; background:var(--gray-200); overflow:hidden; }
+.busq-puesto-barra > div { display:flex; gap:1px; height:100%; }
+.busq-puesto-barra span { display:block; height:100%; }
+/* Cuatro números alineados en columnas: enviadas, rechazadas, sin decisión, % de rechazo. */
+.busq-puesto-num { display:grid; grid-template-columns:2ch 2ch 2ch 4.5ch; gap:8px; font-family:var(--font-mono); font-size:13px; color:var(--gray-700); text-align:right; white-space:nowrap; }
+.busq-puesto-num b { color:var(--gray-900); }
+.busq-azul { color:var(--accent); }
+.busq-rojo { color:var(--red-600); font-weight:600; }
+
+/* Por CV: barra partida. */
+.busq .busq-fila-cv { grid-template-columns:minmax(0, 150px) minmax(0, 1fr) 70px; }
+.busq-partida { display:flex; height:100%; }
+.busq-partida span { display:block; height:100%; }
+
+/* Tabla. */
+.busq-filtros { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:10px; }
+.busq-filtros select { flex:1 1 170px; width:auto; min-width:0; font-size:14px; }
+.busq-filtros .busq-nota { margin:0 0 0 auto; }
+.busq-grupo { padding:0 16px 16px; }
+.busq-tabla-caja { border:1px solid var(--gray-200); border-radius:8px; }
+.busq-tabla { width:100%; border-collapse:collapse; font-size:13.5px; line-height:1.35; }
+.busq-tabla th { padding:8px 10px; background:var(--surface-inset); text-align:left; font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--gray-700); white-space:nowrap; }
+.busq-tabla td { padding:7px 10px; border-top:1px solid var(--gray-200); vertical-align:top; color:var(--gray-900); }
+.busq-tabla td small { display:block; margin-top:3px; font-size:12.5px; color:var(--gray-700); }
+.busq-tabla a { color:var(--accent); white-space:nowrap; }
+.busq-tabla .busq-td-estado { color:var(--gray-700); }
+.busq-mono { font-family:var(--font-mono); font-size:13px; white-space:nowrap; }
+.busq-mas { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.busq-mas .btn { font-size:13px; }
+
+@media (max-width: 760px) {
+  /* 3 arriba y 2 abajo, sin celdas vacías. */
+  .busq-cifras { grid-template-columns:repeat(6, minmax(0, 1fr)); }
+  .busq-cifras div { grid-column:span 2; }
+  .busq-cifras div:nth-child(n+4) { grid-column:span 3; }
+  .busq-cifras dt { letter-spacing:0; }
+  .busq-cifras div { padding:8px 10px; }
+  .busq-cifras dd { font-size:20px; }
+  /* Barras en una sola línea: nombre (puede ocupar dos renglones), barra y número. */
+  .busq .pano-fila, .busq .busq-fila-cv { grid-template-columns:minmax(0, 100px) minmax(0, 1fr) auto; gap:8px; }
+  .busq .pano-quien { white-space:normal; line-height:1.25; }
+  .busq-puesto { grid-template-columns:minmax(0, 100px) minmax(0, 1fr) auto; gap:8px; }
+  .busq-puesto-num { gap:5px; }
+  /* Tabla: cada fila es una tarjeta (sin columnas que obliguen a desplazarse de costado). */
+  .busq-tabla thead { display:none; }
+  .busq-tabla, .busq-tabla tbody { display:block; }
+  .busq-tabla tr { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:2px 10px; padding:8px 10px; border-top:1px solid var(--gray-200); }
+  .busq-tabla tr:first-child { border-top:0; }
+  .busq-tabla td { display:block; padding:0; border:0; }
+  .busq-tabla td:nth-child(1) { grid-column:1; grid-row:1; }
+  .busq-tabla .busq-td-link { grid-column:2; grid-row:1; text-align:right; }
+  .busq-tabla .busq-td-puesto { grid-column:1 / -1; font-weight:600; }
+  .busq-tabla .busq-td-empresa { grid-column:1; color:var(--gray-700); }
+  .busq-tabla .busq-td-fuente { grid-column:2; text-align:right; color:var(--gray-700); }
+  .busq-tabla .busq-td-estado { grid-column:1 / -1; }
+  .busq-grupo { padding:0 10px 10px; }
+  .busq-tabla tr { gap:1px 10px; padding:7px 10px; }
+  .busq-tabla .busq-td-cv { display:none; }
+}

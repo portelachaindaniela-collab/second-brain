@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, abrirEnlaceOAuth } from '../supabase.js'
 import { CabeceraPantalla, Pie } from '../estructura.jsx'
 import { GRUPOS, ACCIONES, DIAS_SEGUIMIENTO, agrupar, faltaEnviar, semaforoDe, coincide, nombreCv, grupoDe, esLink, esMail } from '../postulaciones.mjs'
+import BusquedaEstadisticas from './BusquedaEstadisticas.jsx'
+import Desplegable from './Desplegable.jsx'
 import './Postulaciones.css'
 
 // Postulaciones: la planilla de Google Sheets de Daniela ordenada por lo que hay que hacer. La planilla sigue siendo
@@ -16,6 +18,8 @@ async function llamar(body) {
 }
 
 const SEMAFOROS = ['verde', 'amarillo', 'rojo', 'negro']
+// "Lo que falta enviar": cuántas tarjetas se ven antes de tocar "Ver más".
+const FALTA_VISIBLES = 3
 
 function Contacto({ valor }) {
   if (!valor) return null
@@ -109,7 +113,11 @@ export default function Postulaciones() {
   const [semaforo, setSemaforo] = useState('')
   const [cv, setCv] = useState('')
   const [abierta, setAbierta] = useState(null)
-  const [verCerradas, setVerCerradas] = useState(false)
+  // Grupos abiertos (listas desplegables). Arrancan todos cerrados: se ve una línea por grupo con su cantidad.
+  const [abiertos, setAbiertos] = useState(() => new Set())
+  const [verTodasFalta, setVerTodasFalta] = useState(false)
+  const alternar = clave => setAbiertos(a => { const b = new Set(a); if (b.has(clave)) b.delete(clave); else b.add(clave); return b })
+  const [vista, setVista] = useState('seguimiento')
 
   const cargar = useCallback(async () => {
     setCargando(true); setError('')
@@ -157,11 +165,17 @@ export default function Postulaciones() {
     {cargando && !datos && !error && <p className="empty-state">Leyendo tu planilla…</p>}
     {!cargando && estado && !estado.error && !(estado.conectado && estado.elegida) && <Conexion estado={estado} recargar={cargar} />}
 
-    {listo && <>
+    {listo && <div className="postu-chips-filtro postu-vistas" role="tablist" aria-label="Vista">
+      {[['seguimiento', 'Seguimiento'], ['estadisticas', 'Estadísticas']].map(([v, t]) => <button key={v} role="tab" aria-selected={vista === v} className={vista === v ? 'activo' : ''} onClick={() => setVista(v)}>{t}</button>)}
+    </div>}
+
+    {listo && vista === 'estadisticas' && <BusquedaEstadisticas filas={filas} url={datos.url} />}
+
+    {listo && vista === 'seguimiento' && <>
       {pendientes.length > 0 && <section className="postu-falta">
         <h2>Lo que falta enviar · empezá por acá</h2>
-        <div className="postu-falta-lista">{pendientes.slice(0, 6).map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} destacada />)}</div>
-        {pendientes.length > 6 && <p className="postu-nota">Y {pendientes.length - 6} más en Para hacer.</p>}
+        <div className="postu-falta-lista">{(verTodasFalta ? pendientes : pendientes.slice(0, FALTA_VISIBLES)).map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} destacada />)}</div>
+        {pendientes.length > FALTA_VISIBLES && <button className="btn btn-sm postu-falta-mas" onClick={() => setVerTodasFalta(v => !v)}>{verTodasFalta ? 'Ver menos' : `Ver ${pendientes.length - FALTA_VISIBLES} más`}</button>}
       </section>}
 
       <div className="postu-filtros">
@@ -175,19 +189,13 @@ export default function Postulaciones() {
         </div>}
       </div>
 
-      <div className="postu-columnas">
-        {GRUPOS.filter(g => g.clave !== 'cerradas').map(g => <section key={g.clave} className="postu-columna">
-          <h2>{g.titulo}<span>{grupos[g.clave].length}</span></h2>
-          {grupos[g.clave].length ? grupos[g.clave].map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} />) : <p className="postu-vacio">Nada acá.</p>}
-        </section>)}
+      <div className="postu-desplegables">
+        {GRUPOS.map(g => <Desplegable key={g.clave} titulo={g.titulo} cantidad={grupos[g.clave].length} abierto={abiertos.has(g.clave)} alternar={() => alternar(g.clave)}>
+          {grupos[g.clave].length
+            ? <div className="postu-cerradas-lista">{grupos[g.clave].map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} />)}</div>
+            : <p className="postu-vacio postu-vacio-desplegable">Nada acá.</p>}
+        </Desplegable>)}
       </div>
-
-      <section className="postu-cerradas">
-        <button className="postu-cerradas-cabecera" aria-expanded={verCerradas} onClick={() => setVerCerradas(v => !v)}>
-          <span><strong>Descartadas y cerradas</strong> · {grupos.cerradas.length}</span><span className="btn btn-sm">{verCerradas ? 'Ocultar' : 'Ver'}</span>
-        </button>
-        {verCerradas && <div className="postu-cerradas-lista">{grupos.cerradas.map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} />)}</div>}
-      </section>
     </>}
 
     {datos && <Pie titulo="Planilla" resumen={`${datos.titulo}${datos.pestana ? ` · pestaña ${datos.pestana}` : ''} · ${filas.length} postulaciones`}
