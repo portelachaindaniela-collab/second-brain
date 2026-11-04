@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Bloques, Bloque } from '../estructura.jsx'
 import { Barra } from './Panorama.jsx'
 import { CATEGORIAS, PERIODOS, tituloCategoria, prepararFilas, estadisticas, etiquetaMes, linkFila, porGrupoPuesto, enviadasPorPeriodo, SIN_FECHA } from '../busquedaLaboral.mjs'
@@ -8,6 +8,7 @@ import './BusquedaEstadisticas.css'
 
 const ROJO = 'var(--red-600)', AZUL = 'var(--accent)'
 const COLOR_SEMAFORO = { verde: 'var(--green-600)', amarillo: 'var(--amber-600)', rojo: 'var(--red-600)', negro: 'var(--gray-500)', '': 'var(--gray-300)' }
+const POR_PAGINA = 10
 const pct = v => v == null ? '—' : `${Math.round(v * 100)}%`
 
 function Leyenda() {
@@ -17,9 +18,9 @@ function Leyenda() {
 function PorPeriodo({ filas }) {
   const [periodo, setPeriodo] = useState('mes')
   const { columnas, sinFecha, fueraDeRango } = useMemo(() => enviadasPorPeriodo(filas, periodo), [filas, periodo])
-  // En pantallas angostas el gráfico se desplaza: se arranca mostrando lo más reciente (a la derecha).
-  const caja = useRef(null)
-  useEffect(() => { if (caja.current) caja.current.scrollLeft = caja.current.scrollWidth }, [columnas])
+  // Todas las columnas entran en el ancho, sin desplazarse. Se ve una etiqueta de fecha cada `paso` columnas
+  // (siempre la última, la más reciente) para que no se pisen; el número de cada columna se ve siempre.
+  const paso = Math.max(1, Math.ceil(columnas.length / 10))
   const max = Math.max(1, ...columnas.map(c => c.rechazadas + c.sinDecision))
   const total = columnas.reduce((s, c) => s + c.rechazadas + c.sinDecision, 0)
   const rango = periodo === 'dia' ? 'en los últimos 30 días' : periodo === 'semana' ? 'en las últimas 16 semanas' : 'en total'
@@ -31,14 +32,14 @@ function PorPeriodo({ filas }) {
       <span className="busq-nota"><strong>{total}</strong> enviadas {rango}</span>
     </div>
     <Leyenda />
-    {columnas.length ? <div ref={caja} className={`busq-columnas busq-columnas-${periodo}`} role="img" aria-label={columnas.map(c => `${c.etiqueta.join(' ')}: ${c.rechazadas} rechazadas, ${c.sinDecision} sin decisión`).join('; ')}>
-      {columnas.map(c => <div key={c.clave} className="busq-col" title={`${c.etiqueta.join(' ')}: ${c.rechazadas + c.sinDecision} enviadas (${c.rechazadas} rechazadas, ${c.sinDecision} sin decisión)`}>
+    {columnas.length ? <div className={`busq-columnas busq-columnas-${periodo}`} role="img" aria-label={columnas.map(c => `${c.etiqueta.join(' ')}: ${c.rechazadas} rechazadas, ${c.sinDecision} sin decisión`).join('; ')}>
+      {columnas.map((c, i) => <div key={c.clave} className="busq-col" title={`${c.etiqueta.join(' ')}: ${c.rechazadas + c.sinDecision} enviadas (${c.rechazadas} rechazadas, ${c.sinDecision} sin decisión)`}>
         <div className="busq-col-barra">
           <span className="busq-col-num">{c.rechazadas + c.sinDecision || ''}</span>
           <span style={{ height: `calc((100% - 20px) * ${c.sinDecision / max})`, background: AZUL }} />
           <span style={{ height: `calc((100% - 20px) * ${c.rechazadas / max})`, background: ROJO }} />
         </div>
-        <span className="busq-col-mes">{c.etiqueta[0]}<br />{c.etiqueta[1]}</span>
+        <span className={(columnas.length - 1 - i) % paso ? 'busq-col-mes busq-col-mes-opcional' : 'busq-col-mes'}>{c.etiqueta[0]}<br />{c.etiqueta[1]}</span>
       </div>)}
     </div> : <p className="pano-vacio">todavía no hay postulaciones enviadas</p>}
     <p className="busq-nota">
@@ -61,10 +62,10 @@ function PorPuesto({ grupos }) {
           {g.rechazadas > 0 && <span style={{ flex: g.rechazadas, background: ROJO }} />}
           {g.sinDecision > 0 && <span style={{ flex: g.sinDecision, background: AZUL }} />}
         </div></div>
-        <span className="busq-puesto-num"><b>{g.enviadas}</b> · <span className="busq-rojo">{g.rechazadas} {g.rechazadas === 1 ? 'rechazada' : 'rechazadas'}</span> · <span className="busq-azul">{g.sinDecision} sin decisión</span> · {pct(g.rechazadas / g.enviadas)}</span>
+        <span className="busq-puesto-num"><b>{g.enviadas}</b><span className="busq-rojo">{g.rechazadas}</span><span className="busq-azul">{g.sinDecision}</span><span>{pct(g.rechazadas / g.enviadas)}</span></span>
       </div>)}
     </div>
-    <p className="busq-nota">Solo las enviadas, agrupadas por palabras del puesto. Números: enviadas · rechazadas · sin decisión · tasa de rechazo.</p>
+    <p className="busq-nota">Solo las enviadas, agrupadas por palabras del puesto. Números: enviadas, <span className="busq-rojo">rechazadas</span>, <span className="busq-azul">sin decisión</span> y % de rechazo.</p>
   </>
 }
 
@@ -84,7 +85,7 @@ function Embudo({ etapas }) {
       <Barra valor={e.n} maximo={max} color={i === etapas.length - 1 ? ROJO : AZUL} />
       <span className="pano-num">{e.n}{i > 0 && etapas[i - 1].n > 0 && <small> · {pct(e.n / etapas[i - 1].n)}</small>}</span>
     </div>)}
-    <p className="busq-nota">Evaluadas: todas menos “Sin evaluar” o sin estado. Con respuesta: rechazadas + “Respondido”. El acuse automático no cuenta como respuesta.</p>
+    <p className="busq-nota">Evaluadas: sin contar “Sin evaluar” ni vacías. Con respuesta: rechazadas + “Respondido” (el acuse automático no cuenta).</p>
   </div>
 }
 
@@ -94,18 +95,21 @@ function Tabla({ filas, url }) {
   const [mes, setMes] = useState('')
   const canales = useMemo(() => [...new Set(filas.map(p => p.canal))].sort((a, b) => a.localeCompare(b)), [filas])
   const meses = useMemo(() => [...new Set(filas.map(p => p.mes))].sort((a, b) => a === SIN_FECHA ? 1 : b === SIN_FECHA ? -1 : b.localeCompare(a)), [filas])
+  const [cuantas, setCuantas] = useState(POR_PAGINA)
   const visibles = filas.filter(p => (!categoria || p.categoria === categoria) && (!canal || p.canal === canal) && (!mes || p.mes === mes))
+  // Sin desplazamiento adentro del cuadro: se muestran de a POR_PAGINA filas y un botón para ver más.
+  const filtrar = set => e => { set(e.target.value); setCuantas(POR_PAGINA) }
   return <>
     <div className="busq-filtros">
-      <select aria-label="Estado" value={categoria} onChange={e => setCategoria(e.target.value)}>
+      <select aria-label="Estado" value={categoria} onChange={filtrar(setCategoria)}>
         <option value="">Todos los estados</option>
         {CATEGORIAS.map(c => <option key={c.clave} value={c.clave}>{c.titulo}</option>)}
       </select>
-      <select aria-label="Fuente" value={canal} onChange={e => setCanal(e.target.value)}>
+      <select aria-label="Fuente" value={canal} onChange={filtrar(setCanal)}>
         <option value="">Todas las fuentes</option>
         {canales.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
-      <select aria-label="Mes" value={mes} onChange={e => setMes(e.target.value)}>
+      <select aria-label="Mes" value={mes} onChange={filtrar(setMes)}>
         <option value="">Todos los meses</option>
         {meses.map(m => <option key={m} value={m}>{etiquetaMes(m)}</option>)}
       </select>
@@ -114,18 +118,22 @@ function Tabla({ filas, url }) {
     <div className="busq-tabla-caja">
       <table className="busq-tabla">
         <thead><tr><th>Fecha</th><th>Puesto</th><th>Empresa</th><th>Fuente</th><th>Estado</th><th>CV</th><th /></tr></thead>
-        <tbody>{visibles.map(p => <tr key={p.fila}>
+        <tbody>{visibles.slice(0, cuantas).map(p => <tr key={p.fila}>
           <td className="busq-mono">{p.fecha || '—'}</td>
-          <td>{p.color && <span className={`postu-punto ${p.color}`} aria-label={`semáforo ${p.color}`} />}{p.puesto || '(sin puesto)'}</td>
-          <td>{p.empresa}</td>
-          <td title={p.fuente}>{p.canal}</td>
+          <td className="busq-td-puesto">{p.color && <span className={`postu-punto ${p.color}`} aria-label={`semáforo ${p.color}`} />}{p.puesto || '(sin puesto)'}</td>
+          <td className="busq-td-empresa">{p.empresa}</td>
+          <td className="busq-td-fuente" title={p.fuente}>{p.canal}</td>
           <td><span className={`busq-cat busq-cat-${p.categoria}`}>{tituloCategoria(p.categoria)}</span><small>{p.estado}</small></td>
-          <td>{p.cv}</td>
-          <td>{url && <a href={linkFila(url, p.fila)} target="_blank" rel="noreferrer" title={`Fila ${p.fila} en la planilla`}>fila {p.fila} ↗</a>}</td>
+          <td className="busq-td-cv">{p.cv}</td>
+          <td className="busq-td-link">{url && <a href={linkFila(url, p.fila)} target="_blank" rel="noreferrer" title={`Fila ${p.fila} en la planilla`}>fila {p.fila} ↗</a>}</td>
         </tr>)}</tbody>
       </table>
       {!visibles.length && <p className="pano-vacio">nada con estos filtros</p>}
     </div>
+    {visibles.length > cuantas && <div className="busq-mas">
+      <button className="btn btn-sm" onClick={() => setCuantas(c => c + POR_PAGINA)}>Ver {Math.min(POR_PAGINA, visibles.length - cuantas)} más</button>
+      <button className="btn btn-sm" onClick={() => setCuantas(visibles.length)}>Ver todas ({visibles.length})</button>
+    </div>}
   </>
 }
 
@@ -146,7 +154,7 @@ export default function BusquedaEstadisticas({ filas: filasPlanilla, url }) {
 
   return <div className="busq">
     <dl className="busq-cifras">{cifras.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-    <p className="busq-nota">Enviadas = rechazadas + postuladas sin decisión. La tasa de rechazo es sobre las enviadas.</p>
+    <p className="busq-nota">Enviadas = rechazadas + sin decisión. La tasa de rechazo es sobre las enviadas.</p>
 
     {s.otros.length > 0 && <div className="busq-aviso" role="alert">
       <strong>{s.otros.length} {s.otros.length === 1 ? 'estado no encaja' : 'estados no encajan'} en ninguna categoría</strong> (se cuentan como “Otro”). Corregilos en la planilla:
@@ -154,10 +162,10 @@ export default function BusquedaEstadisticas({ filas: filasPlanilla, url }) {
     </div>}
 
     <Bloques>
-      <Bloque titulo="Enviadas por puesto" ancho="completo">
+      <Bloque titulo="Enviadas por puesto">
         <PorPuesto grupos={grupos} />
       </Bloque>
-      <Bloque titulo="Enviadas por día, semana y mes" ancho="completo">
+      <Bloque titulo="Enviadas por día, semana y mes">
         <PorPeriodo filas={filas} />
         {s.sinFecha.length > 0 && <p className="busq-nota">{s.sinFecha.length} {s.sinFecha.length === 1 ? 'fila tiene' : 'filas tienen'} una fecha que no se puede leer: {s.sinFecha.map(p => `fila ${p.fila} (“${p.fecha || 'vacía'}”)`).join(', ')}.</p>}
       </Bloque>
@@ -179,16 +187,16 @@ export default function BusquedaEstadisticas({ filas: filasPlanilla, url }) {
           <span className="pano-num">{x.n}</span>
         </div>)}
       </Bloque>
-      <Bloque titulo="Por CV usado" ancho="completo">
+      <Bloque titulo="Por CV usado">
         {s.porCv.length ? <>
           <p className="busq-leyenda"><span><i style={{ background: ROJO }} />rechazadas</span><span><i style={{ background: 'var(--gray-500)' }} />resto de las enviadas</span></p>
           {s.porCv.map(c => <div key={c.cv} className="pano-fila busq-fila-cv">
             <span className="pano-quien" title={c.cv}>{c.cv}</span>
             <BarraPartida total={c.enviadas} rojo={c.rechazadas} maximo={maxCv} />
-            <span className="pano-num">{c.enviadas}<small> · {c.rechazadas} rechazadas</small></span>
+            <span className="pano-num">{c.enviadas}<small> · <span className="busq-rojo">{c.rechazadas}</span></small></span>
           </div>)}
         </> : <p className="pano-vacio">todavía no hay postulaciones enviadas</p>}
-        <p className="busq-nota">Solo las enviadas, según la columna “CV a usar”.</p>
+        <p className="busq-nota">Solo las enviadas. Números: enviadas · <span className="busq-rojo">rechazadas</span>.</p>
       </Bloque>
       <Bloque titulo="Todas las ofertas" ancho="completo">
         <Tabla filas={filas} url={url} />
