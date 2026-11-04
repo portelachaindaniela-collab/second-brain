@@ -57,3 +57,4 @@
   .postu-columnas { grid-template-columns:minmax(0, 1fr); }
   .postu-detalle dl { grid-template-columns:minmax(0, 1fr); }
 }
+.postu-vistas { margin:0 0 16px; }

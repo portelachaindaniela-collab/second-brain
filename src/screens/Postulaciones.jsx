@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, abrirEnlaceOAuth } from '../supabase.js'
 import { CabeceraPantalla, Pie } from '../estructura.jsx'
 import { GRUPOS, ACCIONES, DIAS_SEGUIMIENTO, agrupar, faltaEnviar, semaforoDe, coincide, nombreCv, grupoDe, esLink, esMail } from '../postulaciones.mjs'
+import BusquedaEstadisticas from './BusquedaEstadisticas.jsx'
 import './Postulaciones.css'
 
 // Postulaciones: la planilla de Google Sheets de Daniela ordenada por lo que hay que hacer. La planilla sigue siendo
@@ -110,6 +111,7 @@ export default function Postulaciones() {
   const [cv, setCv] = useState('')
   const [abierta, setAbierta] = useState(null)
   const [verCerradas, setVerCerradas] = useState(false)
+  const [vista, setVista] = useState('seguimiento')
 
   const cargar = useCallback(async () => {
     setCargando(true); setError('')
@@ -157,7 +159,13 @@ export default function Postulaciones() {
     {cargando && !datos && !error && <p className="empty-state">Leyendo tu planilla…</p>}
     {!cargando && estado && !estado.error && !(estado.conectado && estado.elegida) && <Conexion estado={estado} recargar={cargar} />}
 
-    {listo && <>
+    {listo && <div className="postu-chips-filtro postu-vistas" role="tablist" aria-label="Vista">
+      {[['seguimiento', 'Seguimiento'], ['estadisticas', 'Estadísticas']].map(([v, t]) => <button key={v} role="tab" aria-selected={vista === v} className={vista === v ? 'activo' : ''} onClick={() => setVista(v)}>{t}</button>)}
+    </div>}
+
+    {listo && vista === 'estadisticas' && <BusquedaEstadisticas filas={filas} url={datos.url} />}
+
+    {listo && vista === 'seguimiento' && <>
       {pendientes.length > 0 && <section className="postu-falta">
         <h2>Lo que falta enviar · empezá por acá</h2>
         <div className="postu-falta-lista">{pendientes.slice(0, 6).map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} destacada />)}</div>
