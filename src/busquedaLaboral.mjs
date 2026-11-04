@@ -12,7 +12,6 @@ export const CATEGORIAS = [
   { clave: 'cerrada', titulo: 'Cerrada' },
   { clave: 'otro', titulo: 'Otro' },
 ]
-export const tituloCategoria = clave => CATEGORIAS.find(c => c.clave === clave)?.titulo ?? clave
 
 // Columna I (Estado). Lo que no encaja en ninguna regla queda como 'otro' para corregirlo en la planilla.
 export function clasificarEstado(estado) {

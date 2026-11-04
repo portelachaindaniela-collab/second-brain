@@ -3,6 +3,7 @@ import { supabase, abrirEnlaceOAuth } from '../supabase.js'
 import { CabeceraPantalla, Pie } from '../estructura.jsx'
 import { GRUPOS, ACCIONES, DIAS_SEGUIMIENTO, agrupar, faltaEnviar, semaforoDe, coincide, nombreCv, grupoDe, esLink, esMail } from '../postulaciones.mjs'
 import BusquedaEstadisticas from './BusquedaEstadisticas.jsx'
+import Desplegable from './Desplegable.jsx'
 import './Postulaciones.css'
 
 // Postulaciones: la planilla de Google Sheets de Daniela ordenada por lo que hay que hacer. La planilla sigue siendo
@@ -110,7 +111,9 @@ export default function Postulaciones() {
   const [semaforo, setSemaforo] = useState('')
   const [cv, setCv] = useState('')
   const [abierta, setAbierta] = useState(null)
-  const [verCerradas, setVerCerradas] = useState(false)
+  // Grupos abiertos (listas desplegables). Arrancan todos cerrados: se ve una línea por grupo con su cantidad.
+  const [abiertos, setAbiertos] = useState(() => new Set())
+  const alternar = clave => setAbiertos(a => { const b = new Set(a); if (b.has(clave)) b.delete(clave); else b.add(clave); return b })
   const [vista, setVista] = useState('seguimiento')
 
   const cargar = useCallback(async () => {
@@ -183,19 +186,13 @@ export default function Postulaciones() {
         </div>}
       </div>
 
-      <div className="postu-columnas">
-        {GRUPOS.filter(g => g.clave !== 'cerradas').map(g => <section key={g.clave} className="postu-columna">
-          <h2>{g.titulo}<span>{grupos[g.clave].length}</span></h2>
-          {grupos[g.clave].length ? grupos[g.clave].map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} />) : <p className="postu-vacio">Nada acá.</p>}
-        </section>)}
+      <div className="postu-desplegables">
+        {GRUPOS.map(g => <Desplegable key={g.clave} titulo={g.titulo} cantidad={grupos[g.clave].length} abierto={abiertos.has(g.clave)} alternar={() => alternar(g.clave)}>
+          {grupos[g.clave].length
+            ? <div className="postu-cerradas-lista">{grupos[g.clave].map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} />)}</div>
+            : <p className="postu-vacio postu-vacio-desplegable">Nada acá.</p>}
+        </Desplegable>)}
       </div>
-
-      <section className="postu-cerradas">
-        <button className="postu-cerradas-cabecera" aria-expanded={verCerradas} onClick={() => setVerCerradas(v => !v)}>
-          <span><strong>Descartadas y cerradas</strong> · {grupos.cerradas.length}</span><span className="btn btn-sm">{verCerradas ? 'Ocultar' : 'Ver'}</span>
-        </button>
-        {verCerradas && <div className="postu-cerradas-lista">{grupos.cerradas.map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} />)}</div>}
-      </section>
     </>}
 
     {datos && <Pie titulo="Planilla" resumen={`${datos.titulo}${datos.pestana ? ` · pestaña ${datos.pestana}` : ''} · ${filas.length} postulaciones`}

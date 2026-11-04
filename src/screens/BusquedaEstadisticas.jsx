@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Bloques, Bloque } from '../estructura.jsx'
 import { Barra } from './Panorama.jsx'
-import { CATEGORIAS, PERIODOS, tituloCategoria, prepararFilas, estadisticas, etiquetaMes, linkFila, porGrupoPuesto, enviadasPorPeriodo, SIN_FECHA } from '../busquedaLaboral.mjs'
+import Desplegable from './Desplegable.jsx'
+import { CATEGORIAS, PERIODOS, prepararFilas, estadisticas, etiquetaMes, linkFila, porGrupoPuesto, enviadasPorPeriodo, SIN_FECHA } from '../busquedaLaboral.mjs'
 import './BusquedaEstadisticas.css'
 
 // Estadísticas de la búsqueda laboral, dentro de Postulaciones. Usa las filas que la pantalla ya leyó de la planilla.
@@ -89,51 +90,58 @@ function Embudo({ etapas }) {
   </div>
 }
 
+// Filas de una categoría, de a POR_PAGINA (sin desplazamiento adentro del cuadro).
+function FilasCategoria({ filas, url }) {
+  const [cuantas, setCuantas] = useState(POR_PAGINA)
+  return <div className="busq-grupo">
+    <div className="busq-tabla-caja">
+      <table className="busq-tabla">
+        <thead><tr><th>Fecha</th><th>Puesto</th><th>Empresa</th><th>Fuente</th><th>Estado</th><th>CV</th><th /></tr></thead>
+        <tbody>{filas.slice(0, cuantas).map(p => <tr key={p.fila}>
+          <td className="busq-mono">{p.fecha || '—'}</td>
+          <td className="busq-td-puesto">{p.color && <span className={`postu-punto ${p.color}`} aria-label={`semáforo ${p.color}`} />}{p.puesto || '(sin puesto)'}</td>
+          <td className="busq-td-empresa">{p.empresa}</td>
+          <td className="busq-td-fuente" title={p.fuente}>{p.canal}</td>
+          <td className="busq-td-estado">{p.estado || 'Sin estado'}</td>
+          <td className="busq-td-cv">{p.cv}</td>
+          <td className="busq-td-link">{url && <a href={linkFila(url, p.fila)} target="_blank" rel="noreferrer" title={`Fila ${p.fila} en la planilla`}>fila {p.fila} ↗</a>}</td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+    {filas.length > cuantas && <div className="busq-mas">
+      <button className="btn btn-sm" onClick={() => setCuantas(c => c + POR_PAGINA)}>Ver {Math.min(POR_PAGINA, filas.length - cuantas)} más</button>
+      <button className="btn btn-sm" onClick={() => setCuantas(filas.length)}>Ver todas ({filas.length})</button>
+    </div>}
+  </div>
+}
+
+// Ofertas agrupadas por estado en listas desplegables (cerradas al abrir la pantalla), filtrables por fuente y mes.
 function Tabla({ filas, url }) {
-  const [categoria, setCategoria] = useState('')
   const [canal, setCanal] = useState('')
   const [mes, setMes] = useState('')
+  const [abiertos, setAbiertos] = useState(() => new Set())
+  const alternar = clave => setAbiertos(a => { const b = new Set(a); if (b.has(clave)) b.delete(clave); else b.add(clave); return b })
   const canales = useMemo(() => [...new Set(filas.map(p => p.canal))].sort((a, b) => a.localeCompare(b)), [filas])
   const meses = useMemo(() => [...new Set(filas.map(p => p.mes))].sort((a, b) => a === SIN_FECHA ? 1 : b === SIN_FECHA ? -1 : b.localeCompare(a)), [filas])
-  const [cuantas, setCuantas] = useState(POR_PAGINA)
-  const visibles = filas.filter(p => (!categoria || p.categoria === categoria) && (!canal || p.canal === canal) && (!mes || p.mes === mes))
-  // Sin desplazamiento adentro del cuadro: se muestran de a POR_PAGINA filas y un botón para ver más.
-  const filtrar = set => e => { set(e.target.value); setCuantas(POR_PAGINA) }
+  const visibles = filas.filter(p => (!canal || p.canal === canal) && (!mes || p.mes === mes))
+  const grupos = CATEGORIAS.map(c => ({ ...c, filas: visibles.filter(p => p.categoria === c.clave) })).filter(g => g.filas.length)
   return <>
     <div className="busq-filtros">
-      <select aria-label="Estado" value={categoria} onChange={filtrar(setCategoria)}>
-        <option value="">Todos los estados</option>
-        {CATEGORIAS.map(c => <option key={c.clave} value={c.clave}>{c.titulo}</option>)}
-      </select>
-      <select aria-label="Fuente" value={canal} onChange={filtrar(setCanal)}>
+      <select aria-label="Fuente" value={canal} onChange={e => setCanal(e.target.value)}>
         <option value="">Todas las fuentes</option>
         {canales.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
-      <select aria-label="Mes" value={mes} onChange={filtrar(setMes)}>
+      <select aria-label="Mes" value={mes} onChange={e => setMes(e.target.value)}>
         <option value="">Todos los meses</option>
         {meses.map(m => <option key={m} value={m}>{etiquetaMes(m)}</option>)}
       </select>
       <span className="busq-nota">{visibles.length} de {filas.length}</span>
     </div>
-    <div className="busq-tabla-caja">
-      <table className="busq-tabla">
-        <thead><tr><th>Fecha</th><th>Puesto</th><th>Empresa</th><th>Fuente</th><th>Estado</th><th>CV</th><th /></tr></thead>
-        <tbody>{visibles.slice(0, cuantas).map(p => <tr key={p.fila}>
-          <td className="busq-mono">{p.fecha || '—'}</td>
-          <td className="busq-td-puesto">{p.color && <span className={`postu-punto ${p.color}`} aria-label={`semáforo ${p.color}`} />}{p.puesto || '(sin puesto)'}</td>
-          <td className="busq-td-empresa">{p.empresa}</td>
-          <td className="busq-td-fuente" title={p.fuente}>{p.canal}</td>
-          <td><span className={`busq-cat busq-cat-${p.categoria}`}>{tituloCategoria(p.categoria)}</span><small>{p.estado}</small></td>
-          <td className="busq-td-cv">{p.cv}</td>
-          <td className="busq-td-link">{url && <a href={linkFila(url, p.fila)} target="_blank" rel="noreferrer" title={`Fila ${p.fila} en la planilla`}>fila {p.fila} ↗</a>}</td>
-        </tr>)}</tbody>
-      </table>
-      {!visibles.length && <p className="pano-vacio">nada con estos filtros</p>}
-    </div>
-    {visibles.length > cuantas && <div className="busq-mas">
-      <button className="btn btn-sm" onClick={() => setCuantas(c => c + POR_PAGINA)}>Ver {Math.min(POR_PAGINA, visibles.length - cuantas)} más</button>
-      <button className="btn btn-sm" onClick={() => setCuantas(visibles.length)}>Ver todas ({visibles.length})</button>
-    </div>}
+    {grupos.length ? <div className="postu-desplegables">
+      {grupos.map(g => <Desplegable key={g.clave} titulo={g.titulo} cantidad={g.filas.length} abierto={abiertos.has(g.clave)} alternar={() => alternar(g.clave)}>
+        <FilasCategoria key={`${canal}|${mes}`} filas={g.filas} url={url} />
+      </Desplegable>)}
+    </div> : <p className="pano-vacio">nada con estos filtros</p>}
   </>
 }
 
