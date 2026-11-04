@@ -1,43 +1,71 @@
-/* Estadísticas de la búsqueda laboral. Usa las filas y barras del panorama (Panorama.css); acá lo propio. */
-.busq-cifras { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:1px; margin:0 0 6px; border:1px solid var(--gray-200); border-radius:var(--radius); background:var(--gray-200); overflow:hidden; }
-.busq-cifras div { padding:10px 14px; background:var(--white); min-width:0; }
-.busq-cifras dt { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--gray-500); }
-.busq-cifras dd { margin:4px 0 0; font-family:var(--font-mono); font-size:22px; color:var(--gray-900); font-variant-numeric:tabular-nums; }
-.busq-nota { margin:8px 0 0; font-size:11.5px; color:var(--gray-500); }
+/* Estadísticas de la búsqueda laboral. Usa las filas y barras del panorama (Panorama.css); acá lo propio.
+   Legibilidad: nada por debajo de 12px, notas y ejes en --gray-700 y texto oscuro sobre las barras de color. */
+.busq { font-size:14px; }
+.busq-cifras { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:1px; margin:0 0 8px; border:1px solid var(--gray-200); border-radius:var(--radius); background:var(--gray-200); overflow:hidden; }
+.busq-cifras div { padding:12px 14px; background:var(--white); min-width:0; }
+.busq-cifras dt { font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--gray-700); }
+.busq-cifras dd { margin:4px 0 0; font-family:var(--font-mono); font-size:26px; color:var(--gray-900); font-variant-numeric:tabular-nums; }
+.busq-nota { margin:10px 0 0; font-size:13px; line-height:1.45; color:var(--gray-700); }
 .busq > .busq-nota { margin-bottom:16px; }
 
-.busq-aviso { margin:0 0 16px; padding:12px 14px; border:1px solid var(--amber-600); border-radius:var(--radius); font-size:13px; color:var(--gray-900); }
+.busq-aviso { margin:0 0 16px; padding:12px 14px; border:1px solid var(--amber-600); border-radius:var(--radius); font-size:14px; line-height:1.45; color:var(--gray-900); }
 .busq-aviso ul { margin:6px 0 0; padding-left:18px; }
 .busq-aviso a { color:var(--accent); }
 
-.busq-leyenda { display:flex; gap:14px; margin:0 0 8px; font-family:var(--font-mono); font-size:10.5px; color:var(--gray-500); }
-.busq-leyenda i { display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:2px; }
+.busq-leyenda { display:flex; flex-wrap:wrap; gap:6px 16px; margin:0 0 10px; font-size:13px; color:var(--gray-700); }
+.busq-leyenda i { display:inline-block; width:10px; height:10px; margin-right:6px; border-radius:2px; vertical-align:-1px; }
 
-.busq-columnas { display:flex; gap:6px; align-items:stretch; height:180px; overflow-x:auto; }
-.busq-columnas-dia { gap:3px; }
-.busq-columnas-dia .busq-col { flex-basis:22px; min-width:22px; }
-.busq-col { display:flex; flex-direction:column; align-items:center; gap:4px; flex:1 0 34px; min-width:34px; }
-.busq-col-num { font-family:var(--font-mono); font-size:11px; color:var(--gray-900); }
-.busq-col-barra { flex:1; width:100%; max-width:32px; display:flex; flex-direction:column; justify-content:flex-end; border-radius:4px; background:var(--gray-200); overflow:hidden; }
+/* Filas de barras del panorama, más grandes acá. */
+.busq .pano-fila { grid-template-columns:minmax(0, 150px) minmax(0, 1fr) 76px; height:auto; min-height:28px; font-size:13px; color:var(--gray-900); }
+.busq .pano-barra { height:8px; border-radius:4px; }
+.busq .pano-num { font-size:13.5px; }
+.busq .pano-num small { font-size:12px; color:var(--gray-700); }
+.busq .pano-quien i { width:9px; height:9px; }
+.busq .pano-vacio { font-size:13px; color:var(--gray-700); }
+
+/* Columnas verticales (día, semana, mes). */
+.busq-columnas { display:flex; gap:6px; align-items:stretch; height:200px; overflow-x:auto; }
+.busq-columnas-dia { gap:4px; }
+.busq-columnas-dia .busq-col { flex-basis:28px; min-width:28px; }
+.busq-col { display:flex; flex-direction:column; align-items:center; gap:4px; flex:1 0 40px; min-width:40px; }
+.busq-col-num { min-height:16px; font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--gray-900); }
+.busq-col-barra { flex:1; width:100%; max-width:34px; display:flex; flex-direction:column; justify-content:flex-end; border-radius:4px; background:var(--gray-200); overflow:hidden; }
 .busq-col-barra span { display:block; width:100%; }
-.busq-col-mes { font-family:var(--font-mono); font-size:10px; line-height:1.25; text-align:center; color:var(--gray-500); white-space:nowrap; }
+.busq-col-mes { font-family:var(--font-mono); font-size:12px; line-height:1.3; text-align:center; color:var(--gray-700); white-space:nowrap; }
 
-.pano-num small { color:var(--gray-500); }
-.busq-fila-cv { grid-template-columns:minmax(0, 160px) minmax(0, 1fr) 96px; }
+.busq-periodo { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; }
+.busq-periodo .busq-nota { margin:0; font-size:14px; }
+.busq-periodo strong { color:var(--gray-900); font-family:var(--font-mono); font-size:16px; }
+.busq-periodo .postu-chips-filtro button { padding:6px 14px; font-size:13.5px; }
+
+/* Barras horizontales por puesto. */
+.busq-puestos { display:flex; flex-direction:column; gap:10px; }
+.busq-puesto { display:grid; grid-template-columns:minmax(0, 220px) minmax(0, 1fr) auto; gap:12px; align-items:center; }
+.busq-puesto-nombre { font-size:14px; color:var(--gray-900); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.busq-puesto-barra { height:26px; border-radius:4px; background:var(--gray-200); overflow:hidden; }
+.busq-puesto-barra > div { display:flex; height:100%; min-width:26px; }
+.busq-puesto-barra span { display:flex; align-items:center; justify-content:center; min-width:22px; font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--ink-900); }
+.busq-puesto-num { min-width:190px; font-family:var(--font-mono); font-size:13px; color:var(--gray-700); text-align:right; white-space:nowrap; }
+.busq-puesto-num b { font-size:16px; color:var(--gray-900); }
+.busq-rojo { color:var(--red-600); font-weight:600; }
+
+/* Por CV: barra partida. */
+.busq .busq-fila-cv { grid-template-columns:minmax(0, 190px) minmax(0, 1fr) 150px; }
 .busq-partida { display:flex; height:100%; }
 .busq-partida span { display:block; height:100%; }
 
+/* Tabla. */
 .busq-filtros { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:10px; }
-.busq-filtros select { flex:1 1 160px; width:auto; min-width:0; }
+.busq-filtros select { flex:1 1 170px; width:auto; min-width:0; font-size:14px; }
 .busq-filtros .busq-nota { margin:0 0 0 auto; }
-.busq-tabla-caja { max-height:520px; overflow:auto; border:1px solid var(--gray-200); border-radius:8px; }
-.busq-tabla { width:100%; border-collapse:collapse; font-size:12.5px; }
-.busq-tabla th { position:sticky; top:0; z-index:1; padding:8px 10px; background:var(--surface-inset); text-align:left; font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--gray-500); white-space:nowrap; }
-.busq-tabla td { padding:7px 10px; border-top:1px solid var(--gray-200); vertical-align:top; color:var(--gray-900); }
-.busq-tabla td small { display:block; margin-top:2px; color:var(--gray-500); }
+.busq-tabla-caja { max-height:560px; overflow:auto; border:1px solid var(--gray-200); border-radius:8px; }
+.busq-tabla { width:100%; border-collapse:collapse; font-size:14px; line-height:1.4; }
+.busq-tabla th { position:sticky; top:0; z-index:1; padding:9px 10px; background:var(--surface-inset); text-align:left; font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--gray-700); white-space:nowrap; }
+.busq-tabla td { padding:9px 10px; border-top:1px solid var(--gray-200); vertical-align:top; color:var(--gray-900); }
+.busq-tabla td small { display:block; margin-top:3px; font-size:12.5px; color:var(--gray-700); }
 .busq-tabla a { color:var(--accent); white-space:nowrap; }
-.busq-mono { font-family:var(--font-mono); font-size:11.5px; white-space:nowrap; }
-.busq-cat { font-size:11px; font-weight:600; }
+.busq-mono { font-family:var(--font-mono); font-size:13px; white-space:nowrap; }
+.busq-cat { font-size:13px; font-weight:600; }
 .busq-cat-rechazada { color:var(--red-600); }
 .busq-cat-postulada { color:var(--accent); }
 .busq-cat-otro { color:var(--amber-600); }
@@ -45,24 +73,15 @@
 @media (max-width: 760px) {
   .busq-cifras { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .busq-cifras div:last-child { grid-column:1 / -1; }
-  .busq-fila-cv { grid-template-columns:minmax(0, 100px) minmax(0, 1fr) 84px; }
-  .busq-tabla th:nth-child(6), .busq-tabla td:nth-child(6) { display:none; }
-}
-
-.busq-periodo { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
-.busq-periodo .busq-nota { margin:0; }
-.busq-periodo strong { color:var(--gray-900); font-family:var(--font-mono); }
-
-.busq-puestos { display:flex; flex-direction:column; gap:8px; }
-.busq-puesto { display:grid; grid-template-columns:minmax(0, 200px) minmax(0, 1fr) 150px; gap:12px; align-items:center; }
-.busq-puesto-nombre { font-size:12.5px; color:var(--gray-900); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.busq-puesto-barra { height:22px; border-radius:4px; background:var(--gray-200); overflow:hidden; }
-.busq-puesto-barra > div { display:flex; height:100%; min-width:22px; }
-.busq-puesto-barra span { display:flex; align-items:center; justify-content:center; min-width:18px; font-family:var(--font-mono); font-size:11px; font-weight:600; color:#fff; }
-.busq-puesto-num { font-family:var(--font-mono); font-size:11.5px; color:var(--gray-500); text-align:right; white-space:nowrap; }
-.busq-puesto-num b { font-size:14px; color:var(--gray-900); }
-.busq-rojo { color:var(--red-600); font-weight:600; }
-@media (max-width: 760px) {
-  .busq-puesto { grid-template-columns:minmax(0, 1fr) auto; gap:4px 8px; }
+  .busq-cifras dd { font-size:24px; }
+  /* En el celular, nombre y número arriba y la barra abajo, a todo el ancho. */
+  .busq .pano-fila, .busq .busq-fila-cv { grid-template-columns:minmax(0, 1fr) auto; gap:4px 10px; }
+  .busq .pano-fila .pano-barra { grid-column:1 / -1; grid-row:2; }
+  .busq .pano-fila { margin-bottom:6px; }
+  .busq-puesto { grid-template-columns:minmax(0, 1fr) auto; gap:4px 8px; align-items:end; }
+  .busq-puesto-nombre { white-space:normal; line-height:1.3; }
+  .busq-puesto-num { min-width:0; }
   .busq-puesto-barra { grid-column:1 / -1; grid-row:2; }
+  .busq-columnas-dia .busq-col { flex-basis:30px; min-width:30px; }
+  .busq-tabla th:nth-child(6), .busq-tabla td:nth-child(6) { display:none; }
 }

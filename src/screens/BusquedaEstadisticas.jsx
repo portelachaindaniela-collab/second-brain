@@ -61,7 +61,7 @@ function PorPuesto({ grupos }) {
           {g.rechazadas > 0 && <span style={{ flex: g.rechazadas, background: ROJO }}>{g.rechazadas}</span>}
           {g.sinDecision > 0 && <span style={{ flex: g.sinDecision, background: AZUL }}>{g.sinDecision}</span>}
         </div></div>
-        <span className="busq-puesto-num"><b>{g.enviadas}</b> env. · <span className="busq-rojo">{pct(g.rechazadas / g.enviadas)}</span> rech.</span>
+        <span className="busq-puesto-num"><b>{g.enviadas}</b> {g.enviadas === 1 ? 'enviada' : 'enviadas'} · <span className="busq-rojo">{pct(g.rechazadas / g.enviadas)}</span> rechazo</span>
       </div>)}
     </div>
     <p className="busq-nota">Solo las enviadas, agrupadas por palabras del puesto. Adentro de cada barra: rechazadas y sin decisión.</p>
@@ -185,7 +185,7 @@ export default function BusquedaEstadisticas({ filas: filasPlanilla, url }) {
           {s.porCv.map(c => <div key={c.cv} className="pano-fila busq-fila-cv">
             <span className="pano-quien" title={c.cv}>{c.cv}</span>
             <BarraPartida total={c.enviadas} rojo={c.rechazadas} maximo={maxCv} />
-            <span className="pano-num">{c.enviadas}<small> · {c.rechazadas} rech.</small></span>
+            <span className="pano-num">{c.enviadas}<small> · {c.rechazadas} rechazadas</small></span>
           </div>)}
         </> : <p className="pano-vacio">todavía no hay postulaciones enviadas</p>}
         <p className="busq-nota">Solo las enviadas, según la columna “CV a usar”.</p>
