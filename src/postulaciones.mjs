@@ -5,6 +5,7 @@ export const GRUPOS = [
   { clave: 'hacer', titulo: 'Para hacer' },
   { clave: 'esperando', titulo: 'Esperando respuesta' },
   { clave: 'respondieron', titulo: 'Respondieron' },
+  { clave: 'rechazadas', titulo: 'Rechazadas' },
   { clave: 'cerradas', titulo: 'Descartadas y cerradas' },
 ]
 
@@ -12,7 +13,11 @@ const normal = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toL
 
 export function grupoDe(estado) {
   const e = normal(estado)
+  // La empresa dijo que no (en la planilla: "RECHAZADA 12/05", "RECHAZADA 03/11 - vacante cubierta").
+  if (/rechazad/.test(e)) return 'rechazadas'
   if (/descartad|cerrad|vencid/.test(e)) return 'cerradas'
+  // "POSTULADA - preguntas respondidas ... - sin respuesta": la que respondió fue Daniela, la empresa no.
+  if (/sin respuesta/.test(e)) return 'esperando'
   if (/respond|acuse|entrevista|llamad|contactaron|devolucion/.test(e)) return 'respondieron'
   if (/postulad|enviad/.test(e)) return 'esperando'
   return 'hacer'
@@ -34,9 +39,15 @@ export function leerFecha(texto, hoy = new Date()) {
   return Number.isNaN(f.getTime()) ? null : f
 }
 
-// Días desde que se mandó: la fecha que dice el estado ("POSTULADA 15/10") o, si no tiene, la de la fila.
+// La última fecha que aparece en el texto: "POSTULADA 19/06 - reenviada 02/11" → 02/11.
+export function ultimaFecha(texto, hoy = new Date()) {
+  const fechas = String(texto || '').match(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g)
+  return fechas ? leerFecha(fechas[fechas.length - 1], hoy) : null
+}
+
+// Días desde el último envío: la última fecha del estado ("POSTULADA 15/10 - reenviada 05/11") o, si no tiene, la de la fila.
 export function diasEsperando(p, hoy = new Date()) {
-  const f = leerFecha(p.estado, hoy) || leerFecha(p.fecha, hoy)
+  const f = ultimaFecha(p.estado, hoy) || leerFecha(p.fecha, hoy)
   if (!f) return null
   const dia = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
   return Math.max(0, Math.round((dia(hoy) - dia(f)) / 86400000))
@@ -90,3 +101,22 @@ export function nombreCv(cv) {
 
 export const esLink = s => /^https?:\/\//i.test(String(s || '').trim())
 export const esMail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+/.test(String(s || '').trim())
+
+// Esperando respuesta, por antigüedad: el gráfico de barras de la pantalla. Lo que no tiene fecha va aparte.
+export const TRAMOS = [
+  { clave: 'semana', titulo: 'Esta semana', hasta: 7 },
+  { clave: 'quincena', titulo: '1 a 2 semanas', hasta: 14 },
+  { clave: 'mes', titulo: '2 a 4 semanas', hasta: 30 },
+  { clave: 'viejas', titulo: 'Más de un mes', hasta: Infinity },
+]
+
+export function tramoDe(dias) {
+  if (dias == null) return 'viejas'
+  return TRAMOS.find(t => dias <= t.hasta).clave
+}
+
+export function porTramo(esperando) {
+  const r = Object.fromEntries(TRAMOS.map(t => [t.clave, 0]))
+  for (const p of esperando) r[tramoDe(p.dias)]++
+  return r
+}
