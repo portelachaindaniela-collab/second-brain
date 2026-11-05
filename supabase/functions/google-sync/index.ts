@@ -6,6 +6,7 @@ import { filasCalendarios } from "./calendarios.mjs";
 import { identificarCorrida, abrirCorrida, cerrarCorrida, HEADER_SECRETO } from "../_shared/trabajador.mjs";
 
 const TRABAJADOR = "google_sync";
+const DIAS_ADELANTE = 60;
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -57,7 +58,8 @@ async function sincronizar(admin: any, ownerId: string): Promise<Record<string, 
   }
 
   const desde = new Date(); desde.setHours(0, 0, 0, 0);
-  const hasta = new Date(); hasta.setDate(hasta.getDate() + 7); hasta.setHours(23, 59, 59, 999);
+  // 60 días para adelante: con 7, lo agendado a dos semanas (charlas, inscripciones) no aparecía en la app.
+  const hasta = new Date(); hasta.setDate(hasta.getDate() + DIAS_ADELANTE); hasta.setHours(23, 59, 59, 999);
 
   // Antes solo se sincronizaba el calendario "primary" — cualquier evento en un calendario
   // secundario (Salud, Trabajo, Organización, etc.) nunca aparecía en Second Brain aunque
@@ -89,7 +91,7 @@ async function sincronizar(admin: any, ownerId: string): Promise<Record<string, 
     cal.searchParams.set("timeMax", hasta.toISOString());
     cal.searchParams.set("singleEvents", "true");
     cal.searchParams.set("orderBy", "startTime");
-    cal.searchParams.set("maxResults", "60");
+    cal.searchParams.set("maxResults", "250");
 
     const calResp = await fetch(cal.toString(), { headers: { Authorization: `Bearer ${token}` } });
     const calData = await calResp.json();

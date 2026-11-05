@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { grupoDe, semaforoDe, leerFecha, diasEsperando, faltaEnviar, agrupar, coincide, nombreCv, ACCIONES } from './postulaciones.mjs'
+import { porTramo, tramoDe, grupoDe, semaforoDe, leerFecha, diasEsperando, faltaEnviar, agrupar, coincide, nombreCv, ACCIONES } from './postulaciones.mjs'
 
 const hoy = new Date(2026, 9, 19)
 
@@ -15,6 +15,18 @@ test('grupoDe entiende el texto libre de la planilla', () => {
   assert.equal(grupoDe('Carta lista - sin enviar'), 'hacer')
   assert.equal(grupoDe('Sin evaluar'), 'hacer')
   assert.equal(grupoDe(''), 'hacer')
+  assert.equal(grupoDe('RECHAZADA 12/05'), 'rechazadas')
+  assert.equal(grupoDe('RECHAZADA 22/10 - busqueda cerrada'), 'rechazadas')
+  assert.equal(grupoDe('POSTULADA - preguntas respondidas (segun Daniela) - sin respuesta'), 'esperando')
+})
+
+test('porTramo cuenta lo que espera por antigüedad', () => {
+  assert.equal(tramoDe(0), 'semana')
+  assert.equal(tramoDe(14), 'quincena')
+  assert.equal(tramoDe(30), 'mes')
+  assert.equal(tramoDe(31), 'viejas')
+  assert.equal(tramoDe(null), 'viejas')
+  assert.deepEqual(porTramo([{ dias: 1 }, { dias: 9 }, { dias: 40 }, { dias: null }]), { semana: 1, quincena: 1, mes: 0, viejas: 2 })
 })
 
 test('semaforoDe y nombreCv', () => {
@@ -36,6 +48,7 @@ test('diasEsperando usa la fecha del estado y si no la de la fila', () => {
   assert.equal(diasEsperando({ estado: 'POSTULADA 15/10 - sin respuesta', fecha: '14/10/2026' }, hoy), 4)
   assert.equal(diasEsperando({ estado: 'POSTULADA - sin respuesta', fecha: '17/08/2026' }, hoy), 63)
   assert.equal(diasEsperando({ estado: 'POSTULADA', fecha: 'marzo 2026' }, hoy), null)
+  assert.equal(diasEsperando({ estado: 'POSTULADA 19/06 - reenviada 15/10 - sin respuesta', fecha: '19/06/2026' }, hoy), 4)
 })
 
 test('faltaEnviar: verdes sin mandar, primero lo que ya está listo', () => {

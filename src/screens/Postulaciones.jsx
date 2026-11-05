@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, abrirEnlaceOAuth } from '../supabase.js'
 import { CabeceraPantalla, Pie } from '../estructura.jsx'
-import { GRUPOS, ACCIONES, DIAS_SEGUIMIENTO, agrupar, faltaEnviar, semaforoDe, coincide, nombreCv, grupoDe, esLink, esMail } from '../postulaciones.mjs'
-import BusquedaEstadisticas from './BusquedaEstadisticas.jsx'
-import Desplegable from './Desplegable.jsx'
+import { ACCIONES, DIAS_SEGUIMIENTO, TRAMOS, agrupar, porTramo, tramoDe, coincide, nombreCv, esLink, esMail } from '../postulaciones.mjs'
+import { PERIODOS, prepararFilas, porGrupoPuesto, enviadasPorPeriodo } from '../busquedaLaboral.mjs'
 import './Postulaciones.css'
 
-// Postulaciones: la planilla de Google Sheets de Daniela ordenada por lo que hay que hacer. La planilla sigue siendo
+// Postulaciones: la planilla de Google Sheets de Daniela, resumida en números y barras. La planilla sigue siendo
 // el lugar de carga; desde acá solo se cambia el Estado de una fila (función postulaciones).
+// Poco texto: cada postulación es una línea (puesto, empresa, días o CV). El resto se ve al abrirla.
 
 async function llamar(body) {
   const { data, error } = await supabase.functions.invoke('postulaciones', { body })
@@ -17,9 +17,7 @@ async function llamar(body) {
   return r
 }
 
-const SEMAFOROS = ['verde', 'amarillo', 'rojo', 'negro']
-// "Lo que falta enviar": cuántas tarjetas se ven antes de tocar "Ver más".
-const FALTA_VISIBLES = 3
+const VISIBLES = 8
 
 function Contacto({ valor }) {
   if (!valor) return null
@@ -28,17 +26,107 @@ function Contacto({ valor }) {
   return <span>{valor}</span>
 }
 
-function Tarjeta({ p, abrir, destacada }) {
-  const color = semaforoDe(p.semaforo)
-  const lento = p.dias != null && p.dias >= DIAS_SEGUIMIENTO && grupoDe(p.estado) === 'esperando'
-  return <button className={`postu-tarjeta${destacada ? ' destacada' : ''}`} onClick={() => abrir(p)}>
-    <span className="postu-titulo">{color && <span className={`postu-punto ${color}`} aria-label={`semáforo ${color}`} />}{p.puesto || '(sin puesto)'}</span>
-    <span className="postu-sub">{[p.empresa, p.zona].filter(Boolean).join(' · ') || p.link}</span>
-    {grupoDe(p.estado) === 'esperando'
-      ? <span className={lento ? 'postu-dias lento' : 'postu-dias'}>{p.dias == null ? 'Sin fecha' : p.dias === 0 ? 'Hoy' : `${p.dias} ${p.dias === 1 ? 'día' : 'días'}`}{lento && ' sin respuesta · ¿seguimiento?'}</span>
-      : <span className="postu-estado">{p.estado || 'Sin estado'}</span>}
-    {(p.cv || p.fuente) && <span className="postu-chips">{p.cv && <span className="postu-chip">CV {nombreCv(p.cv)}</span>}{p.fuente && <span className="postu-chip">{p.fuente}</span>}</span>}
-  </button>
+// Una postulación = una línea. A la derecha va un solo dato: los días que lleva esperando, o el CV si falta mandarla.
+function Fila({ p, abrir, dato }) {
+  const lento = p.dias != null && p.dias >= DIAS_SEGUIMIENTO
+  return <li>
+    <button className="postu-fila" onClick={() => abrir(p)}>
+      <span className="postu-fila-texto"><strong>{p.puesto || p.link || '(sin puesto)'}</strong>{p.empresa && <span>{p.empresa}</span>}</span>
+      {dato === 'dias' && <span className={`postu-fila-dato${lento ? ' lento' : ''}`}>{p.dias == null ? '—' : `${p.dias} d`}</span>}
+      {dato === 'cv' && p.cv && <span className="postu-fila-cv">{nombreCv(p.cv)}</span>}
+    </button>
+  </li>
+}
+
+function Lista({ filas, abrir, dato, vacio }) {
+  const [todas, setTodas] = useState(false)
+  if (!filas.length) return <p className="postu-vacio">{vacio}</p>
+  const vistas = todas ? filas : filas.slice(0, VISIBLES)
+  return <>
+    <ul className="postu-lista">{vistas.map(p => <Fila key={p.fila} p={p} abrir={abrir} dato={dato} />)}</ul>
+    {filas.length > VISIBLES && <button className="postu-mas" onClick={() => setTodas(t => !t)}>{todas ? 'Ver menos' : `Ver las ${filas.length}`}</button>}
+  </>
+}
+
+// Barra única: de todo lo enviado, cuánto espera, cuánto respondió y cuánto rechazaron.
+function Resultado({ g }) {
+  const partes = [
+    { clave: 'esperando', titulo: 'Esperando', n: g.esperando.length },
+    { clave: 'respondieron', titulo: 'Respondieron', n: g.respondieron.length },
+    { clave: 'rechazadas', titulo: 'Rechazadas', n: g.rechazadas.length },
+  ]
+  const total = partes.reduce((s, x) => s + x.n, 0)
+  if (!total) return null
+  return <div className="postu-resultado">
+    <p className="postu-grafico-titulo">De {total} enviadas</p>
+    <div className="postu-barra" role="img" aria-label={partes.map(x => `${x.titulo}: ${x.n}`).join(', ')}>
+      {partes.filter(x => x.n).map(x => <span key={x.clave} className={`seg ${x.clave}`} style={{ flexGrow: x.n }} />)}
+    </div>
+    <ul className="postu-leyenda">
+      {partes.map(x => <li key={x.clave}><strong>{x.n}</strong><span><span className={`postu-marca ${x.clave}`} />{x.titulo}</span></li>)}
+    </ul>
+  </div>
+}
+
+// Columnas por antigüedad de lo que espera. Tocar una filtra la lista de abajo.
+function Antiguedad({ esperando, tramo, setTramo }) {
+  const cuenta = porTramo(esperando)
+  const max = Math.max(1, ...Object.values(cuenta))
+  return <div className="postu-antiguedad">
+    <p className="postu-grafico-titulo">Hace cuánto esperan</p>
+    <div className="postu-columnas-graf" role="group" aria-label="Esperando por antigüedad">
+      {TRAMOS.map(t => <button key={t.clave} className={`postu-col${tramo === t.clave ? ' activa' : ''}${t.clave === 'viejas' ? ' vieja' : ''}`}
+        aria-pressed={tramo === t.clave} onClick={() => setTramo(tramo === t.clave ? '' : t.clave)}>
+        <span className="postu-col-n">{cuenta[t.clave]}</span>
+        <span className="postu-col-barra"><span style={{ height: `${(cuenta[t.clave] / max) * 100}%` }} /></span>
+        <span className="postu-col-titulo">{t.titulo}</span>
+      </button>)}
+    </div>
+  </div>
+}
+
+// Enviadas en el tiempo: columnas apiladas (rechazadas abajo, sin decisión arriba) por día, semana o mes.
+function EnElTiempo({ filas }) {
+  const [periodo, setPeriodo] = useState('mes')
+  const { columnas } = useMemo(() => enviadasPorPeriodo(filas, periodo), [filas, periodo])
+  const max = Math.max(1, ...columnas.map(c => c.rechazadas + c.sinDecision))
+  const paso = Math.max(1, Math.ceil(columnas.length / 8))
+  return <div className="postu-card">
+    <div className="postu-card-cabecera">
+      <p className="postu-grafico-titulo">Enviadas en el tiempo</p>
+      <div className="postu-periodos" role="tablist" aria-label="Período">
+        {PERIODOS.map(([v, t]) => <button key={v} role="tab" aria-selected={periodo === v} className={periodo === v ? 'activo' : ''} onClick={() => setPeriodo(v)}>{t}</button>)}
+      </div>
+    </div>
+    {columnas.length ? <div className="postu-tiempo" role="img" aria-label={columnas.map(c => `${c.etiqueta.join(' ')}: ${c.rechazadas + c.sinDecision}`).join(', ')}>
+      {columnas.map((c, i) => { const n = c.rechazadas + c.sinDecision; return <div key={c.clave} className="postu-tiempo-col" title={`${c.etiqueta.join(' ')}: ${n} (${c.rechazadas} rechazadas)`}>
+        <span className="postu-tiempo-n">{n || ''}</span>
+        <span className="postu-tiempo-barra">
+          <span className="seg esperando" style={{ height: `${(c.sinDecision / max) * 100}%` }} />
+          <span className="seg rechazadas" style={{ height: `${(c.rechazadas / max) * 100}%` }} />
+        </span>
+        <span className="postu-tiempo-etiqueta">{(columnas.length - 1 - i) % paso ? '' : c.etiqueta[0]}</span>
+      </div> })}
+    </div> : <p className="postu-vacio">Todavía no hay enviadas con fecha.</p>}
+  </div>
+}
+
+// Enviadas por tipo de puesto: una barra por grupo, partida en rechazadas y sin decisión.
+function PorPuesto({ filas }) {
+  const grupos = useMemo(() => porGrupoPuesto(filas), [filas])
+  const max = Math.max(1, ...grupos.map(g => g.enviadas))
+  return <div className="postu-card">
+    <p className="postu-grafico-titulo">Por tipo de puesto</p>
+    {grupos.length ? <ul className="postu-puestos">
+      {grupos.map(g => <li key={g.grupo} title={`${g.enviadas} enviadas, ${g.rechazadas} rechazadas`}>
+        <span className="postu-puesto-nombre">{g.grupo}</span>
+        <span className="postu-puesto-barra" style={{ width: `${(g.enviadas / max) * 100}%` }}>
+          <span className="seg rechazadas" style={{ flexGrow: g.rechazadas }} /><span className="seg esperando" style={{ flexGrow: g.sinDecision }} />
+        </span>
+        <strong>{g.enviadas}</strong>
+      </li>)}
+    </ul> : <p className="postu-vacio">Todavía no hay enviadas.</p>}
+  </div>
 }
 
 function Detalle({ p, cerrar, cambiar }) {
@@ -110,14 +198,9 @@ export default function Postulaciones() {
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(true)
   const [busqueda, setBusqueda] = useState('')
-  const [semaforo, setSemaforo] = useState('')
-  const [cv, setCv] = useState('')
+  const [tramo, setTramo] = useState('')
   const [abierta, setAbierta] = useState(null)
-  // Grupos abiertos (listas desplegables). Arrancan todos cerrados: se ve una línea por grupo con su cantidad.
-  const [abiertos, setAbiertos] = useState(() => new Set())
-  const [verTodasFalta, setVerTodasFalta] = useState(false)
-  const alternar = clave => setAbiertos(a => { const b = new Set(a); if (b.has(clave)) b.delete(clave); else b.add(clave); return b })
-  const [vista, setVista] = useState('seguimiento')
+  const [verCerradas, setVerCerradas] = useState(false)
 
   const cargar = useCallback(async () => {
     setCargando(true); setError('')
@@ -146,59 +229,66 @@ export default function Postulaciones() {
   }
 
   const filas = useMemo(() => datos?.filas || [], [datos])
-  const cvs = useMemo(() => [...new Set(filas.filter(p => grupoDe(p.estado) !== 'cerradas').map(p => nombreCv(p.cv)).filter(Boolean))].sort(), [filas])
-  const visibles = filas.filter(p => coincide(p, busqueda) && (!semaforo || semaforoDe(p.semaforo) === semaforo) && (!cv || nombreCv(p.cv) === cv))
-  const grupos = agrupar(visibles)
-  const todas = agrupar(filas)
-  const pendientes = faltaEnviar(filas)
+  const g = useMemo(() => agrupar(filas), [filas])
+  const preparadas = useMemo(() => prepararFilas(filas), [filas])
+  const filtrar = lista => lista.filter(p => coincide(p, busqueda))
+  // Para hacer: primero las verdes.
+  const hacer = filtrar(g.hacer)
+  const esperando = filtrar(g.esperando).filter(p => !tramo || tramoDe(p.dias) === tramo)
+  const respondieron = filtrar(g.respondieron)
+  const cerradas = filtrar([...g.rechazadas, ...g.cerradas]).sort((a, b) => b.fila - a.fila)
   const listo = estado?.conectado && estado?.elegida && datos
+  const tituloTramo = TRAMOS.find(t => t.clave === tramo)?.titulo
 
-  return <div>
+  return <div className="postu">
     <CabeceraPantalla sobretitulo="Búsqueda laboral" titulo="Postulaciones" cargando={cargando && !datos}
       cifras={listo ? [
-        { valor: todas.hacer.length, etiqueta: 'para hacer', nivel: todas.hacer.length ? 'aviso' : undefined },
-        { valor: todas.esperando.length, etiqueta: 'esperando' },
-        { valor: todas.respondieron.length, etiqueta: 'respondieron' },
+        { valor: g.hacer.length, etiqueta: 'para hacer', nivel: g.hacer.length ? 'aviso' : undefined },
+        { valor: g.esperando.length, etiqueta: 'esperando' },
+        { valor: g.respondieron.length, etiqueta: 'respondieron' },
       ] : []} />
 
     {error && <p role="alert" className="feedback-error">{error} <button className="btn btn-sm" onClick={cargar}>Reintentar</button></p>}
     {cargando && !datos && !error && <p className="empty-state">Leyendo tu planilla…</p>}
     {!cargando && estado && !estado.error && !(estado.conectado && estado.elegida) && <Conexion estado={estado} recargar={cargar} />}
 
-    {listo && <div className="postu-chips-filtro postu-vistas" role="tablist" aria-label="Vista">
-      {[['seguimiento', 'Seguimiento'], ['estadisticas', 'Estadísticas']].map(([v, t]) => <button key={v} role="tab" aria-selected={vista === v} className={vista === v ? 'activo' : ''} onClick={() => setVista(v)}>{t}</button>)}
-    </div>}
+    {listo && <>
+      <section className="postu-graficos">
+        <Resultado g={g} />
+        <Antiguedad esperando={g.esperando} tramo={tramo} setTramo={setTramo} />
+        <EnElTiempo filas={preparadas} />
+        <PorPuesto filas={preparadas} />
+      </section>
 
-    {listo && vista === 'estadisticas' && <BusquedaEstadisticas filas={filas} url={datos.url} />}
+      <div className="postu-grilla">
+        <section className="postu-bloque">
+          <h2>Para hacer <span>{hacer.length}</span></h2>
+          <Lista filas={hacer} abrir={setAbierta} dato="cv" vacio="Nada pendiente." />
+          {respondieron.length > 0 && <>
+            <h2 className="postu-sub-h">Respondieron <span>{respondieron.length}</span></h2>
+            <Lista filas={respondieron} abrir={setAbierta} vacio="" />
+          </>}
+        </section>
 
-    {listo && vista === 'seguimiento' && <>
-      {pendientes.length > 0 && <section className="postu-falta">
-        <h2>Lo que falta enviar · empezá por acá</h2>
-        <div className="postu-falta-lista">{(verTodasFalta ? pendientes : pendientes.slice(0, FALTA_VISIBLES)).map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} destacada />)}</div>
-        {pendientes.length > FALTA_VISIBLES && <button className="btn btn-sm postu-falta-mas" onClick={() => setVerTodasFalta(v => !v)}>{verTodasFalta ? 'Ver menos' : `Ver ${pendientes.length - FALTA_VISIBLES} más`}</button>}
-      </section>}
+        <section className="postu-bloque">
+          <h2>Esperando{tituloTramo && <> · {tituloTramo.toLowerCase()} <button className="postu-quitar" onClick={() => setTramo('')}>quitar filtro</button></>} <span>{esperando.length}</span></h2>
+          <Lista key={tramo} filas={esperando} abrir={setAbierta} dato="dias" vacio="Nada en este tramo." />
+        </section>
+      </div>
 
-      <div className="postu-filtros">
+      <div className="postu-buscar">
         <input aria-label="Buscar puesto o empresa" placeholder="Buscar puesto o empresa" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-        <div className="postu-chips-filtro semaforos" role="group" aria-label="Semáforo">
-          <button className={!semaforo ? 'activo' : ''} onClick={() => setSemaforo('')}>Todos</button>
-          {SEMAFOROS.map(s => <button key={s} className={semaforo === s ? 'activo' : ''} aria-pressed={semaforo === s} onClick={() => setSemaforo(semaforo === s ? '' : s)}><span className={`postu-punto ${s}`} />{s}</button>)}
-        </div>
-        {cvs.length > 1 && <div className="postu-chips-filtro" role="group" aria-label="CV">
-          {cvs.map(c => <button key={c} className={cv === c ? 'activo' : ''} aria-pressed={cv === c} onClick={() => setCv(cv === c ? '' : c)}>CV {c}</button>)}
-        </div>}
       </div>
 
-      <div className="postu-desplegables">
-        {GRUPOS.map(g => <Desplegable key={g.clave} titulo={g.titulo} cantidad={grupos[g.clave].length} abierto={abiertos.has(g.clave)} alternar={() => alternar(g.clave)}>
-          {grupos[g.clave].length
-            ? <div className="postu-cerradas-lista">{grupos[g.clave].map(p => <Tarjeta key={p.fila} p={p} abrir={setAbierta} />)}</div>
-            : <p className="postu-vacio postu-vacio-desplegable">Nada acá.</p>}
-        </Desplegable>)}
-      </div>
+      <section className="postu-cerradas">
+        <button className="postu-cerradas-cabecera" aria-expanded={verCerradas} onClick={() => setVerCerradas(v => !v)}>
+          <span><strong>Rechazadas y cerradas</strong> · {cerradas.length}</span><span className="btn btn-sm">{verCerradas ? 'Ocultar' : 'Ver'}</span>
+        </button>
+        {verCerradas && <div className="postu-cerradas-cuerpo"><Lista filas={cerradas} abrir={setAbierta} vacio="Nada acá." /></div>}
+      </section>
     </>}
 
-    {datos && <Pie titulo="Planilla" resumen={`${datos.titulo}${datos.pestana ? ` · pestaña ${datos.pestana}` : ''} · ${filas.length} postulaciones`}
+    {datos && <Pie titulo="Planilla" resumen={`${datos.titulo} · ${filas.length} filas`}
       boton={cargando ? 'Leyendo…' : 'Recargar'} onBoton={cargar} ocupado={cargando} />}
     {datos?.url && <p className="postu-nota"><a href={datos.url} target="_blank" rel="noreferrer">Abrir la planilla en Google Sheets</a></p>}
 
