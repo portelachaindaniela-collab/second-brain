@@ -480,9 +480,9 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .bloque-cabecera .bloque-nota { white-space: normal; }
 /* Títulos de sección dentro de las tarjetas: los mismos en todas las pantallas.
    Nivel 1, el título de la tarjeta. Nivel 2, el subtítulo en mayúsculas. Ninguna pantalla los redefine. */
-.bloque-cabecera h2, .section-heading h3, .bg-tabla h2, .postu-columna h2, .metricas-lista-titulo h2 { font-family: var(--font); font-size: var(--letra-13); font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; text-transform: none; color: var(--gray-900); }
-.bloque-cabecera h2, .bg-tabla h2, .postu-columna h2 { padding-left: var(--esp-8); border-left: 2px solid var(--accent); }
-.bloque-subtitulo, .bg-cambios h2, .postu-falta h2, .medios-pais h4, .corrida-seccion h4, .hoy-subtitulo, .referentes-titulo, .panel-subtitulo, .consola-subtitulo, .cabina-rotulo { font-family: var(--font); font-size: var(--letra-11); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--gray-500); }
+.bloque-cabecera h2, .section-heading h3, .bg-tabla h2, .metricas-lista-titulo h2, .postu-bloque h2 { font-family: var(--font); font-size: var(--letra-13); font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; text-transform: none; color: var(--gray-900); }
+.bloque-cabecera h2, .bg-tabla h2, .postu-bloque h2 { padding-left: var(--esp-8); border-left: 2px solid var(--accent); }
+.bloque-subtitulo, .bg-cambios h2, .postu-grafico-titulo, .medios-pais h4, .corrida-seccion h4, .hoy-subtitulo, .referentes-titulo, .panel-subtitulo, .consola-subtitulo, .cabina-rotulo { font-family: var(--font); font-size: var(--letra-11); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--gray-500); }
 
 .pantalla-pie { margin-top: var(--esp-32); padding-top: var(--esp-16); border-top: 1px solid var(--gray-200); }
 .pie-linea { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-12); flex-wrap: wrap; font-size: var(--letra-13); color: var(--gray-700); }
