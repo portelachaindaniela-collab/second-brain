@@ -30,6 +30,14 @@
   --id-arena: #e6cf9f;
   --id-fucsia: #e86df2;
   --id-bordo: #e0566e;
+  /* Paleta de gráficos: todos los gráficos sacan sus colores de la paleta de identidad (la de "Qué trajo cada uno").
+     Una serie por trabajador usa el color de ese trabajador; el resto usa estos nombres. */
+  --grafico-dato: var(--id-azul);
+  --grafico-dato-2: var(--id-arena);
+  --grafico-positivo: var(--id-lima);
+  --grafico-negativo: var(--id-bordo);
+  --grafico-atencion: var(--id-ambar);
+  --grafico-pista: var(--gray-200);
   --gray-900: #e7edf4;
   --gray-700: #a9b6c4;
   --gray-500: #7e93a6;

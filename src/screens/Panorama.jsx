@@ -126,8 +126,8 @@ function SaludPorTrabajador({ trabajadores, resumenes, salud, alertas }) {
       const r = resumenes[t.clave] ?? {}
       return <div key={t.clave} className="pano-fila pano-fila-baja">
         <span className="pano-quien"><i style={{ background: colorIdentidad(t.color) }} />{nombreCorto(t.nombre)}</span>
-        <Barra valor={r.ok ?? 0} maximo={Math.max(1, r.corridas ?? 0)} color={r.error ? 'var(--red-600)' : 'var(--green-600)'} />
-        <span className="pano-num">{r.ok ?? 0}/{r.corridas ?? 0}</span>
+        <Barra valor={r.ok ?? 0} maximo={Math.max(1, r.corridas ?? 0)} color={colorIdentidad(t.color)} />
+        <span className={`pano-num${r.error ? ' txt-error' : ''}`}>{r.ok ?? 0}/{r.corridas ?? 0}</span>
       </div>
     })}
     <p className="pano-sistema">

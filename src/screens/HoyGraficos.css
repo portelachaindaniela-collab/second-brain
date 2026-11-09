@@ -16,7 +16,7 @@
 .hoy-col { display: flex; flex-direction: column; align-items: center; gap: var(--esp-4); height: 100%; min-width: 0; }
 .hoy-col-num { font-family: var(--font-mono); font-size: var(--letra-11); color: var(--gray-900); min-height: 14px; }
 .hoy-col-barra { flex: 1; width: 100%; max-width: 30px; display: flex; align-items: flex-end; border-radius: var(--radius-sm); background: var(--gray-200); overflow: hidden; }
-.hoy-col-barra > div { width: 100%; background: var(--gray-500); border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+.hoy-col-barra > div { width: 100%; background: var(--grafico-dato); border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
 .hoy-col-hoy .hoy-col-barra > div { background: var(--accent); }
 .hoy-col-dia { font-family: var(--font-mono); font-size: var(--letra-11); line-height: 1.25; text-align: center; color: var(--gray-500); }
 .hoy-col-hoy .hoy-col-dia { color: var(--accent); }

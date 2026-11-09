@@ -8,9 +8,9 @@
 /* Resultado: una barra apilada */
 .postu-barra { display:flex; gap:var(--esp-4); height:14px; border-radius:var(--radius); overflow:hidden; }
 .postu-barra .seg { min-width:6px; }
-.seg.esperando, .postu-marca.esperando { background:var(--gray-500); }
-.seg.respondieron, .postu-marca.respondieron { background:var(--teal-600); }
-.seg.rechazadas, .postu-marca.rechazadas { background:var(--red-600); }
+.seg.esperando, .postu-marca.esperando { background:var(--grafico-dato); }
+.seg.respondieron, .postu-marca.respondieron { background:var(--grafico-positivo); }
+.seg.rechazadas, .postu-marca.rechazadas { background:var(--grafico-negativo); }
 .postu-resultado { display:flex; flex-direction:column; }
 .postu-barra { margin-top:var(--esp-4); }
 .postu-leyenda { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:var(--esp-8); margin:auto 0 0; padding:var(--esp-16) 0 0; list-style:none; }
@@ -26,8 +26,8 @@
 .postu-col.activa { border-color:var(--accent); background:var(--accent-100); }
 .postu-col-n { font-size:var(--letra-20); font-weight:700; font-variant-numeric:tabular-nums; color:var(--gray-900); }
 .postu-col-barra { display:flex; align-items:flex-end; width:100%; max-width:46px; height:64px; border-radius:var(--radius-sm); background:var(--surface-inset); }
-.postu-col-barra span { display:block; width:100%; min-height:2px; border-radius:var(--radius-sm); background:var(--gray-500); }
-.postu-col.vieja .postu-col-barra span { background:var(--amber-600); }
+.postu-col-barra span { display:block; width:100%; min-height:2px; border-radius:var(--radius-sm); background:var(--grafico-dato); }
+.postu-col.vieja .postu-col-barra span { background:var(--grafico-atencion); }
 .postu-col.activa .postu-col-barra span { background:var(--accent); }
 .postu-col-titulo { font-size:var(--letra-11); color:var(--gray-500); text-align:center; line-height:1.2; }
 
@@ -49,7 +49,7 @@
 .postu-puestos { display:flex; flex-direction:column; gap:var(--esp-8); margin:0; padding:0; list-style:none; }
 .postu-puestos li { display:grid; grid-template-columns:150px minmax(0, 1fr) 28px; align-items:center; gap:var(--esp-12); }
 .postu-puesto-nombre { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--letra-13); color:var(--gray-700); }
-.postu-puesto-barra { display:flex; height:8px; min-width:4px; border-radius:var(--radius-sm); overflow:hidden; }
+.postu-puesto-barra { display:flex; height:6px; min-width:4px; border-radius:var(--radius-sm); overflow:hidden; }
 .postu-puestos strong { text-align:right; font-size:var(--letra-13); color:var(--gray-900); font-variant-numeric:tabular-nums; }
 
 /* Listas */
