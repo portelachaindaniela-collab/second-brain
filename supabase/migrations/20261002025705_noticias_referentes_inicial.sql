@@ -1,0 +1,3 @@
+-- Carga de datos (INSERT de medios y referentes en public.noticias_medios), no cambia el esquema.
+-- El SQL aplicado no se copió acá por su tamaño; el contenido equivalente está en supabase/noticias-referentes.sql.
+-- Para el texto exacto: select statements from supabase_migrations.schema_migrations where version = '20261002025705';
