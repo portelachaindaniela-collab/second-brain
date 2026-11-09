@@ -6,7 +6,7 @@ import { unirRepetidos } from '../eventosUnicos.mjs'
 import { importarEventosComunidad, textoImportacion } from '../comunidadImportar.js'
 import { inicioSemana, moverSemana, tituloSemana, diasDeSemana } from '../semana.mjs'
 import { calendarioDe, leyendaCalendarios, prepararCalendarios } from '../calendarioMes.mjs'
-import { Bloques, Bloque } from '../estructura.jsx'
+import { Bloques, Bloque, CabeceraPantalla } from '../estructura.jsx'
 
 const DIA_CORTO = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
 
@@ -155,7 +155,7 @@ export default function Agenda({ proyectos, revision, enBloque = false, debajo }
   </Bloque>
 
   return <div>
-    {!enBloque && <div className="page-head"><h1>Calendario</h1><div style={{ display:'flex', gap:8 }}><button className="btn btn-primary" onClick={() => setEditando({})}>+ Nuevo evento</button><button className="btn" disabled={importando} onClick={importarComunidad}>{importando ? 'Importando…' : 'Importar de Comunidad'}</button></div></div>}
+    {!enBloque && <CabeceraPantalla titulo="Calendario" accion={<><button className="btn btn-primary" onClick={() => setEditando({})}>+ Nuevo evento</button><button className="btn" disabled={importando} onClick={importarComunidad}>{importando ? 'Importando…' : 'Importar de Comunidad'}</button></>} />}
     {resultadoImport && <p role={resultadoImport.error ? 'alert' : undefined} className={resultadoImport.error ? 'feedback-error' : 'feedback-ok'}>{textoImportacion(resultadoImport)}</p>}
     <Bloques>
       <Bloque titulo="Calendario" ancho="completo">

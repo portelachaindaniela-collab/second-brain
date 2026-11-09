@@ -1,6 +1,6 @@
 /* Pantalla Eventos: se apoya en las clases .consola-* de Trabajadores.css y solo agrega lo propio. */
 .eventos-fila { grid-template-columns: 9.5em minmax(0, 1fr); }
-.eventos-fecha { font-variant-numeric: tabular-nums; padding-top: 1px; }
+.eventos-fecha { font-variant-numeric: tabular-nums; padding-top: var(--esp-2); }
 .eventos-envuelve { white-space: normal; overflow-wrap: anywhere; }
 .eventos-sin-margen { margin-top: 0; }
 
@@ -11,47 +11,47 @@
 .eventos-estado-no_fui { color: var(--c-error); }
 .eventos-estado-evaluado { color: var(--gray-900); }
 
-.eventos-veredicto { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; padding: 6px 0 6px 10px; border-left: 2px solid var(--c-linea); }
+.eventos-veredicto { display: flex; flex-direction: column; gap: var(--esp-4); margin-top: var(--esp-4); padding: var(--esp-8) 0 var(--esp-8) var(--esp-12); border-left: 2px solid var(--c-linea); }
 /* Sin semáforo: el veredicto es texto, solo cambia el peso. */
 .eventos-tag { width: auto; min-width: 3.2em; color: var(--gray-900); white-space: nowrap; }
 .eventos-tag::before { content: '['; }
 .eventos-tag::after { content: ']'; }
 .eventos-tag-no_viable { text-decoration: line-through; text-decoration-color: var(--c-tenue); }
 .eventos-razon { margin: 0; white-space: normal; }
-.eventos-agenda { margin-top: 2px; }
-.eventos-pie { font-size: 11.5px; margin-top: 2px; }
+.eventos-agenda { margin-top: var(--esp-2); }
+.eventos-pie { font-size: var(--letra-12); margin-top: var(--esp-2); }
 
-.eventos-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
-.eventos-check { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; }
+.eventos-dos { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-12); align-items: end; }
+.eventos-check { display: flex; align-items: center; gap: var(--esp-8); padding-bottom: var(--esp-12); }
 .eventos-borrar { margin-right: auto; }
 .eventos-modal-ancho { width: min(820px, 100%); }
 .eventos-reglas { min-height: 55vh; line-height: 1.5; }
 
 @media (max-width: 560px) {
-  .eventos-fila { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .eventos-fila { grid-template-columns: minmax(0, 1fr); gap: var(--esp-2); }
   .eventos-dos { grid-template-columns: 1fr; }
 }
 
 /* Tarjetas chicas de eventos; el detalle completo se abre en una ventana (DetalleEvento). */
-.evento-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
-.evento-tarjeta { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px; text-align: left; cursor: pointer;
+.evento-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: var(--esp-12); }
+.evento-tarjeta { display: flex; flex-direction: column; gap: var(--esp-8); min-width: 0; padding: var(--esp-12); text-align: left; cursor: pointer;
   background: var(--surface-inset); border: 1px solid var(--c-linea); border-radius: var(--radius-sm); color: inherit; font: inherit; }
 .evento-tarjeta:hover { border-color: var(--gray-500); }
 .evento-tarjeta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.evento-tarjeta-fecha { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--c-tenue); font-variant-numeric: tabular-nums; }
+.evento-tarjeta-fecha { display: flex; justify-content: space-between; gap: var(--esp-8); font-size: var(--letra-12); color: var(--c-tenue); font-variant-numeric: tabular-nums; }
 .evento-tarjeta-nombre, .evento-tarjeta-veredicto, .evento-tarjeta-meta { font-family: var(--font); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
-.evento-tarjeta-nombre { font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--gray-900); -webkit-line-clamp: 2; }
-.evento-tarjeta-veredicto { font-size: 12.5px; line-height: 1.4; color: var(--gray-700); -webkit-line-clamp: 2; }
-.evento-tarjeta-veredicto .eventos-tag { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; }
-.evento-tarjeta-meta { font-size: 12px; color: var(--c-tenue); -webkit-line-clamp: 1; }
+.evento-tarjeta-nombre { font-size: var(--letra-14); font-weight: 600; line-height: 1.3; color: var(--gray-900); -webkit-line-clamp: 2; }
+.evento-tarjeta-veredicto { font-size: var(--letra-13); line-height: 1.4; color: var(--gray-700); -webkit-line-clamp: 2; }
+.evento-tarjeta-veredicto .eventos-tag { font-family: var(--font-mono); font-size: var(--letra-12); font-weight: 600; }
+.evento-tarjeta-meta { font-size: var(--letra-12); color: var(--c-tenue); -webkit-line-clamp: 1; }
 
 .evento-detalle { max-width: 680px; }
 .evento-detalle .modal-head { align-items: flex-start; }
-.evento-detalle-nombre { font-family: var(--font) !important; font-size: 18px !important; line-height: 1.3; margin-bottom: 4px; }
+.evento-detalle-nombre { font-family: var(--font) !important; font-size: var(--letra-20) !important; line-height: 1.3; margin-bottom: var(--esp-4); }
 .evento-detalle .modal-body { max-height: 70vh; }
-.evento-detalle-datos { margin: 0 0 14px; }
-.evento-detalle-datos > div { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: 12px; padding: 4px 0; }
+.evento-detalle-datos { margin: 0 0 var(--esp-16); }
+.evento-detalle-datos > div { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: var(--esp-12); padding: var(--esp-4) 0; }
 .evento-detalle-datos dt { color: var(--c-tenue); }
-.evento-detalle-datos dd { margin: 0; font-family: var(--font); font-size: 13.5px; overflow-wrap: anywhere; }
-.evento-detalle .eventos-razon, .evento-detalle .eventos-veredicto strong { font-family: var(--font); font-size: 13.5px; line-height: 1.5; }
-.evento-detalle-acciones { justify-content: flex-start; flex-wrap: wrap; gap: 4px 14px; }
+.evento-detalle-datos dd { margin: 0; font-family: var(--font); font-size: var(--letra-14); overflow-wrap: anywhere; }
+.evento-detalle .eventos-razon, .evento-detalle .eventos-veredicto strong { font-family: var(--font); font-size: var(--letra-14); line-height: 1.5; }
+.evento-detalle-acciones { justify-content: flex-start; flex-wrap: wrap; gap: var(--esp-4) var(--esp-16); }

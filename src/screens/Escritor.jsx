@@ -5,6 +5,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import { supabase } from '../supabase.js'
 import { VACIO, claveEscrito, cuerpoEscrito, leerContenido, leerLocales, combinarEscritos, serializarGuardados } from '../escritos.mjs'
 import Ambiente from './Ambiente.jsx'
+import { CabeceraPantalla } from '../estructura.jsx'
 import './Escritor.css'
 
 const guardarRemoto = serializarGuardados(async registro => {
@@ -157,7 +158,7 @@ export default function Escritor({ ownerId }) {
     if (seleccion === id) setSeleccion(resto[0]?.id || null)
   }
   const actual = docs.find(d => d.id === seleccion)
-  return <div className="escritor"><div className="page-head"><div><h1>Escribir</h1><p className="hint">Un espacio para tus textos privados.</p></div><button className="btn btn-primary" disabled={cargando} onClick={nuevo}>+ Nuevo texto</button></div>
+  return <div className="escritor"><CabeceraPantalla titulo="Escribir" subtitulo="Un espacio para tus textos privados." accion={<button className="btn btn-primary" disabled={cargando} onClick={nuevo}>+ Nuevo texto</button>} />
     {error && <p className="feedback-error" role="alert">{error}</p>}
     <div className="escritor-layout"><aside className="escritor-biblioteca"><label htmlFor="buscar-escritos">Mis textos</label><input id="buscar-escritos" type="search" placeholder="Buscar por título…" value={busqueda} onChange={e => setBusqueda(e.target.value)} />{docs.filter(d => d.title.toLocaleLowerCase().includes(busqueda.toLocaleLowerCase())).map(d => <button className={d.id === seleccion ? 'seleccionado' : ''} key={d.id} onClick={() => setSeleccion(d.id)} aria-current={d.id === seleccion ? 'true' : undefined}><strong>{d.title || 'Sin título'}</strong><small>{mostrarFecha(d.updated_at)}{d.pendiente ? ' · Borrador' : ''}</small></button>)}</aside>
       {cargando ? <p className="empty-state">Abriendo tus textos…</p> : actual ? <Documento key={actual.id} inicial={actual} cambiar={cambiar} borrar={borrar} /> : <div className="card card-pad escritor-vacio"><h2>La página está en blanco.</h2><p>Una idea, un relato, algo que quieras guardar. Empezá por donde quieras.</p><button className="btn" onClick={nuevo}>Escribir mi primer texto</button></div>}

@@ -8,13 +8,15 @@ import { useEffect, useId, useRef, useState } from 'react'
 
 // cifra: { valor, etiqueta, nivel?: 'aviso' | 'error', grafico? }. Sin nivel va en el color normal: solo lo que pide
 // atención cambia de color. grafico: un gráfico chico (una línea) que va debajo del número.
-export function CabeceraPantalla({ sobretitulo, titulo, subtitulo, cifras = [], cargando = false }) {
+// accion: botones de la pantalla ("+ Nuevo"), a la derecha del título.
+export function CabeceraPantalla({ sobretitulo, titulo, subtitulo, cifras = [], cargando = false, accion }) {
   return <header className="pantalla-cabecera">
     <div className="pantalla-titulos">
       {sobretitulo && <p className="pantalla-sobretitulo">{sobretitulo}</p>}
       <h1>{titulo}</h1>
       {subtitulo && <p className="pantalla-subtitulo">{subtitulo}</p>}
     </div>
+    {accion && <div className="pantalla-accion">{accion}</div>}
     {cifras.length > 0 && <dl className="pantalla-cifras" style={{ '--columnas': Math.min(cifras.length, 4) }}>
       {cifras.slice(0, 4).map(c => <div key={c.etiqueta} className={c.nivel ? `cifra-${c.nivel}` : undefined}>
         <dt>{c.etiqueta}</dt>
