@@ -146,3 +146,17 @@ test('el tope por corrida se reparte entre fuentes, en ronda', async () => {
   assert.deepEqual(repartirPorFuente(lista, 5).map(x => x.url), ['eventbrite0', 'luma0', 'meetup0', 'eventbrite1', 'luma1'])
   assert.equal(repartirPorFuente(lista, 100).length, 8)
 })
+
+test('descripción: texto plano, párrafos separados, sin HTML ni entidades', async () => {
+  const { limpiarDescripcion, descripcionDeHtml, MAX_DESCRIPCION } = await import('./logic.mjs')
+  assert.equal(limpiarDescripcion('<p>Charla sobre <b>IA</b> &amp; deporte</p><p>Hablan Ana y Luis</p>'), 'Charla sobre IA & deporte\nHablan Ana y Luis')
+  assert.equal(limpiarDescripcion('   '), null)
+  assert.equal(limpiarDescripcion(undefined), null)
+  assert.ok(limpiarDescripcion('x'.repeat(MAX_DESCRIPCION + 50)).endsWith('…'))
+  assert.equal(descripcionDeHtml(ld({ '@type': 'Event', name: 'A', description: 'Networking de ecommerce' })), 'Networking de ecommerce')
+})
+
+test('el detalle guarda la descripción del evento', () => {
+  const html = ld({ '@type': 'Event', name: 'Meetup IA', startDate: '2026-11-20T21:00:00Z', description: 'Charla sobre IA aplicada', url: 'https://x.com/e/1' })
+  assert.equal(filaDeDetalle(html, { palabras_clave: ['ia'] }).fila.descripcion, 'Charla sobre IA aplicada')
+})

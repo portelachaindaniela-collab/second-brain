@@ -57,3 +57,9 @@ test('si el plan tiene fin, el evento del calendario termina a esa hora', async 
   assert.equal(cuerpo.location, '')
   assert.equal(cuerpo.description, '')
 })
+
+test('la descripción se muestra sin marcas de Markdown', async () => {
+  const { textoDescripcion } = await import('./eventos.mjs')
+  assert.equal(textoDescripcion('**Goal** is to connect\n\n\n## Agenda\n- Charla de [Ana](https://x.com)\n* Networking'), 'Goal is to connect\n\nAgenda\n• Charla de Ana\n• Networking')
+  assert.equal(textoDescripcion(null), '')
+})

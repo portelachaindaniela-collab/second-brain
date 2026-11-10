@@ -83,3 +83,15 @@ export function eventoParaCalendario(evento, timeZone = 'America/Argentina/Bueno
     project_id: null,
   }
 }
+
+// Descripción para leer: sin las marcas de Markdown que usan algunas páginas (Meetup): **negrita**, # títulos, [texto](link).
+export function textoDescripcion(texto) {
+  if (typeof texto !== 'string') return ''
+  return texto
+    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '$1')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*]\s+/gm, '• ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}

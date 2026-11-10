@@ -61,3 +61,15 @@ test('rechaza respuestas sin veredicto', () => {
   assert.throws(() => armarVeredicto('{"motivo":"x"}', evento), /incompleta/)
   assert.throws(() => armarVeredicto('nada', evento), /JSON/)
 })
+
+test('la descripción va al pedido como dato y el resumen vuelve en el veredicto', async () => {
+  const { describirEvento, armarVeredicto } = await import('./logic.mjs')
+  const evento = { nombre: 'BA Connectors', inicio_at: '2026-11-11T21:30:00Z', tiene_entrada: false, descripcion: 'Encuentro de networking con charla de Ana Pérez.' }
+  assert.match(describirEvento(evento), /DESCRIPCIÓN:\nEncuentro de networking con charla de Ana Pérez\./)
+  assert.match(describirEvento({ ...evento, descripcion: null }), /la página no publica descripción/)
+  const v = armarVeredicto(JSON.stringify({ veredicto: 'viable', motivo: 'cierra', viaje_min: 50, preparacion_min: 30,
+    de_que_trata: 'Networking con una charla sobre IA.', quienes: [{ nombre: 'Ana Pérez', rol: 'CTO' }, 'Luis', { rol: 'sin nombre' }] }), evento)
+  assert.equal(v.de_que_trata, 'Networking con una charla sobre IA.')
+  assert.deepEqual(v.quienes, [{ nombre: 'Ana Pérez', rol: 'CTO' }, { nombre: 'Luis', rol: null }])
+  assert.deepEqual(armarVeredicto(JSON.stringify({ veredicto: 'viable', motivo: 'cierra' }), evento).quienes, [])
+})

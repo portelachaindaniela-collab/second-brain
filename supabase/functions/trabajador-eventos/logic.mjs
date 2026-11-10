@@ -126,6 +126,24 @@ export function coincidePalabra(texto, palabras) {
   return palabras.some(p => t.includes(`-${slug(p)}-`))
 }
 
+// Descripción del evento en texto plano: sin etiquetas HTML, con los párrafos separados y un tope de largo.
+export const MAX_DESCRIPCION = 6000
+const ENTIDADES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
+export function limpiarDescripcion(texto) {
+  if (typeof texto !== 'string') return null
+  const plano = texto
+    .replace(/<\s*br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h\d)>/gi, '\n').replace(/<[^>]+>/g, '')
+    .replace(/&(#\d+|[a-z]+);/gi, (m, e) => e[0] === '#' ? String.fromCodePoint(Number(e.slice(1))) : ENTIDADES[e.toLowerCase()] ?? m)
+    .split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim()
+  if (!plano) return null
+  return plano.length > MAX_DESCRIPCION ? plano.slice(0, MAX_DESCRIPCION).trimEnd() + '…' : plano
+}
+
+// Para completar eventos ya cargados: solo la descripción del JSON-LD de la página.
+export function descripcionDeHtml(html) {
+  return limpiarDescripcion(jsonLd(html).find(esEvento)?.description)
+}
+
 // Detalle de un evento → fila de la tabla eventos, o { descartado } si no sirve.
 export function filaDeDetalle(html, { incluir_online = false, palabras_clave = [] } = {}, { sinOfertasEsGratis = false } = {}) {
   const e = jsonLd(html).find(esEvento)
@@ -146,6 +164,7 @@ export function filaDeDetalle(html, { incluir_online = false, palabras_clave = [
       lugar: limpiarNombre(e.location?.name) || null,
       direccion: (typeof direccion === 'string' ? direccion : limpiarNombre(direccion?.streetAddress)) || null,
       url: limpiarUrl(e.url),
+      descripcion: limpiarDescripcion(e.description),
       ...entradaDe(e.offers, { sinOfertasEsGratis }),
     },
   }

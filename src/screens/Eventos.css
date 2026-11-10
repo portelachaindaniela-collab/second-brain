@@ -55,3 +55,9 @@
 .evento-detalle-datos dd { margin: 0; font-family: var(--font); font-size: var(--letra-14); overflow-wrap: anywhere; }
 .evento-detalle .eventos-razon, .evento-detalle .eventos-veredicto strong { font-family: var(--font); font-size: var(--letra-14); line-height: 1.5; }
 .evento-detalle-acciones { justify-content: flex-start; flex-wrap: wrap; gap: var(--esp-4) var(--esp-16); }
+.evento-de-que-trata { margin: 0 0 var(--esp-16); padding: var(--esp-12) var(--esp-16); border-left: 2px solid var(--accent); background: var(--surface-inset); border-radius: var(--radius-sm); }
+.evento-de-que-trata h4 { margin: 0 0 var(--esp-8); font-family: var(--font); font-size: var(--letra-11); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--gray-500); }
+.evento-resumen { margin: 0; font-family: var(--font); font-size: var(--letra-14); line-height: 1.5; color: var(--gray-900); }
+.evento-quienes { margin: var(--esp-8) 0 0; font-family: var(--font); font-size: var(--letra-13); line-height: 1.5; color: var(--gray-700); }
+.evento-descripcion { margin: var(--esp-8) 0 0; font-family: var(--font); font-size: var(--letra-13); line-height: 1.55; color: var(--gray-700); white-space: pre-line; overflow-wrap: anywhere; }
+.evento-de-que-trata .consola-boton { margin-top: var(--esp-8); padding: 0; }

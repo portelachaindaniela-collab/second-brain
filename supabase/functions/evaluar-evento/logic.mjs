@@ -18,6 +18,9 @@ Pasos:
 3. Decidí según las REGLAS si el plan entero cierra. Si no cierra, buscá la versión recortada que sí cierra
    (una franja, llegar más tarde, irse antes). Si ni recortado cierra, decilo.
 4. Si hay AGENDA, separá qué partes valen la pena y cuáles saltear según las REGLAS. Si no hay agenda, "agenda": null.
+5. Contá de qué trata el evento a partir de la DESCRIPCIÓN y la AGENDA (no de las REGLAS): qué es (charla, taller,
+   meetup, conferencia), sobre qué tema y qué se va a ver, para no tener que abrir la página. Nombrá a quienes hablan o
+   presentan solo si la descripción o la agenda los nombran; nunca inventes nombres.
 
 Respondé SOLO con un objeto JSON, sin texto alrededor, con esta forma exacta:
 {
@@ -34,7 +37,9 @@ Respondé SOLO con un objeto JSON, sin texto alrededor, con esta forma exacta:
     "salir_de_casa": "HH:MM",
     "volver": "HH:MM"
   },
-  "agenda": null o { "vale": [{"item": "...", "por_que": "..."}], "saltear": [{"item": "...", "por_que": "..."}] }
+  "agenda": null o { "vale": [{"item": "...", "por_que": "..."}], "saltear": [{"item": "...", "por_que": "..."}] },
+  "de_que_trata": "dos o tres frases: qué es, sobre qué tema y qué se va a ver; null si no hay descripción ni agenda",
+  "quienes": [{"nombre": "...", "rol": "qué hace o de dónde viene, corto"}] o [] si no se nombra a nadie
 }
 Las horas van en hora de Argentina, formato 24 h.`
 
@@ -54,6 +59,7 @@ export function describirEvento(e) {
     `Entrada: ${e.tiene_entrada ? (e.precio ? `sí, ${e.precio}` : 'sí, precio no cargado') : 'no, es libre'}`,
   ]
   return lineas.filter(Boolean).join('\n')
+    + `\n\nDESCRIPCIÓN:\n${e.descripcion?.trim() ? e.descripcion.trim().slice(0, 6000) : '(la página no publica descripción)'}`
 }
 
 export function construirPedido({ reglas, evento }) {
@@ -97,6 +103,9 @@ function extraerJson(texto) {
 
 const texto = v => (typeof v === 'string' && v.trim() ? v.trim() : null)
 const numero = v => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.round(Number(v)) : null)
+const personas = lista => (Array.isArray(lista) ? lista : [])
+  .map(p => (typeof p === 'string' ? { nombre: texto(p), rol: null } : { nombre: texto(p?.nombre), rol: texto(p?.rol) }))
+  .filter(p => p.nombre).slice(0, 10)
 const items = lista => (Array.isArray(lista) ? lista : [])
   .map(i => (typeof i === 'string' ? { item: i, por_que: null } : { item: texto(i?.item), por_que: texto(i?.por_que) }))
   .filter(i => i.item)
@@ -128,5 +137,7 @@ export function armarVeredicto(respuesta, evento) {
     calculo_plan: delPlan && delPlan.llegada !== completo?.llegada ? delPlan : null,
     plan,
     agenda: agenda && (agenda.vale.length || agenda.saltear.length) ? agenda : null,
+    de_que_trata: texto(r.de_que_trata),
+    quienes: personas(r.quienes),
   }
 }

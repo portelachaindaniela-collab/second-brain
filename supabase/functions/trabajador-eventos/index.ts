@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { identificarCorrida, abrirCorrida, cerrarCorrida, HEADER_SECRETO } from "../_shared/trabajador.mjs";
 import {
   TRABAJADOR, leerParametros, urlBusquedaEventbrite, urlCiudadLuma, urlBusquedaMeetup, FUENTES_SIN_TERMINO,
-  candidatosDeBusqueda, filaDeDetalle, repartirPorFuente,
+  candidatosDeBusqueda, filaDeDetalle, repartirPorFuente, descripcionDeHtml,
   claveEvento, diaAR, dentroDeVentana,
 } from "./logic.mjs";
 
@@ -16,6 +16,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const NAVEGADOR = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36", "Accept-Language": "es-AR,es;q=0.9" };
 const EN_PARALELO = 4;
+const MAX_COMPLETAR = 30;
 
 async function traer(url: string): Promise<string> {
   const r = await fetch(url, { headers: NAVEGADOR, signal: AbortSignal.timeout(15000) });
@@ -91,7 +92,7 @@ async function buscar(admin: any, ownerId: string, parametros: unknown) {
   const enVentana = [...candidatos.values()].filter(c => dentroDeVentana(c.fecha, ahora, p.dias_adelante));
 
   // Lo que ya está en la tabla (cargado a mano o por una corrida anterior) no se toca: ni se duplica ni se pisa.
-  const { data: existentes, error } = await admin.from("eventos").select("nombre,inicio_at,url").eq("owner_id", ownerId)
+  const { data: existentes, error } = await admin.from("eventos").select("id,nombre,inicio_at,url,descripcion").eq("owner_id", ownerId)
     .gte("inicio_at", new Date(ahora - 2 * 86_400_000).toISOString())
     .lte("inicio_at", new Date(ahora + (p.dias_adelante + 2) * 86_400_000).toISOString());
   if (error) throw new Error(`No se pudieron leer los eventos existentes: ${error.message}`);
@@ -125,6 +126,15 @@ async function buscar(admin: any, ownerId: string, parametros: unknown) {
     if (errorAlta) throw new Error(`No se pudieron cargar los eventos: ${errorAlta.message}`);
   }
 
+  // Los que ya estaban y no tienen descripción (cargados antes de que se guardara) se completan desde su página.
+  const sinDescripcion = (existentes ?? []).filter((e: any) => !e.descripcion && /^https?:\/\//.test(e.url ?? "")).slice(0, MAX_COMPLETAR);
+  let completados = 0;
+  for (const r of await enTandas(sinDescripcion, EN_PARALELO, async (e: any) => ({ e, descripcion: descripcionDeHtml(await traer(e.url)) }))) {
+    if (r.status !== "fulfilled" || !r.value.descripcion) continue;
+    const { error: errorDesc } = await admin.from("eventos").update({ descripcion: r.value.descripcion }).eq("id", r.value.e.id).eq("owner_id", ownerId);
+    if (!errorDesc) completados++;
+  }
+
   return {
     cargados: filas.length,
     resumen: {
@@ -132,6 +142,7 @@ async function buscar(admin: any, ownerId: string, parametros: unknown) {
       en_ventana: enVentana.length,
       ya_estaban: enVentana.length - nuevos.length,
       sin_abrir_por_tope: nuevos.length - aAbrir.length,
+      descripciones_completadas: completados,
       descartados,
       por_termino: porTermino,
       cargados: filas.map(f => `${diaAR(f.inicio_at)} · ${f.nombre}`),

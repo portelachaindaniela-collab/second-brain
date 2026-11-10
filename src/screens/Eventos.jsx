@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
-import { ESTADOS_EVENTO, VEREDICTO_TEXTO, aInputLocal, desdeInputLocal, fechaEvento, fechaTarjeta, textoCalculo, esPasado, reglasMasNuevas, eventoParaCalendario } from '../eventos.mjs'
+import { ESTADOS_EVENTO, VEREDICTO_TEXTO, aInputLocal, desdeInputLocal, fechaEvento, fechaTarjeta, textoCalculo, esPasado, reglasMasNuevas, eventoParaCalendario, textoDescripcion } from '../eventos.mjs'
 import { horaAR } from '../trabajadores.mjs'
 import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
 import './Trabajadores.css'
@@ -135,6 +135,27 @@ function EditarReglas({ reglas, cerrar, guardado }) {
   </div>
 }
 
+// De qué trata: el resumen de la evaluación (con quién habla) o, si todavía no se evaluó, la descripción de la página.
+const CORTE_DESCRIPCION = 420
+function DeQueTrata({ evento }) {
+  const [completa, setCompleta] = useState(false)
+  const resumen = evento.veredicto?.de_que_trata
+  const quienes = evento.veredicto?.quienes ?? []
+  const descripcion = textoDescripcion(evento.descripcion)
+  if (!resumen && !descripcion) return null
+  const larga = descripcion && descripcion.length > CORTE_DESCRIPCION
+  const mostrarDescripcion = descripcion && (!resumen || completa)
+  return <section className="evento-de-que-trata">
+    <h4>de qué trata</h4>
+    {resumen && <p className="evento-resumen">{resumen}</p>}
+    {quienes.length > 0 && <p className="evento-quienes"><span className="tenue">{quienes.length === 1 ? 'habla' : 'hablan'}</span> {quienes.map(q => q.rol ? `${q.nombre} (${q.rol})` : q.nombre).join(' · ')}</p>}
+    {mostrarDescripcion && <p className="evento-descripcion">{larga && !completa ? descripcion.slice(0, CORTE_DESCRIPCION).trimEnd() + '…' : descripcion}</p>}
+    {(resumen ? descripcion : larga) && <button type="button" className="consola-boton" onClick={() => setCompleta(x => !x)}>
+      {completa ? (resumen ? '[ocultar la descripción]' : '[ver menos]') : (resumen ? '[ver la descripción completa]' : '[ver todo]')}
+    </button>}
+  </section>
+}
+
 function Veredicto({ v, evento, reglas }) {
   const plan = v.plan
   return <div className="eventos-veredicto">
@@ -243,6 +264,7 @@ function DetalleEvento({ evento, reglas, editar, actualizado, cerrar }) {
           {datos.map(([etiqueta, valor]) => <div key={etiqueta}><dt>{etiqueta}</dt><dd>{valor}</dd></div>)}
           {evento.url && <div><dt>web</dt><dd><a href={evento.url} target="_blank" rel="noreferrer">abrir la página del evento ↗</a></dd></div>}
         </dl>
+        <DeQueTrata evento={evento} />
         {evento.veredicto ? <Veredicto v={evento.veredicto} evento={evento} reglas={reglas} /> : <p className="tenue">sin evaluar todavía.</p>}
         {aviso && <p className="txt-error" role="status">{aviso}</p>}
       </div>
