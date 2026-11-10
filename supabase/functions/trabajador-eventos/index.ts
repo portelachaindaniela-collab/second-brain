@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { identificarCorrida, abrirCorrida, cerrarCorrida, HEADER_SECRETO } from "../_shared/trabajador.mjs";
 import {
-  TRABAJADOR, leerParametros, urlBusquedaEventbrite, candidatosDeBusqueda, filaDeDetalle,
+  TRABAJADOR, leerParametros, urlBusquedaEventbrite, urlCiudadLuma, urlBusquedaMeetup, FUENTES_SIN_TERMINO,
+  candidatosDeBusqueda, filaDeDetalle,
   claveEvento, diaAR, dentroDeVentana,
 } from "./logic.mjs";
 
@@ -35,11 +36,26 @@ const BUSCADORES: Record<string, (fuente: any, termino: string) => Promise<{ nom
     }
     return salida;
   },
+  // Sin término: la página de la ciudad trae los eventos populares (se filtran por palabras clave al abrir cada uno).
+  luma: async (fuente) => {
+    const ciudades: string[] = Array.isArray(fuente.ciudades) && fuente.ciudades.length ? fuente.ciudades : ["buenos-aires"];
+    const salida = [];
+    for (const ciudad of ciudades) salida.push(...candidatosDeBusqueda(await traer(urlCiudadLuma(ciudad))));
+    return salida;
+  },
+  meetup: async (fuente, termino) => {
+    const ubicaciones: string[] = Array.isArray(fuente.ubicaciones) && fuente.ubicaciones.length ? fuente.ubicaciones : ["ar--Buenos Aires"];
+    const salida = [];
+    for (const ubicacion of ubicaciones) salida.push(...candidatosDeBusqueda(await traer(urlBusquedaMeetup(ubicacion, termino))));
+    return salida;
+  },
 };
 
-// Solo el detalle de Eventbrite está implementado; una fuente nueva suma su lector de detalle acá.
+// Todas las fuentes publican el detalle en JSON-LD con el mismo formato; cambia solo cómo se lee la entrada.
 const DETALLE: Record<string, (url: string, p: any) => Promise<ReturnType<typeof filaDeDetalle>>> = {
   eventbrite: async (url, p) => filaDeDetalle(await traer(url), p),
+  luma: async (url, p) => filaDeDetalle(await traer(url), p),
+  meetup: async (url, p) => filaDeDetalle(await traer(url), p, { sinOfertasEsGratis: true }),
 };
 
 async function enTandas<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
@@ -59,7 +75,7 @@ async function buscar(admin: any, ownerId: string, parametros: unknown) {
   for (const fuente of p.fuentes) {
     const buscador = BUSCADORES[fuente.tipo];
     if (!buscador) { errores.push(`La fuente "${fuente.tipo}" todavía no está implementada.`); continue; }
-    for (const termino of p.terminos) {
+    for (const termino of FUENTES_SIN_TERMINO.has(fuente.tipo) ? ["(ciudad)"] : p.terminos) {
       try {
         const encontrados = await buscador(fuente, termino);
         busquedasOk++;

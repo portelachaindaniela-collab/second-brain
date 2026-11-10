@@ -95,3 +95,46 @@ test('detalle: descarta lo que no nombra ninguna palabra clave, mirando también
   const kcd = detalle({ name: 'KCD Argentina 2026', description: 'para los amantes de la tecnología' })
   assert.ok(filaDeDetalle(kcd, { palabras_clave: ['tecnología'] }).fila)
 })
+
+test('Luma y Meetup: URLs de la ciudad y de la búsqueda', async () => {
+  const { urlCiudadLuma, urlBusquedaMeetup, FUENTES_SIN_TERMINO } = await import('./logic.mjs')
+  assert.equal(urlCiudadLuma('buenos-aires'), 'https://luma.com/buenos-aires')
+  assert.equal(urlBusquedaMeetup('ar--Buenos Aires', 'inteligencia artificial'),
+    'https://www.meetup.com/find/?location=ar--Buenos%20Aires&source=EVENTS&keywords=inteligencia%20artificial')
+  assert.ok(FUENTES_SIN_TERMINO.has('luma'))
+  assert.ok(!FUENTES_SIN_TERMINO.has('meetup'))
+})
+
+test('candidatos de Meetup: eventos sueltos, sin ItemList', () => {
+  const html = ld({ '@type': 'Organization', name: 'Meetup' }) + ld([
+    { '@type': 'Event', name: ' Build Your First AI Agent', startDate: '2026-11-12T22:00:00.000Z', url: 'https://www.meetup.com/grupo/events/317120108/?x=1' },
+    { '@type': 'Event', name: 'Sin link', startDate: '2026-11-13T22:00:00.000Z' },
+  ])
+  assert.deepEqual(candidatosDeBusqueda(html), [
+    { nombre: 'Build Your First AI Agent', fecha: '2026-11-12', url: 'https://www.meetup.com/grupo/events/317120108/' },
+  ])
+})
+
+test('candidatos de Luma: ItemList de la página de la ciudad', () => {
+  const html = ld({ '@type': 'ItemList', itemListElement: [{ '@type': 'ListItem', position: 1, item: { '@type': 'Event', name: 'Ecommerce Night #19', startDate: '2026-11-11T19:00:00.000-03:00', url: 'https://luma.com/yl5d8ne4' } }] })
+  assert.deepEqual(candidatosDeBusqueda(html), [{ nombre: 'Ecommerce Night #19', fecha: '2026-11-11', url: 'https://luma.com/yl5d8ne4' }])
+})
+
+test('entrada: dólares de Luma con su moneda; Meetup sin precio es gratis', () => {
+  assert.deepEqual(entradaDe([{ price: 20, priceCurrency: 'usd' }]), { tiene_entrada: true, precio: 'USD 20' })
+  assert.deepEqual(entradaDe([{ price: 0, priceCurrency: 'usd' }]), { tiene_entrada: false, precio: null })
+  assert.deepEqual(entradaDe(null, { sinOfertasEsGratis: true }), { tiene_entrada: false, precio: null })
+  assert.deepEqual(entradaDe(null), { tiene_entrada: true, precio: null })
+})
+
+test('detalle de Luma: lugar y dirección del Place', () => {
+  const html = ld({ '@type': 'Event', name: 'Ecommerce Night #19', url: 'https://luma.com/yl5d8ne4', startDate: '2026-11-11T19:00:00.000-03:00', endDate: '2026-11-11T23:00:00.000-03:00',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode', description: 'Networking de ecommerce',
+    location: { '@type': 'Place', name: 'Workplace by IRSA', address: { '@type': 'PostalAddress', streetAddress: 'Workplace by IRSA' } },
+    offers: [{ '@type': 'Offer', price: 0, priceCurrency: 'usd' }] })
+  const { fila } = filaDeDetalle(html, { palabras_clave: ['ecommerce'] })
+  assert.equal(fila.nombre, 'Ecommerce Night #19')
+  assert.equal(fila.inicio_at, '2026-11-11T22:00:00.000Z')
+  assert.equal(fila.lugar, 'Workplace by IRSA')
+  assert.equal(fila.tiene_entrada, false)
+})

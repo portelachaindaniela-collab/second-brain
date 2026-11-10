@@ -7,7 +7,11 @@ export const ZONA = 'America/Argentina/Buenos_Aires'
 export const PARAMETROS_DEFECTO = {
   dias_adelante: 30,
   terminos: ['tecnología', 'inteligencia artificial', 'marketing digital', 'ciencia de datos'],
-  fuentes: [{ tipo: 'eventbrite', activa: true, ubicaciones: ['argentina--buenos-aires'], paginas: 1 }],
+  fuentes: [
+    { tipo: 'eventbrite', activa: true, ubicaciones: ['argentina--buenos-aires'], paginas: 1 },
+    { tipo: 'luma', activa: true, ciudades: ['buenos-aires'] },
+    { tipo: 'meetup', activa: true, ubicaciones: ['ar--Buenos Aires'] },
+  ],
   // El evento tiene que nombrar alguna en el título o la descripción: la búsqueda de Eventbrite es laxa y
   // rellena con lo que haya cerca (catas de vino, presentaciones de libros). Lista vacía = no filtra.
   palabras_clave: [
@@ -44,6 +48,17 @@ export function urlBusquedaEventbrite(ubicacion, termino, pagina = 1) {
   return `https://www.eventbrite.com.ar/d/${encodeURIComponent(ubicacion)}/${slug(termino)}/${pagina > 1 ? `?page=${pagina}` : ''}`
 }
 
+// Luma no busca por término: su página de ciudad lista los eventos populares y se lee una sola vez por corrida.
+export const FUENTES_SIN_TERMINO = new Set(['luma'])
+
+export function urlCiudadLuma(ciudad) {
+  return `https://luma.com/${encodeURIComponent(ciudad)}`
+}
+
+export function urlBusquedaMeetup(ubicacion, termino) {
+  return `https://www.meetup.com/find/?location=${encodeURIComponent(ubicacion)}&source=EVENTS&keywords=${encodeURIComponent(termino)}`
+}
+
 export function jsonLd(html) {
   const bloques = []
   for (const m of String(html).matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
@@ -59,9 +74,12 @@ export function limpiarUrl(u) {
 }
 
 // Lista de una búsqueda: nombre, fecha (sin hora) y link. Alcanza para descartar duplicados antes de abrir cada evento.
+// Eventbrite y Luma la publican como ItemList; Meetup, como eventos sueltos.
 export function candidatosDeBusqueda(html) {
-  const lista = jsonLd(html).find(x => x['@type'] === 'ItemList')
-  return (lista?.itemListElement ?? []).map(i => i?.item).filter(esEvento).map(e => ({
+  const bloques = jsonLd(html)
+  const lista = bloques.find(x => x['@type'] === 'ItemList')
+  const eventos = lista ? (lista.itemListElement ?? []).map(i => i?.item) : bloques
+  return eventos.filter(esEvento).map(e => ({
     nombre: limpiarNombre(e.name), fecha: String(e.startDate ?? '').slice(0, 10), url: limpiarUrl(e.url),
   })).filter(c => c.nombre && /^\d{4}-\d{2}-\d{2}$/.test(c.fecha) && c.url)
 }
@@ -83,17 +101,22 @@ export function claveEvento(nombre, dia) {
   return `${claveNombre(nombre)}|${dia}`
 }
 
-function formatoPesos(n) {
-  return `$${Math.round(n).toLocaleString('es-AR')}`
+// Pesos como "$5.000"; otra moneda (Luma cobra en dólares) lleva su código: "USD 20".
+function formatoPrecio(n, moneda) {
+  const m = String(moneda ?? 'ARS').toUpperCase()
+  const valor = Math.round(n).toLocaleString('es-AR')
+  return m === 'ARS' ? `$${valor}` : `${m} ${valor}`
 }
 
-export function entradaDe(offers) {
+// sinOfertasEsGratis: Meetup no publica precio en los eventos gratuitos, que son casi todos.
+export function entradaDe(offers, { sinOfertasEsGratis = false } = {}) {
   const lista = [offers].flat().filter(Boolean)
   const precios = lista.flatMap(o => [o.lowPrice, o.highPrice, o.price]).map(Number).filter(Number.isFinite)
-  if (!precios.length) return { tiene_entrada: true, precio: null }
+  if (!precios.length) return { tiene_entrada: !sinOfertasEsGratis, precio: null }
+  const moneda = lista.find(o => o.priceCurrency)?.priceCurrency
   const min = Math.min(...precios), max = Math.max(...precios)
   if (max === 0) return { tiene_entrada: false, precio: null }
-  return { tiene_entrada: true, precio: min === max || min === 0 ? formatoPesos(max) + (min === 0 ? ' (hay gratis)' : '') : `${formatoPesos(min)} – ${formatoPesos(max)}` }
+  return { tiene_entrada: true, precio: min === max || min === 0 ? formatoPrecio(max, moneda) + (min === 0 ? ' (hay gratis)' : '') : `${formatoPrecio(min, moneda)} – ${formatoPrecio(max, moneda)}` }
 }
 
 // Palabra entera, sin mayúsculas ni tildes: "ia" no coincide dentro de "Mitología".
@@ -104,7 +127,7 @@ export function coincidePalabra(texto, palabras) {
 }
 
 // Detalle de un evento → fila de la tabla eventos, o { descartado } si no sirve.
-export function filaDeDetalle(html, { incluir_online = false, palabras_clave = [] } = {}) {
+export function filaDeDetalle(html, { incluir_online = false, palabras_clave = [] } = {}, { sinOfertasEsGratis = false } = {}) {
   const e = jsonLd(html).find(esEvento)
   if (!e) return { descartado: 'sin datos de evento' }
   const estado = String(e.eventStatus ?? '')
@@ -123,7 +146,7 @@ export function filaDeDetalle(html, { incluir_online = false, palabras_clave = [
       lugar: limpiarNombre(e.location?.name) || null,
       direccion: (typeof direccion === 'string' ? direccion : limpiarNombre(direccion?.streetAddress)) || null,
       url: limpiarUrl(e.url),
-      ...entradaDe(e.offers),
+      ...entradaDe(e.offers, { sinOfertasEsGratis }),
     },
   }
 }
