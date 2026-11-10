@@ -37,3 +37,23 @@ test('fecha corta de la tarjeta, con la duración si son varios días', () => {
   assert.equal(fechaTarjeta('2026-10-01T12:00:00Z', '2026-10-02T21:00:00Z'), 'jue 01/10 · 09:00 · 2 días')
   assert.equal(fechaTarjeta('2026-10-01T12:00:00Z'), 'jue 01/10 · 09:00')
 })
+
+test('un plan va al calendario con lugar, web y entrada, y dura una hora si no tiene fin', async () => {
+  const { eventoParaCalendario } = await import('./eventos.mjs')
+  const cuerpo = eventoParaCalendario({ nombre: 'Meetup de datos', inicio_at: '2026-11-20T21:00:00Z', fin_at: null, lugar: 'Ciudad Cultural Konex', direccion: 'Sarmiento 3131', url: 'https://ejemplo.com', tiene_entrada: true, precio: '$5000' })
+  assert.equal(cuerpo.accion, 'crear')
+  assert.equal(cuerpo.title, 'Meetup de datos')
+  assert.equal(cuerpo.location, 'Ciudad Cultural Konex, Sarmiento 3131')
+  assert.equal(cuerpo.description, 'https://ejemplo.com\nEntrada: $5000')
+  assert.equal(cuerpo.starts_at, '2026-11-20T21:00:00.000Z')
+  assert.equal(cuerpo.ends_at, '2026-11-20T22:00:00.000Z')
+  assert.equal(cuerpo.all_day, false)
+})
+
+test('si el plan tiene fin, el evento del calendario termina a esa hora', async () => {
+  const { eventoParaCalendario } = await import('./eventos.mjs')
+  const cuerpo = eventoParaCalendario({ nombre: 'Taller', inicio_at: '2026-11-20T13:00:00Z', fin_at: '2026-11-20T17:00:00Z', tiene_entrada: false })
+  assert.equal(cuerpo.ends_at, '2026-11-20T17:00:00.000Z')
+  assert.equal(cuerpo.location, '')
+  assert.equal(cuerpo.description, '')
+})

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
-import { ESTADOS_EVENTO, VEREDICTO_TEXTO, aInputLocal, desdeInputLocal, fechaEvento, fechaTarjeta, textoCalculo, esPasado, reglasMasNuevas } from '../eventos.mjs'
+import { ESTADOS_EVENTO, VEREDICTO_TEXTO, aInputLocal, desdeInputLocal, fechaEvento, fechaTarjeta, textoCalculo, esPasado, reglasMasNuevas, eventoParaCalendario } from '../eventos.mjs'
 import { horaAR } from '../trabajadores.mjs'
 import { CabeceraPantalla, Bloques, Bloque, Pie } from '../estructura.jsx'
 import './Trabajadores.css'
@@ -206,12 +206,26 @@ function DetalleEvento({ evento, reglas, editar, actualizado, cerrar }) {
     actualizado(data)
   }
 
+  async function agregarACalendario() {
+    setOcupado('calendario'); setAviso('')
+    try {
+      const { data, error } = await supabase.functions.invoke('google-calendar-edit', { body: eventoParaCalendario(evento, Intl.DateTimeFormat().resolvedOptions().timeZone) })
+      let respuesta = data
+      if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
+      if (error || respuesta?.error || !respuesta?.evento) { setAviso(respuesta?.error || 'no se pudo agregar al calendario. probá de nuevo.'); return }
+      const { data: guardado, error: errorGuardar } = await supabase.from('eventos').update({ calendario_evento_id: respuesta.evento.id }).eq('id', evento.id).select().single()
+      if (errorGuardar) { setAviso('quedó en el calendario, pero no se pudo marcar acá: ' + errorGuardar.message); return }
+      actualizado(guardado)
+    } finally { setOcupado('') }
+  }
+
   const datos = [
     ['cuándo', fechaEvento(evento.inicio_at, evento.fin_at)],
     ['lugar', evento.lugar],
     ['dirección', evento.direccion],
     ['entrada', evento.tiene_entrada ? (evento.precio || 'con entrada, sin precio cargado') : 'libre'],
     ['agenda', evento.agenda && 'cargada'],
+    ['calendario', evento.calendario_evento_id && 'agregado ✓'],
     ['de dónde', evento.origen && evento.origen !== 'manual' ? `lo trajo el buscador (${evento.origen})` : 'cargado a mano'],
   ].filter(([, valor]) => valor)
 
@@ -234,6 +248,7 @@ function DetalleEvento({ evento, reglas, editar, actualizado, cerrar }) {
       </div>
       <div className="modal-foot evento-detalle-acciones">
         <button className="consola-boton consola-boton-fuerte" disabled={!!ocupado} onClick={evaluar}>{ocupado === 'evaluar' ? '[evaluando…]' : evento.veredicto ? '[re-evaluar]' : '[evaluar]'}</button>
+        {!evento.calendario_evento_id && <button className="consola-boton" disabled={!!ocupado} onClick={agregarACalendario}>{ocupado === 'calendario' ? '[agregando…]' : '[agregar a calendario]'}</button>}
         <button className="consola-boton" disabled={!!ocupado} onClick={editar}>[editar]</button>
         {evento.estado !== 'fui' && <button className="consola-boton" disabled={!!ocupado} onClick={() => marcar('fui')}>[fui]</button>}
         {evento.estado !== 'no_fui' && <button className="consola-boton" disabled={!!ocupado} onClick={() => marcar('no_fui')}>[no fui]</button>}

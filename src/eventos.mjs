@@ -61,3 +61,25 @@ export function fechaTarjeta(inicio, fin) {
   const dias = Math.round((Date.parse(`${f.fecha}T12:00:00Z`) - Date.parse(`${i.fecha}T12:00:00Z`)) / 86_400_000) + 1
   return dias > 1 ? `${base} · ${dias} días` : base
 }
+
+// Lo que se manda a google-calendar-edit para agregar un plan al calendario. Sin hora de fin, dura una hora
+// (igual que un evento nuevo del calendario). La descripción junta la web y la entrada para tenerlas a mano.
+export function eventoParaCalendario(evento, timeZone = 'America/Argentina/Buenos_Aires') {
+  const inicio = new Date(evento.inicio_at)
+  const fin = evento.fin_at && Date.parse(evento.fin_at) > inicio.getTime() ? new Date(evento.fin_at) : new Date(inicio.getTime() + 3600_000)
+  const descripcion = [
+    evento.url,
+    evento.tiene_entrada ? `Entrada: ${evento.precio || 'con entrada'}` : null,
+  ].filter(Boolean).join('\n')
+  return {
+    accion: 'crear',
+    title: evento.nombre,
+    location: [evento.lugar, evento.direccion].filter(Boolean).join(', '),
+    description: descripcion,
+    all_day: false,
+    starts_at: inicio.toISOString(),
+    ends_at: fin.toISOString(),
+    time_zone: timeZone,
+    project_id: null,
+  }
+}
