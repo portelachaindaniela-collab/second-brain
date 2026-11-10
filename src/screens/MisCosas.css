@@ -1,0 +1,27 @@
+/* Mis cosas: un bloque por dispositivo con su mapa; abajo, cómo configurar MacroDroid. */
+.mis-cosas .txt-aviso { color: var(--amber-600); }
+.cosas-motivo { margin: 0 0 var(--esp-12); font-size: var(--letra-13); color: var(--gray-700); line-height: 1.5; }
+.cosas-mapa { display: block; width: 100%; height: 260px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); background: var(--surface-inset); }
+.cosas-acciones { display: flex; gap: var(--esp-8); flex-wrap: wrap; margin-top: var(--esp-12); }
+.cosas-anteriores { margin-top: var(--esp-12); font-size: var(--letra-13); }
+.cosas-anteriores summary { cursor: pointer; color: var(--gray-500); }
+.cosas-anteriores ul { margin: var(--esp-8) 0 0; display: flex; flex-direction: column; gap: var(--esp-4); }
+.cosas-anteriores a { color: var(--gray-900); }
+.cosas-oficiales { display: flex; flex-direction: column; gap: var(--esp-8); }
+.cosas-oficiales li { display: flex; align-items: center; gap: var(--esp-12); flex-wrap: wrap; font-size: var(--letra-13); }
+.cosas-token { margin-bottom: var(--esp-16); }
+.cosas-token p { margin: 0 0 var(--esp-8); font-size: var(--letra-13); }
+.cosas-guia ol { display: flex; flex-direction: column; gap: var(--esp-16); margin: var(--esp-12) 0 0; }
+.cosas-paso { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: var(--esp-12); font-size: var(--letra-13); line-height: 1.55; color: var(--gray-700); }
+.cosas-paso strong { color: var(--gray-900); }
+.cosas-paso-n { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-100); color: var(--accent); font-size: var(--letra-12); font-weight: 700; }
+.cosas-http { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: var(--esp-8) var(--esp-12); margin: var(--esp-8) 0; }
+.cosas-http dt { color: var(--gray-500); }
+.cosas-http dd { margin: 0; display: flex; flex-direction: column; gap: var(--esp-4); min-width: 0; }
+.cosas-codigo { display: flex; align-items: flex-start; gap: var(--esp-8); margin: var(--esp-4) 0; }
+.cosas-codigo code { flex: 1; min-width: 0; padding: var(--esp-8); border-radius: var(--radius-sm); background: var(--surface-inset); font-family: var(--font-mono); font-size: var(--letra-12); color: var(--gray-900); overflow-wrap: anywhere; }
+.cosas-nombre { width: auto; max-width: 220px; margin: var(--esp-8) 0 var(--esp-4); }
+@media (max-width: 560px) {
+  .cosas-mapa { height: 220px; }
+  .cosas-http { grid-template-columns: minmax(0, 1fr); }
+}

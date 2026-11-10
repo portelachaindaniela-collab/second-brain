@@ -208,6 +208,7 @@ label { display: block; font-size: var(--letra-12); font-weight: 600; color: var
   background: var(--white); color: var(--gray-700);
 }
 .btn:hover { background: var(--gray-100); }
+a.btn { text-decoration: none; }
 .btn-primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-text); }
 .btn-danger { background: var(--surface); color: var(--red-600); border-color: var(--red-borde); }

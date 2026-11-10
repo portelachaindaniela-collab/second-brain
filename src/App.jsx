@@ -12,6 +12,8 @@ import Trabajadores from './screens/Trabajadores.jsx'
 import Eventos from './screens/Eventos.jsx'
 import MiNicho from './screens/MiNicho.jsx'
 import Postulaciones from './screens/Postulaciones.jsx'
+import MisCosas from './screens/MisCosas.jsx'
+import { puedeMandarDesdeAca, mandarAlAbrir, mandarMiUbicacion } from './miUbicacion.js'
 import Login from './Login.jsx'
 import BS67 from './bs67/BS67.jsx'
 import MailCalendario from './screens/MailCalendario.jsx'
@@ -61,6 +63,12 @@ export default function App() {
   const [pantallasVisitadas, setPantallasVisitadas] = useState(() => new Set(['hoy']))
 
   useEffect(() => { setPantallasVisitadas(prev => prev.has(pantalla) ? prev : new Set(prev).add(pantalla)) }, [pantalla])
+  // En el celular, si está activado en Mis cosas, SB manda su ubicación cada vez que se abre. Si falla no molesta:
+  // la próxima vez que se abra lo vuelve a intentar.
+  const ownerUbicacion = session?.user?.id
+  useEffect(() => {
+    if (ownerUbicacion && puedeMandarDesdeAca() && mandarAlAbrir()) mandarMiUbicacion(ownerUbicacion, 'periodico').catch(() => {})
+  }, [ownerUbicacion])
 
   useEffect(() => {
     function leerEnVozAlta(texto) {
@@ -233,6 +241,7 @@ export default function App() {
           <li><button className={`nav-item${pantalla === 'metricas' ? ' active' : ''}`} onClick={() => setPantalla('metricas')}>Métricas</button></li>
           <li><button className={`nav-item${pantalla === 'busquedas' ? ' active' : ''}`} onClick={() => setPantalla('busquedas')}>Búsquedas en Google</button></li>
           <li><button className={`nav-item${pantalla === 'cursos' ? ' active' : ''}`} onClick={() => setPantalla('cursos')}>Cursos</button></li>
+          <li><button className={`nav-item${pantalla === 'miscosas' ? ' active' : ''}`} onClick={() => setPantalla('miscosas')}>Mis cosas</button></li>
         </ul>
 
         <div className="nav-group-label">Proyectos</div>
@@ -299,6 +308,7 @@ export default function App() {
             {pantalla === 'metricas' && 'Métricas'}
             {pantalla === 'busquedas' && 'Búsquedas en Google'}
             {pantalla === 'cursos' && 'Cursos'}
+            {pantalla === 'miscosas' && 'Mis cosas'}
             {pantalla === 'escribir' && 'Escribir'}
             {pantalla === 'proyecto' && (proyectoActual?.name || 'Proyecto')}
             {pantalla === 'pantalla' && (pantallaWebActual?.nombre || 'Pantalla')}
@@ -319,6 +329,7 @@ export default function App() {
           {pantallasVisitadas.has('metricas') && <div hidden={pantalla !== 'metricas'}><Metricas key={session.user.id} ownerId={session.user.id} /></div>}
           {pantallasVisitadas.has('busquedas') && <div hidden={pantalla !== 'busquedas'}><BusquedasGoogle key={session.user.id} /></div>}
           {pantallasVisitadas.has('cursos') && <div hidden={pantalla !== 'cursos'}><Cursos key={revisionBot} /></div>}
+          {pantallasVisitadas.has('miscosas') && <div hidden={pantalla !== 'miscosas'}><MisCosas key={session.user.id} ownerId={session.user.id} /></div>}
           {pantallasVisitadas.has('escribir') && <div hidden={pantalla !== 'escribir'}><Suspense fallback={<p className="empty-state">Abriendo el editor…</p>}><Escritor key={session.user.id} ownerId={session.user.id} /></Suspense></div>}
           {pantalla === 'proyecto' && proyectoActual && <ProyectoShell hoja={hojaProyecto} setHoja={setHojaProyecto} key={`${proyectoActual.id}-${revisionBot}`} abrirMail={abrirMail} proyecto={proyectoActual} recargarProyectos={cargarProyectos} />}
           {pantalla === 'pantalla' && pantallaWebActual && <Pantalla pantalla={pantallaWebActual} volver={() => setPantalla(pantallaOrigen)} />}
