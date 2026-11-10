@@ -138,3 +138,11 @@ test('detalle de Luma: lugar y dirección del Place', () => {
   assert.equal(fila.lugar, 'Workplace by IRSA')
   assert.equal(fila.tiene_entrada, false)
 })
+
+test('el tope por corrida se reparte entre fuentes, en ronda', async () => {
+  const { repartirPorFuente } = await import('./logic.mjs')
+  const c = (fuente, n) => Array.from({ length: n }, (_, i) => ({ fuente, url: `${fuente}${i}` }))
+  const lista = [...c('eventbrite', 5), ...c('luma', 2), ...c('meetup', 1)]
+  assert.deepEqual(repartirPorFuente(lista, 5).map(x => x.url), ['eventbrite0', 'luma0', 'meetup0', 'eventbrite1', 'luma1'])
+  assert.equal(repartirPorFuente(lista, 100).length, 8)
+})

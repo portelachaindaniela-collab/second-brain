@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { identificarCorrida, abrirCorrida, cerrarCorrida, HEADER_SECRETO } from "../_shared/trabajador.mjs";
 import {
   TRABAJADOR, leerParametros, urlBusquedaEventbrite, urlCiudadLuma, urlBusquedaMeetup, FUENTES_SIN_TERMINO,
-  candidatosDeBusqueda, filaDeDetalle,
+  candidatosDeBusqueda, filaDeDetalle, repartirPorFuente,
   claveEvento, diaAR, dentroDeVentana,
 } from "./logic.mjs";
 
@@ -99,7 +99,7 @@ async function buscar(admin: any, ownerId: string, parametros: unknown) {
   const urls = new Set((existentes ?? []).map((e: any) => e.url).filter(Boolean));
 
   const nuevos = enVentana.filter(c => !urls.has(c.url) && !claves.has(claveEvento(c.nombre, c.fecha)));
-  const aAbrir = nuevos.slice(0, p.max_detalles_por_corrida);
+  const aAbrir = repartirPorFuente(nuevos, p.max_detalles_por_corrida);
   const descartados: Record<string, number> = {};
   const filas: any[] = [];
 

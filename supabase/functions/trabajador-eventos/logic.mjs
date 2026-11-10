@@ -156,3 +156,19 @@ export function dentroDeVentana(dia, ahora, diasAdelante) {
   const limite = diaAR(ahora + diasAdelante * 86_400_000)
   return dia >= hoy && dia <= limite
 }
+
+// Los que se abren por corrida tienen tope: se toman de a uno por fuente, en ronda, para que una fuente
+// con muchos resultados (Eventbrite) no deje siempre afuera a las otras.
+export function repartirPorFuente(candidatos, tope) {
+  const porFuente = new Map()
+  for (const c of candidatos) {
+    if (!porFuente.has(c.fuente)) porFuente.set(c.fuente, [])
+    porFuente.get(c.fuente).push(c)
+  }
+  const colas = [...porFuente.values()]
+  const salida = []
+  for (let i = 0; salida.length < tope && colas.some(q => i < q.length); i++) {
+    for (const q of colas) if (i < q.length && salida.length < tope) salida.push(q[i])
+  }
+  return salida
+}
