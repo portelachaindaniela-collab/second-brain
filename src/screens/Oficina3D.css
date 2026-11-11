@@ -1,11 +1,26 @@
-/* La Oficina en 3D: el lienzo y las etiquetas (nombres, burbujas y "z z z") que van encima como HTML. */
+/* La Oficina en 3D: el lienzo y las etiquetas (nombres, burbujas y "z z z") que van encima como HTML.
+   El fondo cambia con la hora de Buenos Aires (data-fase: dia, amanecer, atardecer, noche). */
 .oficina-3d {
   position: relative;
   border-radius: var(--radius);
   overflow: hidden;
   background: radial-gradient(120% 90% at 50% 0%, #75689c 0%, #5b4f7d 70%);
   cursor: grab;
+  transition: background 2s;
 }
+.oficina-3d[data-fase="atardecer"], .oficina-3d[data-fase="amanecer"] { background: radial-gradient(120% 90% at 50% 0%, #f2a37a 0%, #8a5f8f 70%); }
+.oficina-3d[data-fase="noche"] { background: radial-gradient(120% 90% at 50% 0%, #2f3566 0%, #141832 75%); }
+.o3-escenario { position: relative; }
+.o3-escenario canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Botones de cámara, abajo a la derecha. */
+.o3-botones { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; z-index: 2; }
+.o3-botones button {
+  width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer; font: 700 16px/1 system-ui, sans-serif;
+  color: #3b2f4f; background: rgba(255, 250, 243, .92); box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+}
+.o3-botones button:hover { background: #fff; }
+.o3-botones button:focus-visible { outline: 2px solid var(--accent); }
 .oficina-3d canvas { display: block; }
 .oficina-3d canvas:active { cursor: grabbing; }
 .o3-textos { position: absolute; inset: 0; pointer-events: none; }
@@ -20,6 +35,11 @@
 .o3-cartel.estado-pausado, .o3-cartel.estado-nuevo { color: #8f86a8; }
 .o3-cartel.is-elegido { outline: 2px solid var(--accent); }
 .o3-cartel.o3-jefa { color: #f6dd8b; background: #6e432a; font-weight: 700; }
+.o3-cartel.o3-yo { color: #3b2f4f; background: #f6dd8b; font-weight: 800; pointer-events: none; }
+.o3-lejos .o3-cartel.o3-yo { display: block; }
+.o3-cartel.o3-roberta { color: #7a4f2c; background: #fbe7cf; pointer-events: none; }
+/* En la vista de reunión no hacen falta los carteles de las oficinas. */
+.o3-en-reunion .o3-cartel, .o3-en-reunion .o3-botones { display: none !important; }
 .o3-lejos .o3-cartel:not(.is-elegido) { display: none; }
 
 .o3-burbuja {
@@ -29,9 +49,28 @@
 }
 .o3-burbuja.estado-trabajando::after { content: '•••'; letter-spacing: 1px; animation: o3-puntos 1.2s infinite; }
 .o3-burbuja.estado-error { background: #e85d6a; border-color: #e85d6a; color: #fff; animation: o3-late 1s ease-in-out infinite; }
+.o3-burbuja.estado-habla { border-color: #f0a63c; background: #f0a63c; color: #fff; font-size: 12px; animation: o3-late 1.2s ease-in-out infinite; }
+.o3-burbuja.estado-turno { border-color: #6b5594; background: #6b5594; color: #fff; font-size: 10.5px; padding: 0 8px; }
 .o3-zetas { font: 800 13px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .35); animation: o3-zetas 2.6s ease-in-out infinite; }
 
 @keyframes o3-puntos { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 @keyframes o3-late { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
 @keyframes o3-zetas { 0% { opacity: 0; transform: translateY(4px); } 50% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
-@media (prefers-reduced-motion: reduce) { .o3-burbuja, .o3-burbuja::after, .o3-zetas { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .o3-burbuja, .o3-burbuja::after, .o3-burbuja.estado-habla { border-color: #f0a63c; background: #f0a63c; color: #fff; font-size: 12px; animation: o3-late 1.2s ease-in-out infinite; }
+.o3-burbuja.estado-turno { border-color: #6b5594; background: #6b5594; color: #fff; font-size: 10.5px; padding: 0 8px; }
+.o3-zetas { animation: none !important; } }
+
+/* Pantalla completa: la vista de reunión (sala o despacho). La arma Oficina.jsx con la barra, los participantes,
+   los subtítulos y los controles alrededor de la escena. */
+.oficina-3d.o3-completa {
+  position: fixed; inset: 0; z-index: 95; border-radius: 0; background: #17151f; cursor: default;
+  display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "barra barra" "video gente" "sub gente" "controles controles";
+}
+.o3-completa .o3-escenario { grid-area: video; height: auto !important; min-height: 0; margin: 10px 0 0 10px; border-radius: 10px; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 0%, #75689c 0%, #5b4f7d 70%); }
+@media (max-width: 780px) {
+  .oficina-3d.o3-completa { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas: "barra" "video" "sub" "gente" "controles"; }
+  .o3-completa .o3-escenario { margin: 6px 6px 0; }
+}

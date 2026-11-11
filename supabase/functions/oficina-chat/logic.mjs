@@ -81,3 +81,67 @@ Cómo responder:
 export function armarMensajes(c, mensajes, hoy) {
   return [{ role: 'system', content: sistema(c, hoy) }, ...mensajes]
 }
+
+// ---------- Reunión ----------
+// { reunion: true, asistentes: ['up:redactor', ...], mensajes } — Daniela habla con todos los que vinieron.
+// Responde una sola llamada a la IA con los que tengan algo que decir: { respuestas: [{ agente, texto }] }.
+export const MAX_ASISTENTES = 24
+const MAX_REGISTRO_REUNION = 4
+
+export function validarReunion(body) {
+  const ids = Array.isArray(body?.asistentes) ? [...new Set(body.asistentes.map(String))] : []
+  const asistentes = ids.map(id => ({ id, ...partirId(id) })).filter(a => a.equipo && (a.equipo !== 'up' || AGENTES_UP[a.clave]))
+  if (!asistentes.length || asistentes.length !== ids.length || asistentes.length > MAX_ASISTENTES) return { ok: false, error: 'Asistentes inválidos.' }
+  if (!Array.isArray(body?.mensajes) || !body.mensajes.length) return { ok: false, error: 'Falta el mensaje.' }
+  const mensajes = body.mensajes.slice(-16).map(m => ({
+    role: m?.role === 'assistant' ? 'assistant' : 'user',
+    content: String(m?.content ?? '').slice(0, MAX_CARACTERES).trim(),
+  })).filter(m => m.content)
+  if (!mensajes.length || mensajes.at(-1).role !== 'user') return { ok: false, error: 'Falta el mensaje.' }
+  return { ok: true, asistentes, mensajes }
+}
+
+// participantes: [{ id, c }] con c = contexto() de cada uno.
+export function sistemaReunion(participantes, hoy) {
+  const fichas = participantes.map(({ id, c }) => [
+    `### ${c.nombre} (id: ${id}) — ${c.rol}`,
+    `Qué hace: ${recortar(c.descripcion, 300)}`,
+    `Registro reciente:`,
+    ...(c.registro.length ? c.registro.slice(0, MAX_REGISTRO_REUNION).map(l => recortar(l, 220)) : ['(vacío)']),
+  ].join('\n')).join('\n\n')
+  return `Es una reunión en la Oficina de agentes del Second Brain de Daniela, por videollamada. Hoy es ${hoy}.
+Daniela habla con todos los agentes que vinieron. Vos das voz a esos agentes: cada uno habla en primera persona,
+en español rioplatense, como en una reunión de trabajo normal (natural, cordial, concreto).
+
+Participantes y lo que sabe cada uno (es TODO lo que saben; no inventen fechas, cifras ni resultados):
+
+${fichas}
+
+Cómo se responde:
+- Hablan solo los que tienen algo que aportar a lo que dijo Daniela (normalmente 1 a 3). Si nombra a alguien, responde ese.
+  Si pide que hablen todos (una ronda, "¿cómo están todos?"), responde cada uno con una oración.
+- Cada respuesta: 1 a 3 oraciones. Pueden hablarse entre ellos o preguntarle algo a Daniela si lo necesitan.
+- Nadie puede cambiar nada desde la reunión (correr, aprobar, editar): si Daniela pide eso, el agente dice en qué pantalla se hace.
+- Si nadie sabe algo, el que más se acerque lo dice con honestidad.
+
+Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}]}`
+}
+
+// Los mensajes de los agentes vuelven al modelo como "Nombre: texto" para que sepa quién dijo qué.
+export function mensajesReunion(participantes, mensajes, hoy) {
+  return [{ role: 'system', content: sistemaReunion(participantes, hoy) }, ...mensajes]
+}
+
+// Lee la respuesta del modelo: tolera texto alrededor y descarta agentes que no están en la reunión.
+export function leerRespuestas(texto, idsValidos) {
+  const crudo = String(texto ?? '')
+  const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
+  let datos = null
+  if (desde >= 0 && hasta > desde) { try { datos = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { datos = null } }
+  const lista = Array.isArray(datos?.respuestas) ? datos.respuestas : []
+  const validos = new Set(idsValidos)
+  return lista
+    .map(r => ({ agente: String(r?.agente ?? ''), texto: String(r?.texto ?? '').trim().slice(0, 1200) }))
+    .filter(r => validos.has(r.agente) && r.texto)
+    .slice(0, MAX_ASISTENTES)
+}

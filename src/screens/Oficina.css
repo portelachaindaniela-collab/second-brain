@@ -84,3 +84,58 @@
 @media (max-width: 780px) {
   .oficina-panel { top: auto; left: 0; width: 100vw; height: 82vh; border-left: 0; border-top: 1px solid var(--gray-300); border-radius: var(--radius) var(--radius) 0 0; }
 }
+
+/* ---------- Reunión ---------- */
+.oficina-ayuda { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-8); }
+
+.reunion-convocar { max-width: 520px; }
+.reunion-grupo { border: 0; margin: 0 0 var(--esp-16); padding: 0; display: flex; flex-direction: column; gap: var(--esp-8); }
+.reunion-grupo legend { font-size: var(--letra-12); color: var(--gray-500); margin-bottom: var(--esp-8); padding: 0; }
+.reunion-opcion { display: flex; gap: var(--esp-8); align-items: flex-start; padding: var(--esp-8) var(--esp-12); border: 1px solid var(--gray-300); border-radius: var(--radius); cursor: pointer; font-size: var(--letra-13); }
+.reunion-opcion:has(input:checked) { border-color: var(--accent); background: var(--accent-100); }
+.reunion-opcion input { width: auto; flex: 0 0 auto; margin: 2px 0 0; accent-color: var(--accent); }
+.reunion-opcion > span { flex: 1; min-width: 0; text-align: left; }
+
+/* Aviso de llegada, encima de la escena. */
+.reunion-aviso {
+  position: absolute; top: 10px; left: 10px; z-index: 3; max-width: min(320px, calc(100% - 20px)); max-height: calc(100% - 20px); overflow: auto;
+  padding: var(--esp-12); border-radius: var(--radius); background: rgba(23, 21, 31, .9); color: #f3effa; font-size: var(--letra-12);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+}
+.reunion-aviso p { margin: 0 0 var(--esp-4); }
+.reunion-aviso .tenue { color: #b9b2cc; }
+.reunion-aviso ul { list-style: none; margin: var(--esp-8) 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--esp-4); }
+.reunion-aviso li { padding: 1px 8px; border-radius: 999px; background: rgba(255, 255, 255, .1); color: #d9d3e8; }
+.reunion-aviso li.llego { background: rgba(63, 184, 120, .25); color: #b9f0d2; }
+.reunion-aviso-botones { display: flex; gap: var(--esp-8); }
+
+/* Vista de reunión en pantalla completa (sobre la escena 3D, que ocupa el área "video"). */
+.reunion-barra { grid-area: barra; display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-8) var(--esp-16); padding: var(--esp-12) var(--esp-16); color: #f3effa; font-size: var(--letra-14); border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.reunion-barra .tenue { color: #b9b2cc; font-size: var(--letra-12); }
+.reunion-voz { margin-left: auto; display: flex; align-items: center; gap: var(--esp-4); font-size: var(--letra-12); color: #d9d3e8; cursor: pointer; }
+.reunion-gente { grid-area: gente; padding: var(--esp-12); overflow-y: auto; color: #e9e4f5; font-size: var(--letra-13); min-height: 0; }
+.reunion-gente-titulo { margin: 0 0 var(--esp-8); font-size: var(--letra-11); text-transform: uppercase; letter-spacing: .06em; color: #9d95b5; }
+.reunion-gente ul, .reunion-gente ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.reunion-gente li { display: flex; align-items: center; gap: var(--esp-8); padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, .05); border: 1px solid transparent; }
+.reunion-gente li .tenue { color: #9d95b5; font-size: var(--letra-11); }
+.reunion-gente li.habla { border-color: #f0a63c; background: rgba(240, 166, 60, .14); }
+.reunion-gente li.turno-en-tu-oficina { border-color: #9f86df; }
+.reunion-gente li.turno-atendido { opacity: .55; }
+.reunion-punto { width: 8px; height: 8px; border-radius: 50%; background: #6b6680; flex-shrink: 0; }
+.reunion-gente li.habla .reunion-punto { background: #f0a63c; box-shadow: 0 0 0 4px rgba(240, 166, 60, .25); }
+.reunion-sub { grid-area: sub; padding: var(--esp-8) var(--esp-16) 0 var(--esp-16); display: flex; flex-direction: column; gap: var(--esp-8); min-height: 0; }
+.reunion-subtitulo { margin: 0; padding: var(--esp-8) var(--esp-12); border-radius: 8px; background: rgba(0, 0, 0, .55); color: #fff; font-size: var(--letra-14); line-height: 1.45; }
+.reunion-mensajes { max-height: 22vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; font-size: var(--letra-12); color: #d9d3e8; }
+.reunion-mensaje { margin: 0; overflow-wrap: anywhere; }
+.reunion-mensaje.de-yo { color: #f6dd8b; }
+.reunion-escribir { display: flex; gap: var(--esp-8); align-items: center; }
+.reunion-escribir input { flex: 1; min-width: 0; }
+.reunion-controles { grid-area: controles; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-8); padding: var(--esp-12) var(--esp-16); border-top: 1px solid rgba(255, 255, 255, .08); color: #9d95b5; font-size: var(--letra-12); }
+.reunion-controles .btn-primary { margin-right: auto; }
+.btn.reunion-salir { background: #e85d6a; border-color: #e85d6a; color: #fff; }
+.btn.reunion-salir:hover { background: #d84b58; border-color: #d84b58; }
+@media (max-width: 780px) {
+  .reunion-gente ul, .reunion-gente ol { flex-direction: row; overflow-x: auto; }
+  .reunion-gente li { flex-shrink: 0; }
+  .reunion-mensajes { max-height: 16vh; }
+}

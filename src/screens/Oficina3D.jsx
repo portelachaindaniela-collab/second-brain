@@ -2,29 +2,43 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
-import { crearSala, crearOficina, crearEscritorio, crearPuestoMesa, vaciarMateriales, COLORES } from '../oficina3d/mundo.js'
+import { crearSala, crearOficina, crearEscritorio, crearPuestoMesa, crearDireccion, vaciarMateriales, vidrioVentana, COLORES } from '../oficina3d/mundo.js'
 import { crearPersonaje, posar, liberar } from '../oficina3d/personaje.js'
-import { lugares, mesaUp, rutinas, camino, largo, puntoEn, momentoRutina, variante, agujas, FONDO_OFICINAS, ANCHO_OFICINAS_IZQ } from '../oficinaPlano.mjs'
+import { crearRoberta, moverRoberta } from '../oficina3d/roberta.js'
+import {
+  lugares, mesaUp, mesaPdg, mesaAdmin, rutinas, camino, largo, puntoEn, momentoRutina, variante, agujas, alturaPiso,
+  ACCESORIOS, luzDelDia, VELOCIDAD, PISO, asientosReunion, alPasillo, haciaPasillo, caminoReunion, asientosEspera,
+  caminoEspera, caminoTurno, caminoVueltaTurno, DANIELA, VISITA, ROBERTA,
+} from '../oficinaPlano.mjs'
+import { obstaculos, grilla, buscarCamino } from '../oficinaCaminar.mjs'
 import { ESTADOS } from '../oficina.mjs'
 import './Oficina3D.css'
 
-// La Oficina en 3D (three.js): cada trabajador y cada comercial de PDG en su oficina (la de María, la jefa, es la mejor),
-// los de UP en un tablón compartido, y las salas comunes. Lo que hace cada uno sale de su estado real: trabajando
-// teclea (y su pantalla brilla en verde), con un problema se agarra la cabeza (pantalla roja y "!"), libre trabaja y
-// cada tanto sale a la cafetería, el comedor, el ocio o el ping pong y vuelve, pausado duerme en un puf.
-// Se gira arrastrando, se acerca con la rueda o con dos dedos, y tocando un agente se abre su panel.
-const ORDEN = ['trabajadores', 'up', 'pdg']
-const ROPA_EQUIPO = { up: '#d9734e', pdg: '#3fa98a' }
-const CENTRO = new THREE.Vector3(18, 0.4, 11)
-const JEFA = 'maria'
+// La Oficina en 3D (three.js), con jerarquía de la entrada al fondo: Administración (las tareas programadas en una
+// mesa), la mampara, los tablones de UP y PDG comercial, las oficinas de los trabajadores (compartidas por tema) y,
+// sobre la tarima del fondo, las oficinas de María y de Daniela, la jefa de todos.
+// Lo que hace cada agente sale de su estado real: trabajando teclea (pantalla verde), con un problema se agarra la
+// cabeza (pantalla roja y "!"), libre trabaja y cada tanto sale de descanso, pausado duerme en un puf.
+// Además: la luz sigue la hora de Buenos Aires; al elegir un agente la cámara lo sigue; con doble click Daniela
+// camina adonde quiera; y las reuniones (en la sala, todos juntos, o en su oficina, por turnos) se ven acá.
+const ORDEN = ['trabajadores', 'up', 'pdg', 'admin']
+const ROPA_EQUIPO = { up: '#d9734e', pdg: '#3fa98a', admin: '#8a7fc4' }
+const COLOR_PUESTO = { up: COLORES.durazno, pdg: COLORES.menta, admin: COLORES.lila }
+const CENTRO = new THREE.Vector3(22.5, 0.4, 13.25)
+// Videollamada: la cámara está en la pantalla de la sala (el lado sin sillas) y ve la herradura entera de frente.
+const CAMARA_SALA = { pos: new THREE.Vector3(10.2, 2.35, 4.0), target: new THREE.Vector3(5.85, 0.75, 4.0), fov: 56 }
+const CAMARA_DESPACHO = { pos: new THREE.Vector3(37.25, 1.92, 1.05), target: new THREE.Vector3(36.5, 1.12, 4.7), fov: 46 }
 const nombreCorto = n => String(n).split(' (')[0]
+// Al costado de la silla de Daniela, del lado libre: por ahí se levanta y se vuelve a sentar.
+const COSTADO_SILLA = { x: DANIELA.sentado.x + 1.7, y: DANIELA.sentado.y }
+const reducido = () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+const suaveIn = x => (x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2)
 
 function colorRopa(a) {
   if (!a.color) return ROPA_EQUIPO[a.equipo] ?? COLORES.lila
   const css = getComputedStyle(document.documentElement).getPropertyValue(`--id-${a.color}`).trim()
   return css || COLORES.lila
 }
-const reducido = () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
 
 // El CSS2DRenderer ubica cada etiqueta con transform: lo visible (y animado) va en un elemento de adentro.
 function etiqueta(clase, texto, alClic) {
@@ -39,17 +53,26 @@ function etiqueta(clase, texto, alClic) {
   return obj
 }
 
-export default function Oficina3D({ agentes, elegidoId, abrir }) {
+// reunion: null o { id, modo: 'sala' | 'turnos', estado: 'convocada' | 'en_curso' | 'volviendo', asistentes: [ids],
+//   inicio, vuelta, turnos: { [id]: { llamado, fin } } }. hablando: id del que habla en la reunión.
+// pantallaCompleta: la vista tipo videollamada (la arma Oficina.jsx con children encima de la escena).
+export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, hablando = null, alPlanificar, alVolvieron,
+  volverDaniela = 0, alMoverDaniela, pantallaCompleta = false, reloj = Date.now, children }) {
   const marco = useRef(null)
-  const datos = useRef({ agentes, elegidoId, abrir, rut: rutinas(agentes) })
-  // Cada render deja a mano lo último (estados, elegido, abrir): el cuadro de animación lo lee sin rearmar la escena.
-  useEffect(() => { datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes) } })
+  const escenario = useRef(null)
+  const datos = useRef(null)
+  datos.current ??= { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj }
+  // Cada render deja a mano lo último: el cuadro de animación lo lee sin rearmar la escena.
+  useEffect(() => {
+    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj }
+  })
   // La escena se arma de nuevo solo si cambia quiénes están (no cuando cambia su estado).
-  const firma = agentes.map(a => `${a.id}`).join('|')
+  const firma = agentes.map(a => a.id).join('|')
 
   useEffect(() => {
     const contenedor = marco.current
-    if (!contenedor) return
+    const caja = escenario.current
+    if (!contenedor || !caja) return
     const sinMovimiento = reducido()
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
@@ -58,69 +81,89 @@ export default function Oficina3D({ agentes, elegidoId, abrir }) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.05
     renderer.outputColorSpace = THREE.SRGBColorSpace
-    contenedor.appendChild(renderer.domElement)
+    renderer.domElement.tabIndex = 0
+    caja.appendChild(renderer.domElement)
     const textos = new CSS2DRenderer()
     textos.domElement.className = 'o3-textos'
-    contenedor.appendChild(textos.domElement)
+    caja.appendChild(textos.domElement)
 
+    // Luces: cielo, sol (se mueve con la hora) y un relleno suave.
     const escena = new THREE.Scene()
-    escena.add(new THREE.HemisphereLight('#ffffff', '#cbb9ee', 1.35))
+    const cielo = new THREE.HemisphereLight('#ffffff', '#cbb9ee', 1.35)
+    escena.add(cielo)
     const sol = new THREE.DirectionalLight('#fff3df', 2.3)
-    sol.position.set(42, 34, 30)
     sol.target.position.copy(CENTRO)
     sol.castShadow = true
     sol.shadow.mapSize.set(2048, 2048)
-    Object.assign(sol.shadow.camera, { left: -27, right: 27, top: 22, bottom: -22, near: 5, far: 110 })
+    Object.assign(sol.shadow.camera, { left: -32, right: 32, top: 24, bottom: -24, near: 5, far: 130 })
     sol.shadow.bias = -0.0004
     sol.shadow.normalBias = 0.03
     escena.add(sol, sol.target)
     const relleno = new THREE.DirectionalLight('#dfe9ff', 0.55)
-    relleno.position.set(-10, 12, 30)
+    relleno.position.set(-10, 12, 34)
     escena.add(relleno)
 
-    const camara = new THREE.PerspectiveCamera(30, 1, 0.5, 200)
+    // Cámara: se desplaza arrastrando (botón izquierdo), gira con el derecho, acerca con la rueda;
+    // en el celular, dos dedos desplazan y acercan (un dedo sigue moviendo la página).
+    const camara = new THREE.PerspectiveCamera(30, 1, 0.3, 220)
     const controles = new OrbitControls(camara, renderer.domElement)
     controles.target.copy(CENTRO)
     controles.enableDamping = true
     controles.dampingFactor = 0.08
-    controles.minDistance = 10
-    controles.maxDistance = 70
-    controles.minPolarAngle = 0.35
-    controles.maxPolarAngle = 1.22
-    controles.minAzimuthAngle = 0.12
-    controles.maxAzimuthAngle = 1.45
+    controles.minDistance = 4
+    controles.maxDistance = 80
+    controles.minPolarAngle = 0.3
+    controles.maxPolarAngle = 1.3
+    controles.minAzimuthAngle = 0.05
+    controles.maxAzimuthAngle = 1.5
+    controles.screenSpacePanning = false
+    controles.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
+    controles.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN }
     controles.cursor.copy(CENTRO)
-    controles.maxTargetRadius = 11
-    // Celular: un dedo hace scroll de la página; dos dedos giran y acercan.
-    controles.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE }
+    controles.maxTargetRadius = 22
+    controles.keyPanSpeed = 20
+    controles.listenToKeyEvents(renderer.domElement)
     renderer.domElement.style.touchAction = 'pan-y'
 
     const inicial = datos.current.agentes
-    const sala = crearSala(mesaUp(inicial.filter(a => a.equipo === 'up').length).mesa)
+    const nUp = inicial.filter(a => a.equipo === 'up').length
+    const nPdg = inicial.filter(a => a.equipo === 'pdg').length
+    const nAdmin = inicial.filter(a => a.equipo === 'admin').length
+    const sala = crearSala({ up: mesaUp(nUp).mesa, pdg: mesaPdg(nPdg).mesa, admin: mesaAdmin(nAdmin).mesa })
     escena.add(sala.grupo)
+    const direccion = crearDireccion()
+    escena.add(direccion.grupo)
 
     // Lugares y actores.
     const actores = new Map()
     const clicables = []
+    const todosLosLugares = []
+    const construidas = new Set()
+    let luzMaria = null
     for (const e of ORDEN) {
       const del = inicial.filter(a => a.equipo === e)
-      lugares(e, del.length, del.findIndex(a => a.clave === JEFA)).forEach((lugar, i) => {
+      lugares(e, del.map(a => a.clave)).forEach((lugar, i) => {
         const a = del[i]
+        todosLosLugares.push(lugar)
         let mueble
         if (lugar.tipo === 'oficina') {
-          escena.add(crearOficina(lugar, i))
+          if (!construidas.has(lugar.oficina.id)) {
+            const of = crearOficina(lugar.oficina)
+            escena.add(of)
+            if (of.userData.luz) luzMaria = of.userData.luz
+            construidas.add(lugar.oficina.id)
+          }
           mueble = crearEscritorio(lugar.escritorio.x, lugar.escritorio.y, lugar.mira, { ejecutivo: lugar.jefa, decoracion: i })
-        } else mueble = crearPuestoMesa(lugar.sentado.x, lugar.sentado.y, lugar.mira)
+        } else mueble = crearPuestoMesa(lugar.sentado.x, lugar.sentado.y, lugar.mira, COLOR_PUESTO[e])
+        mueble.grupo.position.y = alturaPiso(lugar.sentado.x, lugar.sentado.y)
         mueble.sentado = { x: lugar.sentado.x, y: 0.08, z: lugar.sentado.y }
-        const p = crearPersonaje({ ropa: colorRopa(a), v: variante(a.id) })
+        const p = crearPersonaje({ ropa: colorRopa(a), v: variante(a.id), accesorio: ACCESORIOS[a.id] ?? null })
         escena.add(mueble.grupo, p.grupo)
         for (const o of [mueble.grupo, p.grupo]) { o.traverse(m => { m.userData.agenteId = a.id }); clicables.push(o) }
-        // El nombre en la puerta de su oficina (o junto a su lugar en el tablón).
+        // El nombre sobre el vidrio de su oficina, a la altura de su escritorio (o detrás de su silla en el tablón).
         const cartel = etiqueta(`o3-cartel${lugar.jefa ? ' o3-jefa' : ''}`, lugar.jefa ? `★ ${nombreCorto(a.nombre)}` : nombreCorto(a.nombre), () => datos.current.abrir(a.id))
-        if (lugar.lado === 'fondo') cartel.position.set(lugar.puerta.x, 2.25, FONDO_OFICINAS)
-        else if (lugar.lado === 'izquierda') cartel.position.set(ANCHO_OFICINAS_IZQ, 2.25, lugar.puerta.y)
-        else cartel.position.set(lugar.sentado.x, 0.05, lugar.sentado.y + (lugar.mira === 0 ? -0.55 : lugar.mira === Math.PI ? 0.6 : 0))
-        if (lugar.cabecera) cartel.position.set(lugar.sentado.x + 0.6, 0.05, lugar.sentado.y)
+        if (lugar.tipo === 'oficina') cartel.position.set(lugar.jefa ? lugar.puerta.x : lugar.escritorio.x, 2.25 + alturaPiso(lugar.puerta.x, lugar.oficina.y1 - 0.1), lugar.oficina.y1)
+        else cartel.position.set(lugar.sentado.x - Math.sin(lugar.mira) * 0.6, 0.05, lugar.sentado.y - Math.cos(lugar.mira) * 0.6)
         escena.add(cartel)
         const burbuja = etiqueta('o3-burbuja', null, () => datos.current.abrir(a.id))
         burbuja.position.set(0, 0.55, 0)
@@ -128,9 +171,38 @@ export default function Oficina3D({ agentes, elegidoId, abrir }) {
         const zetas = etiqueta('o3-zetas', 'z z z')
         zetas.position.set(0.25, 0.5, 0)
         p.cabeza.add(zetas)
-        actores.set(a.id, { lugar, mueble, p, cartel, burbuja, zetas, fase: (i * 1.7) % 5, camino: null, descansoId: null })
+        actores.set(a.id, { a, lugar, mueble, p, cartel, burbuja, zetas, fase: (i * 1.7) % 5, camino: null, descansoId: null, desfase: 0, pos: { x: lugar.sentado.x, y: 0, z: lugar.sentado.y } })
       })
     }
+
+    // Daniela: su personaje, sentada en su escritorio hasta que hace doble click en algún lugar.
+    const yo = crearPersonaje({ ropa: COLORES.dorado, v: { pelo: 2, colorPelo: 0, piel: 0 }, accesorio: 'estrella' })
+    escena.add(yo.grupo)
+    const cartelYo = etiqueta('o3-cartel o3-yo', '★ Daniela (vos)')
+    cartelYo.position.set(0, 0.62, 0)
+    yo.cabeza.add(cartelYo)
+    const daniela = { sentada: true, ruta: null, d: 0, pos: { x: DANIELA.sentado.x, y: DANIELA.sentado.y }, giro: DANIELA.mira, volverAlLlegar: false, avisoLejos: false, volverVisto: datos.current.volverDaniela }
+    const mapa = grilla(obstaculos(todosLosLugares, nUp, nPdg, nAdmin))
+    const caminarA = (destino, sentarse = false) => {
+      const desde = daniela.sentada ? COSTADO_SILLA : daniela.pos
+      const ruta = buscarCamino(mapa, desde, destino)
+      if (!ruta) return
+      daniela.ruta = daniela.sentada ? [{ ...daniela.pos }, ...ruta] : [{ ...daniela.pos }, ...ruta.slice(1)]
+      daniela.d = 0
+      daniela.sentada = false
+      daniela.volverAlLlegar = sentarse
+      if (sentarse) daniela.ruta.push({ x: DANIELA.sentado.x, y: DANIELA.sentado.y })
+    }
+    const volverAlEscritorio = () => caminarA(COSTADO_SILLA, true)
+
+    // Roberta, su perra: echada en su camita; cuando Daniela camina, la sigue por el mismo rastro (así no atraviesa
+    // paredes) y se sienta cerca; cuando Daniela vuelve a sentarse, vuelve a su camita.
+    const perra = crearRoberta()
+    escena.add(perra.grupo)
+    const cartelPerra = etiqueta('o3-cartel o3-roberta', `🐾 ${ROBERTA.nombre}`)
+    cartelPerra.position.set(0, 0.85, 0)
+    perra.grupo.add(cartelPerra)
+    const roberta = { pos: { ...ROBERTA.cama }, giro: 0.8, idx: 0, rastro: [] }
 
     // Aro bajo el agente elegido y pelota de ping pong.
     const aro = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.7, 40), new THREE.MeshBasicMaterial({ color: '#f0a63c', transparent: true, opacity: 0.9, side: THREE.DoubleSide }))
@@ -142,37 +214,46 @@ export default function Oficina3D({ agentes, elegidoId, abrir }) {
     pelota.visible = false
     escena.add(pelota)
 
-    // Tamaño: el ancho del recuadro; la altura sigue la proporción (más alta en el celular).
-    let ancho = 0
+    // Tamaño: el ancho del recuadro; la altura sigue la proporción. En pantalla completa, todo el espacio disponible.
+    let medida = ''
+    const general = { pos: new THREE.Vector3(), target: CENTRO.clone(), fov: 30 }
     let encuadrada = false
     const medir = () => {
-      const w = contenedor.clientWidth
-      if (!w || w === ancho) return
-      ancho = w
-      const h = Math.round(Math.min(620, Math.max(340, w < 640 ? w * 0.9 : w * 0.58)))
+      const completa = contenedor.classList.contains('o3-completa')
+      const w = caja.clientWidth
+      const h = completa ? caja.clientHeight : Math.round(Math.min(640, Math.max(340, w < 640 ? w * 0.9 : w * 0.58)))
+      if (!w || !h || `${w}x${h}` === medida) return
+      medida = `${w}x${h}`
+      if (!completa) caja.style.height = `${h}px`
       renderer.setSize(w, h)
       textos.setSize(w, h)
       camara.aspect = w / h
       camara.updateProjectionMatrix()
-      // Encuadre inicial: más lejos si la pantalla es angosta, para que entre toda la oficina.
       if (!encuadrada) {
-        const lejos = 53 * Math.min(1.5, Math.max(1, 1.6 / camara.aspect))
+        const lejos = 60 * Math.min(1.45, Math.max(1, 1.6 / camara.aspect))
         camara.position.copy(CENTRO).add(new THREE.Vector3(0.62, 0.62, 0.48).normalize().multiplyScalar(lejos))
+        general.pos.copy(camara.position)
         encuadrada = true
       }
     }
     medir()
     const observador = new ResizeObserver(medir)
+    observador.observe(caja)
     observador.observe(contenedor)
 
-    // Clic o toque en un agente: abre su panel. El cursor cambia al pasar por encima.
+    // Clic en un agente: abre su panel. Doble click en el piso: Daniela camina hasta ahí.
     const rayo = new THREE.Raycaster()
     const puntero = new THREE.Vector2()
+    const piso = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     let bajada = null
-    const agenteBajo = ev => {
+    let clicPendiente = 0
+    const apuntar = ev => {
       const r = renderer.domElement.getBoundingClientRect()
       puntero.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1)
       rayo.setFromCamera(puntero, camara)
+    }
+    const agenteBajo = ev => {
+      apuntar(ev)
       const hit = rayo.intersectObjects(clicables, true).find(h => h.object.visible)
       return hit?.object.userData.agenteId ?? null
     }
@@ -180,20 +261,63 @@ export default function Oficina3D({ agentes, elegidoId, abrir }) {
     const alSubir = ev => {
       if (!bajada || Math.hypot(ev.clientX - bajada.x, ev.clientY - bajada.y) > 6) return
       const id = agenteBajo(ev)
-      if (id) datos.current.abrir(id)
+      clearTimeout(clicPendiente)
+      // Se espera un instante por si es un doble click (ese mueve a Daniela, no abre el panel).
+      if (id) clicPendiente = setTimeout(() => datos.current.abrir(id), 260)
+    }
+    const enReunionVisible = () => { const R = datos.current.reunion; return Boolean(R && R.estado === 'en_curso') }
+    const alDobleClic = ev => {
+      clearTimeout(clicPendiente)
+      if (enReunionVisible()) return
+      apuntar(ev)
+      const punto = new THREE.Vector3()
+      if (!rayo.ray.intersectPlane(piso, punto)) return
+      if (punto.x < 0 || punto.z < 0 || punto.x > PISO.ancho || punto.z > PISO.fondo) return
+      const enSuSilla = Math.hypot(punto.x - DANIELA.sentado.x, punto.z - DANIELA.sentado.y) < 1.1
+      if (enSuSilla) volverAlEscritorio()
+      else caminarA({ x: punto.x, y: punto.z })
     }
     const alMover = ev => { if (ev.pointerType === 'mouse' && !ev.buttons) renderer.domElement.style.cursor = agenteBajo(ev) ? 'pointer' : 'grab' }
     renderer.domElement.addEventListener('pointerdown', alBajar)
     renderer.domElement.addEventListener('pointerup', alSubir)
     renderer.domElement.addEventListener('pointermove', alMover)
+    renderer.domElement.addEventListener('dblclick', alDobleClic)
+
+    // Botones de cámara (girar, acercar, centrar): sirven en el celular y para quien no usa el mouse derecho.
+    const girar = ang => {
+      const off = camara.position.clone().sub(controles.target)
+      const s = new THREE.Spherical().setFromVector3(off)
+      s.theta = Math.min(controles.maxAzimuthAngle, Math.max(controles.minAzimuthAngle, s.theta + ang))
+      camara.position.copy(controles.target).add(off.setFromSpherical(s))
+    }
+    const acercar = f => {
+      const off = camara.position.clone().sub(controles.target)
+      const l = Math.min(controles.maxDistance, Math.max(controles.minDistance, off.length() * f))
+      camara.position.copy(controles.target).add(off.setLength(l))
+    }
+    let pedirGeneral = false
+    const botones = document.createElement('div')
+    botones.className = 'o3-botones'
+    for (const [texto, titulo, accion] of [['⟲', 'Girar a la izquierda', () => girar(-0.25)], ['⟳', 'Girar a la derecha', () => girar(0.25)],
+      ['+', 'Acercar', () => acercar(0.8)], ['−', 'Alejar', () => acercar(1.25)], ['⌂', 'Ver toda la oficina', () => { pedirGeneral = true }]]) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.textContent = texto
+      b.title = titulo
+      b.setAttribute('aria-label', titulo)
+      b.addEventListener('click', accion)
+      botones.appendChild(b)
+    }
+    caja.appendChild(botones)
 
     // Solo se anima mientras se ve (la pantalla queda montada oculta cuando vas a otra).
     let visible = true
     let cuadroId = 0
+    let ultimo = performance.now()
     const visibilidad = new IntersectionObserver(([e]) => {
       const antes = visible
       visible = e.isIntersecting
-      if (visible && !antes) cuadroId = requestAnimationFrame(cuadro)
+      if (visible && !antes) { ultimo = performance.now(); cuadroId = requestAnimationFrame(cuadro) }
     })
     visibilidad.observe(contenedor)
 
@@ -205,73 +329,305 @@ export default function Oficina3D({ agentes, elegidoId, abrir }) {
       else { m.color.set('#cfe0ff'); m.emissive.set('#7fa6ff'); m.emissiveIntensity = 0.35 }
     }
 
+    // ---------- Reuniones ----------
+    // Al convocar, cada asistente arma su camino desde donde esté; se avisa cuándo llega cada uno.
+    let plan = null
+    const situacion = (ac, r, t) => {
+      if (r?.tipo === 'rutina' && !sinMovimiento) {
+        if (ac.descansoId !== r.descanso.id) { ac.camino = camino(ac.lugar, r.descanso); ac.largo = largo(ac.camino); ac.descansoId = r.descanso.id }
+        const m = momentoRutina(t + r.retraso + ac.desfase, ac.largo)
+        if (m.fase === 'descanso') return [...r.descanso.llegada].reverse()
+        if (m.fase !== 'sentado') return haciaPasillo(ac.camino, m.d)
+      }
+      return alPasillo(ac.lugar)
+    }
+    const planificar = (R, t) => {
+      const asientos = R.modo === 'turnos' ? asientosEspera() : asientosReunion()
+      const p = { id: R.id, modo: R.modo, por: new Map(), avisado: false }
+      const llegadas = {}
+      R.asistentes.forEach((id, k) => {
+        const ac = actores.get(id)
+        if (!ac) return
+        const asiento = asientos[k % asientos.length]
+        const desde = situacion(ac, datos.current.rut[id], t)
+        const ruta = R.modo === 'turnos' ? caminoEspera(desde, asiento) : caminoReunion(desde, asiento)
+        const espera = ac.a.estado === 'trabajando' ? 8 + k * 0.4 : k * 0.9
+        const vuelta = R.modo === 'turnos' ? caminoEspera(alPasillo(ac.lugar), asiento).reverse() : caminoReunion(alPasillo(ac.lugar), asiento).reverse()
+        const turnoIda = R.modo === 'turnos' ? caminoTurno(asiento) : null
+        const turnoVuelta = R.modo === 'turnos' ? caminoVueltaTurno(ac.lugar) : null
+        const item = { asiento, ruta, largo: largo(ruta), espera, vuelta, largoVuelta: largo(vuelta), turnoIda, largoIda: turnoIda ? largo(turnoIda) : 0, turnoVuelta, largoTurnoVuelta: turnoVuelta ? largo(turnoVuelta) : 0, listo: false, numero: k + 1 }
+        p.por.set(id, item)
+        llegadas[id] = Math.round(espera + item.largo / VELOCIDAD)
+      })
+      datos.current.alPlanificar?.(R.id, llegadas)
+      return p
+    }
+
+    // ---------- Cámara: modos y vuelos ----------
+    let modo = 'general'
+    let vuelo = null
+    let desvio = 0
+    const volar = (pos, target, fov, dur = 1.3) => {
+      vuelo = { t0: performance.now() / 1000, dur, desdeP: camara.position.clone(), desdeT: controles.target.clone(), desdeF: camara.fov, pos: pos.clone(), target: target.clone(), fov }
+    }
+    const seguir = (x, z, alto = 0.9) => {
+      const delta = new THREE.Vector3(x, alto, z).sub(controles.target).multiplyScalar(0.08)
+      controles.target.add(delta)
+      camara.position.add(delta)
+    }
+
+    // ---------- Luz según la hora ----------
+    const ventanas = vidrioVentana()
+    let ultimaLuz = -1
+    let luz = luzDelDia(datos.current.reloj())
+    const colorDia = new THREE.Color('#fff3df'), colorCalido = new THREE.Color('#ffb070'), colorLuna = new THREE.Color('#9fb4ff')
+    const aplicarLuz = () => {
+      luz = luzDelDia(datos.current.reloj())
+      sol.position.set(luz.sol.x, Math.max(6, luz.sol.y), luz.sol.z)
+      sol.color.copy(colorDia).lerp(colorCalido, Math.min(1, luz.calido)).lerp(colorLuna, luz.noche)
+      sol.intensity = 0.35 + 2.1 * luz.luz
+      cielo.intensity = 0.55 + 0.85 * luz.luz
+      cielo.color.set(luz.noche > 0.5 ? '#9aa3d8' : '#ffffff')
+      relleno.intensity = 0.25 + 0.3 * luz.luz
+      if (luz.fase === 'noche') { ventanas.color.set('#283160'); ventanas.emissive.set('#1b2250'); ventanas.emissiveIntensity = 0.35 }
+      else if (luz.fase === 'atardecer' || luz.fase === 'amanecer') { ventanas.color.set('#ffd2b0'); ventanas.emissive.set('#ff9a5c'); ventanas.emissiveIntensity = 0.55 }
+      else { ventanas.color.set('#d6eeff'); ventanas.emissive.set('#bfe3ff'); ventanas.emissiveIntensity = 0.5 }
+      sala.lamparas.emissiveIntensity = 1.8 * luz.noche
+      for (const l of sala.luces) l.intensity = 5 * luz.noche
+      contenedor.dataset.fase = luz.fase
+    }
+    aplicarLuz()
+
     function cuadro() {
       if (!visible) return
-      const t = performance.now() / 1000
-      const { agentes: lista, elegidoId: elegido, rut } = datos.current
+      const ahoraMs = performance.now()
+      const dt = Math.min(0.1, (ahoraMs - ultimo) / 1000)
+      ultimo = ahoraMs
+      const t = ahoraMs / 1000
+      const D = datos.current
+      const { agentes: lista, elegidoId: elegido, rut } = D
+      const R = D.reunion
+      if (t - ultimaLuz > 2) { aplicarLuz(); ultimaLuz = t }
+      if (R && (!plan || plan.id !== R.id)) plan = planificar(R, t)
+      if (!R && plan) plan = null
+      const relojS = Date.now() / 1000
       const porId = new Map(lista.map(a => [a.id, a]))
       const enDescanso = []
+      let todosVolvieron = Boolean(R && R.estado === 'volviendo')
       for (const [id, ac] of actores) {
         const a = porId.get(id)
         if (!a) continue
+        ac.a = a
         const r = rut[id] ?? { tipo: 'escritorio' }
         const { p, lugar, mueble } = ac
-        let pose = 'sentado', objeto = null, pos = mueble.sentado, giro = lugar.mira ?? 0, presente = true, aLaVista = true
-        if (r.tipo === 'siesta') {
+        let pose = 'sentado', objeto = null, pos = mueble.sentado, giro = lugar.mira ?? 0, presente = true, aLaVista = true, habla = false, numero = null
+        const pr = plan?.por.get(id)
+        let enReunion = false
+        if (pr && !pr.listo) {
+          enReunion = true
           presente = false
-          if (r.puf) { pose = 'dormido'; pos = { x: r.puf.x, y: 0.22, z: r.puf.y }; giro = -0.5 } else aLaVista = false
-        } else if (r.tipo === 'rutina' && !sinMovimiento) {
-          if (ac.descansoId !== r.descanso.id) { ac.camino = camino(lugar, r.descanso); ac.largo = largo(ac.camino); ac.descansoId = r.descanso.id }
-          const m = momentoRutina(t + r.retraso, ac.largo)
-          if (m.fase !== 'sentado') {
+          const caminar = ruta => {
+            const pt = puntoEn(ruta.pts, ruta.d)
+            pose = 'caminando'
+            pos = { x: pt.x, y: 0, z: pt.y }
+            giro = Math.atan2(pt.dx, pt.dy)
+          }
+          const terminar = () => { pr.listo = true; ac.desfase = -(t + (r.retraso ?? 0)); enReunion = false; presente = true; pose = 'sentado'; pos = mueble.sentado; giro = lugar.mira ?? 0 }
+          const tu = R.turnos?.[id]
+          const e = relojS - R.inicio / 1000
+          if (R.modo === 'turnos' && tu?.fin) {
+            const d = (relojS - tu.fin / 1000) * VELOCIDAD
+            if (d < pr.largoTurnoVuelta) caminar({ pts: pr.turnoVuelta, d }); else terminar()
+          } else if (R.modo === 'turnos' && tu?.llamado) {
+            const d = (relojS - tu.llamado / 1000) * VELOCIDAD
+            if (d < pr.largoIda) caminar({ pts: pr.turnoIda, d })
+            else { pose = 'sentado'; pos = { x: VISITA.x, y: 0.08, z: VISITA.y }; giro = VISITA.mira; habla = D.hablando === id }
+          } else if (R.estado === 'volviendo') {
+            const d = (relojS - (R.vuelta ?? Date.now()) / 1000) * VELOCIDAD
+            if (d < pr.largoVuelta) caminar({ pts: pr.vuelta, d }); else terminar()
+          } else if (e < pr.espera) {
+            const ini = pr.ruta[0]
+            if (ini.x === lugar.sentado.x && ini.y === lugar.sentado.y) { enReunion = false; presente = true }
+            else { pose = 'parado'; pos = { x: ini.x, y: 0, z: ini.y } }
+          } else {
+            const d = (e - pr.espera) * VELOCIDAD
+            if (d < pr.largo) caminar({ pts: pr.ruta, d })
+            else {
+              const s = pr.asiento
+              pose = s.pose
+              pos = { x: s.x, y: s.pose === 'sentado' ? 0.08 : 0, z: s.y }
+              giro = R.estado === 'en_curso' && R.modo === 'sala' ? Math.atan2(CAMARA_SALA.pos.x - s.x, CAMARA_SALA.pos.z - s.y) : s.mira
+              habla = R.estado === 'en_curso' && D.hablando === id
+              if (R.modo === 'turnos') numero = pr.numero
+            }
+          }
+          if (!pr.listo && R.estado === 'volviendo') todosVolvieron = false
+        }
+        if (!enReunion) {
+          if (r.tipo === 'siesta') {
             presente = false
-            const d = r.descanso
-            if (m.fase === 'descanso') {
-              enDescanso.push(d.id)
-              pose = d.pose
-              objeto = d.objeto
-              pos = { x: d.x, y: d.altura, z: d.y }
-              giro = d.mira
-            } else {
-              const pt = puntoEn(ac.camino, m.d)
-              pose = 'caminando'
-              objeto = m.fase === 'volviendo' ? d.objeto : null
-              pos = { x: pt.x, y: 0, z: pt.y }
-              giro = m.fase === 'yendo' ? Math.atan2(pt.dx, pt.dy) : Math.atan2(-pt.dx, -pt.dy)
+            if (r.puf) { pose = 'dormido'; pos = { x: r.puf.x, y: 0.22, z: r.puf.y }; giro = -0.5 } else aLaVista = false
+          } else if (r.tipo === 'rutina' && !sinMovimiento && !(pr && !pr.listo)) {
+            if (ac.descansoId !== r.descanso.id) { ac.camino = camino(lugar, r.descanso); ac.largo = largo(ac.camino); ac.descansoId = r.descanso.id }
+            const m = momentoRutina(t + r.retraso + ac.desfase, ac.largo)
+            if (m.fase !== 'sentado') {
+              presente = false
+              const d = r.descanso
+              if (m.fase === 'descanso') {
+                enDescanso.push(d.id)
+                pose = d.pose
+                objeto = d.objeto
+                pos = { x: d.x, y: d.altura, z: d.y }
+                giro = d.mira
+              } else {
+                const pt = puntoEn(ac.camino, m.d)
+                pose = 'caminando'
+                objeto = m.fase === 'volviendo' ? d.objeto : null
+                pos = { x: pt.x, y: 0, z: pt.y }
+                giro = m.fase === 'yendo' ? Math.atan2(pt.dx, pt.dy) : Math.atan2(-pt.dx, -pt.dy)
+              }
             }
           }
         }
+        ac.pos = pos
         p.grupo.visible = aLaVista
-        p.grupo.position.set(pos.x, pos.y, pos.z)
+        p.grupo.position.set(pos.x, pos.y + alturaPiso(pos.x, pos.z), pos.z)
         p.grupo.rotation.y = giro
-        posar(p, { pose, estado: presente ? a.estado : 'libre', objeto, t: sinMovimiento ? 0 : t, fase: ac.fase })
+        posar(p, { pose, estado: presente ? a.estado : 'libre', objeto, t: sinMovimiento ? 0 : t, fase: ac.fase, habla })
         if (mueble.pantalla) pantallaColor(mueble.pantalla, a.estado, presente, t)
-        // Burbuja sobre la cabeza: trabajando o con un problema, solo mientras está en su lugar.
-        const tipoBurbuja = presente && (a.estado === 'trabajando' || a.estado === 'error') ? a.estado : null
-        ac.burbuja.userData.el.className = `o3-burbuja${tipoBurbuja ? ` estado-${tipoBurbuja}` : ''}`
-        ac.burbuja.userData.el.textContent = tipoBurbuja === 'error' ? '!' : ''
-        ac.burbuja.visible = Boolean(tipoBurbuja)
+        if (mueble.lampara) mueble.lampara.emissiveIntensity = presente ? 2.2 * luz.noche : 0
+        if (lugar.jefa && luzMaria) luzMaria.intensity = presente ? 4 * luz.noche : 0
+        // Burbuja: trabajando o con un problema en su lugar; en reunión, el que habla; en la espera, su número.
+        let tipo = presente && (a.estado === 'trabajando' || a.estado === 'error') ? a.estado : null
+        let texto = tipo === 'error' ? '!' : ''
+        if (habla) { tipo = 'habla'; texto = '🗣' }
+        else if (numero) { tipo = 'turno'; texto = `Turno ${numero}` }
+        ac.burbuja.userData.el.className = `o3-burbuja${tipo ? ` estado-${tipo}` : ''}`
+        ac.burbuja.userData.el.textContent = texto
+        ac.burbuja.visible = Boolean(tipo)
         ac.zetas.visible = pose === 'dormido'
         ac.cartel.userData.el.className = `o3-cartel${lugar.jefa ? ' o3-jefa' : ''} estado-${a.estado}${id === elegido ? ' is-elegido' : ''}`
         ac.cartel.userData.el.title = `${a.nombre}: ${ESTADOS[a.estado]}. ${a.ahora}`
-        if (id === elegido) { aro.visible = aLaVista; aro.position.set(pos.x, 0.03, pos.z) }
+        if (id === elegido) { aro.visible = aLaVista; aro.position.set(pos.x, 0.03 + alturaPiso(pos.x, pos.z), pos.z) }
       }
       if (!elegido || !actores.has(elegido)) aro.visible = false
+      if (todosVolvieron && plan && !plan.avisado) { plan.avisado = true; D.alVolvieron?.(R.id) }
+
+      // Daniela: camina por su ruta; en una reunión por turnos la esperan sentada en su escritorio.
+      if (D.volverDaniela !== daniela.volverVisto) { daniela.volverVisto = D.volverDaniela; volverAlEscritorio() }
+      if (R?.modo === 'turnos' && R.estado === 'en_curso' && !daniela.sentada) {
+        daniela.ruta = null; daniela.sentada = true; daniela.pos = { x: DANIELA.sentado.x, y: DANIELA.sentado.y }; daniela.giro = DANIELA.mira
+      }
+      let poseYo = 'sentado'
+      if (daniela.ruta) {
+        daniela.d += VELOCIDAD * 1.15 * dt
+        const total = largo(daniela.ruta)
+        const pt = puntoEn(daniela.ruta, daniela.d)
+        daniela.pos = { x: pt.x, y: pt.y }
+        daniela.giro = Math.atan2(pt.dx, pt.dy)
+        poseYo = 'caminando'
+        if (daniela.d >= total) {
+          daniela.ruta = null
+          if (daniela.volverAlLlegar) { daniela.sentada = true; daniela.giro = DANIELA.mira }
+        }
+      }
+      if (!daniela.ruta && !daniela.sentada) poseYo = 'parado'
+      yo.grupo.position.set(daniela.pos.x, (daniela.sentada ? 0.08 : 0) + alturaPiso(daniela.pos.x, daniela.pos.y), daniela.pos.y)
+      yo.grupo.rotation.y = daniela.sentada ? DANIELA.mira : daniela.giro
+      posar(yo, { pose: poseYo, estado: 'libre', t: sinMovimiento ? 0 : t, fase: 2.2 })
+      pantallaColor(direccion.escritorio.pantalla, 'libre', daniela.sentada, t)
+      direccion.escritorio.lampara.emissiveIntensity = daniela.sentada ? 2.2 * luz.noche : 0
+      direccion.luz.intensity = 4.5 * luz.noche
+      const lejos = !daniela.sentada
+      if (lejos !== daniela.avisoLejos) { daniela.avisoLejos = lejos; D.alMoverDaniela?.(lejos) }
+
+      // Roberta: sigue el rastro de Daniela.
+      if (daniela.ruta || !daniela.sentada) {
+        const u = roberta.rastro.at(-1)
+        if (!u || Math.hypot(u.x - daniela.pos.x, u.y - daniela.pos.y) > 0.15) roberta.rastro.push({ ...daniela.pos })
+      }
+      let posePerra = 'echada'
+      const irA = (meta, velocidad = 2.6) => {
+        const dx = meta.x - roberta.pos.x, dy = meta.y - roberta.pos.y
+        const d = Math.hypot(dx, dy)
+        const paso = Math.min(d, velocidad * dt)
+        if (d > 1e-6) { roberta.pos.x += (dx / d) * paso; roberta.pos.y += (dy / d) * paso; roberta.giro = Math.atan2(dx, dy) }
+        return d - paso
+      }
+      const aDaniela = Math.hypot(daniela.pos.x - roberta.pos.x, daniela.pos.y - roberta.pos.y)
+      if (!daniela.sentada && aDaniela < 1.1) {
+        posePerra = 'sentada'
+        roberta.giro = Math.atan2(daniela.pos.x - roberta.pos.x, daniela.pos.y - roberta.pos.y)
+        while (roberta.idx < roberta.rastro.length - 1 && Math.hypot(roberta.rastro[roberta.idx].x - roberta.pos.x, roberta.rastro[roberta.idx].y - roberta.pos.y) < 1.2) roberta.idx++
+      } else if (roberta.idx < roberta.rastro.length) {
+        posePerra = 'caminando'
+        if (irA(roberta.rastro[roberta.idx]) < 0.1) roberta.idx++
+      } else if (daniela.sentada) {
+        if (irA(ROBERTA.cama, 1.6) > 0.05) posePerra = 'caminando'
+        else { roberta.rastro = []; roberta.idx = 0; roberta.giro = 0.8 }
+      } else posePerra = 'sentada'
+      perra.grupo.position.set(roberta.pos.x, (posePerra === 'echada' ? 0.06 : 0) + alturaPiso(roberta.pos.x, roberta.pos.y), roberta.pos.y)
+      perra.grupo.rotation.y = roberta.giro
+      moverRoberta(perra, { pose: posePerra, t: sinMovimiento ? 0 : t })
+
       // La pelota va y viene solo si los dos jugadores de ping pong están en la mesa.
       const jugando = enDescanso.includes('ping-1') && enDescanso.includes('ping-2')
       pelota.visible = jugando
       if (jugando) {
         const f = (Math.sin(t * 4.5) + 1) / 2
-        pelota.position.set(29.3 + f * 4.8, 0.85 + Math.abs(Math.sin(t * 9)) * 0.35, 17.8)
+        pelota.position.set(8.9 + f * 3.2, 0.85 + Math.abs(Math.sin(t * 9)) * 0.35, 22.8)
       }
       const { hora, minuto } = agujas(Date.now())
       sala.agujas.hora.rotation.z = -THREE.MathUtils.degToRad(hora)
       sala.agujas.minuto.rotation.z = -THREE.MathUtils.degToRad(minuto)
       sala.agujas.segundo.rotation.z = -((Date.now() / 1000) % 60) * (Math.PI / 30)
       sala.luzCafetera.material.emissiveIntensity = 0.6 + Math.max(0, Math.sin(t * 3)) * 0.9
-      controles.update()
-      // Los nombres solo se muestran de cerca (de lejos se encimarían); el del elegido, siempre.
-      contenedor.classList.toggle('o3-lejos', camara.position.distanceTo(controles.target) > 56)
+
+      // Cámara: videollamada de la sala, despacho de Daniela (turnos), seguir al elegido, seguir a Daniela o general.
+      const nuevoModo = R?.estado === 'en_curso' && R.modo === 'sala' ? 'sala'
+        : R?.estado === 'en_curso' && R.modo === 'turnos' ? 'despacho'
+          : elegido && actores.has(elegido) ? `agente:${elegido}`
+            : daniela.ruta ? 'daniela' : 'general'
+      if (pedirGeneral) { pedirGeneral = false; if (modo === 'general' || modo === 'daniela') volar(general.pos, general.target, 30) }
+      if (nuevoModo !== modo) {
+        if (modo === 'general') { general.pos.copy(camara.position); general.target.copy(controles.target) }
+        if (nuevoModo === 'sala') volar(CAMARA_SALA.pos, CAMARA_SALA.target, CAMARA_SALA.fov)
+        else if (nuevoModo === 'despacho') volar(CAMARA_DESPACHO.pos, CAMARA_DESPACHO.target, CAMARA_DESPACHO.fov)
+        else if (nuevoModo === 'general') volar(general.pos, general.target, 30)
+        else {
+          const quien = nuevoModo === 'daniela' ? { x: daniela.pos.x, z: daniela.pos.y } : actores.get(elegido).pos
+          const target = new THREE.Vector3(quien.x, 0.9, quien.z)
+          const dir = camara.position.clone().sub(controles.target).setY(0)
+          if (dir.lengthSq() < 0.1) dir.set(0.7, 0, 0.7)
+          dir.normalize()
+          volar(target.clone().add(dir.multiplyScalar(9)).setY(7.5), target, 30)
+        }
+        modo = nuevoModo
+      }
+      controles.enabled = modo !== 'sala' && modo !== 'despacho'
+      if (vuelo) {
+        const f = Math.min(1, (t - vuelo.t0) / vuelo.dur)
+        const k = suaveIn(f)
+        camara.position.lerpVectors(vuelo.desdeP, vuelo.pos, k)
+        controles.target.lerpVectors(vuelo.desdeT, vuelo.target, k)
+        camara.fov = vuelo.desdeF + (vuelo.fov - vuelo.desdeF) * k
+        camara.updateProjectionMatrix()
+        if (f >= 1) vuelo = null
+      } else if (modo.startsWith('agente:')) {
+        const q = actores.get(elegido)?.pos
+        if (q) seguir(q.x, q.z)
+      } else if (modo === 'daniela') seguir(daniela.pos.x, daniela.pos.y)
+      // Con el panel del agente abierto (a la derecha en pantalla ancha), la escena se corre un poco a la izquierda.
+      const quiereDesvio = modo.startsWith('agente:') && window.innerWidth > 780 && !contenedor.classList.contains('o3-completa') ? 0.16 : 0
+      desvio += (quiereDesvio - desvio) * 0.08
+      const [w, h] = medida.split('x').map(Number)
+      if (Math.abs(desvio) > 0.002 && w && h) camara.setViewOffset(w, h, w * desvio, 0, w, h)
+      else if (camara.view) camara.clearViewOffset()
+
+      if (controles.enabled) controles.update()
+      else camara.lookAt(controles.target)
+      contenedor.classList.toggle('o3-lejos', camara.position.distanceTo(controles.target) > 60)
+      contenedor.classList.toggle('o3-en-reunion', modo === 'sala' || modo === 'despacho')
       renderer.render(escena, camara)
       textos.render(escena, camara)
       cuadroId = requestAnimationFrame(cuadro)
@@ -280,21 +636,28 @@ export default function Oficina3D({ agentes, elegidoId, abrir }) {
 
     return () => {
       cancelAnimationFrame(cuadroId)
+      clearTimeout(clicPendiente)
       visible = false
       observador.disconnect()
       visibilidad.disconnect()
       renderer.domElement.removeEventListener('pointerdown', alBajar)
       renderer.domElement.removeEventListener('pointerup', alSubir)
       renderer.domElement.removeEventListener('pointermove', alMover)
+      renderer.domElement.removeEventListener('dblclick', alDobleClic)
       controles.dispose()
       liberar(escena)
       vaciarMateriales()
       renderer.dispose()
       renderer.domElement.remove()
       textos.domElement.remove()
+      botones.remove()
+      caja.style.height = ''
     }
   }, [firma])
 
-  return <div className="oficina-3d" ref={marco} role="img"
-    aria-label="La oficina en 3D: Trabajadores y UP en sus escritorios, la sala de reuniones de PDG, la cocina y el living. Los agentes también están en la lista de abajo." />
+  return <div className={`oficina-3d${pantallaCompleta ? ' o3-completa' : ''}`} ref={marco}>
+    <div className="o3-escenario" ref={escenario} role="img"
+      aria-label="La oficina en 3D: las oficinas de los trabajadores, los tablones de UP y de PDG comercial, la sala de reuniones, la cafetería, el comedor, el ocio, el ping pong y tu oficina de Dirección. Los agentes también están en la lista de abajo." />
+    {children}
+  </div>
 }

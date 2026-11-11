@@ -6,7 +6,14 @@ import { RECORRIDOS, FUENTES, vidaDeTrabajador, textoTrabajador, alertas as calc
 import { NOMBRE_DESTINO } from './orbital.mjs'
 import { AGENTES_UP, ORDEN_UP, herramientasPdg, idAgente } from '../supabase/functions/_shared/oficina.mjs'
 
-export { EQUIPOS, partirId } from '../supabase/functions/_shared/oficina.mjs'
+import { EQUIPOS as EQUIPOS_SERVIDOR } from '../supabase/functions/_shared/oficina.mjs'
+export { partirId } from '../supabase/functions/_shared/oficina.mjs'
+
+// Administración solo existe en la pantalla: son tareas programadas (cron), no conversan con la IA.
+export const EQUIPOS = {
+  ...EQUIPOS_SERVIDOR,
+  admin: { nombre: 'Administración', descripcion: 'Tareas programadas de apoyo: corren solas a su hora.' },
+}
 
 // Estados: trabajando (corrida en curso), libre (hizo lo suyo y espera su turno), error (la última falló o quedó
 // trabada), pausado (desactivado), nuevo (todavía no hizo nada).
@@ -114,6 +121,43 @@ export function agentesPdg(agentes = [], trabajos = [], ahora = Date.now()) {
   })
 }
 
+// ---------- Administración ----------
+// Las tareas programadas que no son trabajadores. corridas: lo que devuelve la función oficina_administracion()
+// (una fila por corrida, las últimas 5 de cada tarea; una tarea sin corridas viene con inicio null).
+export const AGENTES_ADMIN = {
+  search_console: { nombre: 'Search Console', jobs: ['search-console'], rol: 'Trae los datos de Google Search Console', descripcion: 'Una vez por día baja de Google Search Console cómo te encuentran en Google (búsquedas, clics, posiciones) y lo guarda para tus tableros.' },
+  resumen_diario: { nombre: 'Resumen diario', jobs: ['resumen-diario-push'], rol: 'Te manda el resumen del día', descripcion: 'Cada día arma el resumen de lo que pasó y te lo manda como notificación.' },
+  agenda_dulce: { nombre: 'Agenda dulce', jobs: ['agenda-dulce-1410', 'agenda-dulce-1900'], rol: 'Avisos de la agenda dulce', descripcion: 'Dos veces por día (14:10 y 19:00) manda los avisos de la agenda dulce.' },
+  historial_up: { nombre: 'Historial de UP', jobs: ['up-historial'], rol: 'Guarda el historial de UP', descripcion: 'Guarda el historial de lo publicado en UP para que los agentes de UP no repitan.' },
+  limpieza: { nombre: 'Limpieza', jobs: ['limpiar-historial'], rol: 'Limpia los registros viejos', descripcion: 'Borra los registros viejos de las corridas para que la base no crezca sin fin.' },
+}
+const ESTADO_CRON = { succeeded: 'Terminó bien', failed: 'Falló', running: 'Corriendo', starting: 'Arrancando' }
+
+export function agentesAdmin(corridas = [], ahora = Date.now()) {
+  return Object.entries(AGENTES_ADMIN).map(([clave, def]) => {
+    const filas = corridas.filter(c => def.jobs.includes(c.jobname))
+    const suyas = filas.filter(c => c.inicio).sort((a, b) => (ms(b.inicio) ?? 0) - (ms(a.inicio) ?? 0))
+    const activo = filas.some(c => c.activo)
+    const ultima = suyas[0]
+    let estado = 'libre'
+    if (filas.length && !activo) estado = 'pausado'
+    else if (!ultima) estado = 'nuevo'
+    else if (ultima.estado === 'running' || ultima.estado === 'starting') estado = 'trabajando'
+    else if (ultima.estado === 'failed') estado = 'error'
+    const horario = [...new Set(filas.map(c => c.schedule).filter(Boolean))].join(' y ')
+    return {
+      id: idAgente('admin', clave), equipo: 'admin', clave, nombre: def.nombre, rol: def.rol,
+      descripcion: `${def.descripcion}${horario ? ` Horario (cron, UTC): ${horario}.` : ''}`, color: null, estado, ultima: ms(ultima?.inicio),
+      ahora: estado === 'pausado' ? 'Está desactivada.'
+        : !ultima ? 'Todavía no corrió.'
+          : `Corrió ${haceCuanto(ultima.inicio, ahora)}: ${ESTADO_CRON[ultima.estado] ?? ultima.estado}${ultima.estado === 'failed' && ultima.mensaje ? ` (${recortar(ultima.mensaje, 120)})` : ''}`,
+      tareas: suyas.slice(0, 8).map(c => ({ at: ms(c.inicio), texto: `${ESTADO_CRON[c.estado] ?? c.estado}${c.mensaje && c.estado === 'failed' ? `: ${recortar(c.mensaje, 100)}` : ''}`, nivel: c.estado === 'failed' ? 'error' : 'ok' })),
+      herramientas: def.jobs.map(j => `Tarea programada: ${j}`),
+      sinCharla: true,
+    }
+  })
+}
+
 // ---------- Lo que te toca ----------
 // alertas: las de tablero.mjs (trabajadores). piezas: up_piezas de hoy en adelante en falta_info, revision o pendiente.
 // chequeo: la última revisión de Noruega. trabajos / cuentas: de PDG. hoy: 'AAAA-MM-DD' en Buenos Aires.
@@ -145,9 +189,17 @@ export function armarOficina(d, ahora) {
     ...d.trabajadores.map(t => agenteTrabajador(t, d.corridasPor[t.clave] || [], ahora)),
     ...agentesUp(d.upCorridas, d.chequeo, ahora),
     ...agentesPdg(d.pdgAgentes, d.pdgTrabajos, ahora),
+    ...agentesAdmin(d.admin ?? [], ahora),
   ]
   const alertas = calcularAlertas({ trabajadores: d.trabajadores, corridasPor: d.corridasPor, ahora, salud: d.salud })
   const pendientes = teToca({ alertas, piezas: d.piezas, chequeo: d.chequeo, trabajos: d.pdgTrabajos, cuentas: d.pdgCuentas, hoy: d.hoy })
+  for (const a of agentes) if (a.equipo === 'admin' && a.estado === 'error') pendientes.push({ nivel: 'error', texto: `${a.nombre}: ${a.ahora}`, donde: 'Oficina › Administración', agente: a.id })
+  // Las alertas de los trabajadores empiezan con su nombre ("Ópera: …"): así se sabe de quién son.
+  for (const p of pendientes) {
+    if (p.agente) continue
+    const a = agentes.find(x => x.equipo === 'trabajadores' && (p.texto.startsWith(`${x.nombre}:`) || p.texto.startsWith(`${x.nombre} ·`)))
+    if (a) p.agente = a.id
+  }
   return { agentes, pendientes }
 }
 
@@ -160,4 +212,40 @@ export function contarEstados(agentes) {
 // Hoy en Buenos Aires, 'AAAA-MM-DD'.
 export function hoyAR(ahora = Date.now()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ahora))
+}
+
+// ---------- Reunión ----------
+// El informe que da cada agente en la reunión, armado con sus datos (sin IA): qué está haciendo, lo último que
+// hizo y qué necesita de vos. pendientes: lo de teToca(); los que tienen `agente` son de él.
+const minuscula = t => (t ? t[0].toLowerCase() + t.slice(1) : t)
+export function informeDe(a, pendientes = [], ahora = Date.now()) {
+  const partes = [`Hola, soy ${a.nombre.split(' (')[0]}.`]
+  if (a.estado === 'trabajando') partes.push(`Estoy trabajando en este momento: ${minuscula(a.ahora)}.`)
+  else if (a.estado === 'error') partes.push(`Tengo un problema: ${minuscula(a.ahora)}.`)
+  else if (a.estado === 'pausado') partes.push('Estoy pausado.')
+  else if (a.estado === 'nuevo') partes.push('Todavía no me tocó trabajar.')
+  else partes.push(`Estoy al día: ${minuscula(a.ahora)}.`)
+  const ultima = a.tareas?.[0]
+  if (ultima && a.estado !== 'nuevo') partes.push(`Lo último: ${minuscula(ultima.texto)}${ultima.at ? ` (${haceCuanto(new Date(ultima.at).toISOString(), ahora)})` : ''}.`)
+  const mios = pendientes.filter(p => p.agente === a.id)
+  partes.push(mios.length ? `Necesito de vos: ${mios.map(p => minuscula(p.texto)).join('; ')}.` : 'No necesito nada de vos por ahora.')
+  return partes.join(' ').replace(/\.\./g, '.')
+}
+
+// Cierre de la jefa: cómo está el equipo que vino a la reunión.
+export function resumenReunion(asistentes, pendientes = []) {
+  const c = contarEstados(asistentes)
+  const partes = [`Resumen: vinieron ${asistentes.length}.`]
+  partes.push(c.trabajando ? `${c.trabajando} ${c.trabajando === 1 ? 'está trabajando' : 'están trabajando'} ahora.` : 'Nadie está corriendo ahora.')
+  if (c.error) partes.push(`${c.error} ${c.error === 1 ? 'tiene un problema' : 'tienen problemas'}: ${asistentes.filter(a => a.estado === 'error').map(a => a.nombre.split(' (')[0]).join(', ')}.`)
+  else partes.push('Nadie tiene problemas.')
+  const ids = new Set(asistentes.map(a => a.id))
+  const tuyos = pendientes.filter(p => !p.agente || ids.has(p.agente)).length
+  partes.push(tuyos ? `Te ${tuyos === 1 ? 'toca 1 cosa' : `tocan ${tuyos} cosas`}: están en "Te toca".` : 'No te toca nada por ahora.')
+  return partes.join(' ')
+}
+
+// Orden de los turnos: en el orden del plantel, y la jefa (si vino) cierra.
+export function turnosReunion(asistentes, idJefa = 'trabajadores:maria') {
+  return [...asistentes.filter(a => a.id !== idJefa), ...asistentes.filter(a => a.id === idJefa)]
 }

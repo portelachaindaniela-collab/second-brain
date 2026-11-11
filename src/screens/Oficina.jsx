@@ -4,6 +4,8 @@ import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
 import { armarOficina, contarEstados, hoyAR, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
+import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
+import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
 import './Oficina.css'
 
 // La oficina en 3D se carga recién al abrir la pantalla (three.js es pesado). Si el equipo no puede mostrar 3D o la
@@ -44,7 +46,7 @@ async function cargarOficina() {
     if (error) { errores.push(`${nombre}: ${error.message}`); return vacio }
     return data ?? vacio
   }
-  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas] = await Promise.all([
+  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin] = await Promise.all([
     leer('trabajadores', supabase.from('trabajadores').select('*').order('id'), []),
     leer('salud del sistema', supabase.rpc('salud_sistema'), null),
     leer('corridas de UP', supabase.from('up_corridas').select('estado,error,pasos,iniciado_at').order('iniciado_at', { ascending: false }).limit(15), []),
@@ -53,6 +55,7 @@ async function cargarOficina() {
     leer('agentes de PDG', supabase.from('pdg_agentes').select('clave,nombre,rol,orden'), []),
     leer('trabajos de PDG', supabase.from('pdg_trabajos').select('agente,estado,pedido,created_at,pdg_cuentas(nombre)').order('created_at', { ascending: false }).limit(80), []),
     leer('cuentas de PDG', supabase.from('pdg_cuentas').select('nombre,etapa,proxima_fecha').not('proxima_fecha', 'is', null), []),
+    leer('Administración', supabase.rpc('oficina_administracion'), []),
   ])
   const corridasPor = {}
   await Promise.all(trabajadores.map(async t => {
@@ -61,7 +64,7 @@ async function cargarOficina() {
   return {
     trabajadores, corridasPor, salud, upCorridas, chequeo, hoy, errores,
     piezas: piezas.map(p => ({ fecha: p.fecha, estado: p.estado, tiene_texto: Boolean(p.texto) })),
-    pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas,
+    pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin,
   }
 }
 
@@ -91,10 +94,23 @@ export default function Oficina() {
 
   const oficina = useMemo(() => (datos ? armarOficina(datos, ahora) : null), [datos, ahora])
   return <OficinaVista cargando={!datos} agentes={oficina?.agentes ?? []} pendientes={oficina?.pendientes ?? []}
-    errores={[error, ...(datos?.errores ?? [])].filter(Boolean)} ahora={ahora} hablar={hablarConAgente} />
+    errores={[error, ...(datos?.errores ?? [])].filter(Boolean)} ahora={ahora} hablar={hablarConAgente}
+    hablarReunion={hablarEnReunion} actualizar={recargar} />
+}
+
+// Reunión: una pregunta de Daniela y responden los que tengan algo que decir ({ agente, texto }).
+// Los de Administración son tareas programadas: escuchan pero no hablan (no tienen IA).
+const conversan = id => !String(id).startsWith('admin:')
+async function hablarEnReunion(asistentes, mensajes) {
+  const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { reunion: true, asistentes: asistentes.filter(conversan), mensajes } })
+  let respuesta = data
+  if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
+  if (error || !respuesta?.respuestas?.length) throw new Error(respuesta?.error || 'Nadie pudo responder. Probá de nuevo.')
+  return respuesta.respuestas
 }
 
 async function hablarConAgente(agente, mensajes) {
+  if (!conversan(agente)) throw new Error('Es una tarea programada: no conversa. Mirá sus corridas en «Tareas».')
   const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { agente, mensajes } })
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
@@ -103,7 +119,8 @@ async function hablarConAgente(agente, mensajes) {
 }
 
 // ---------- Vista ----------
-export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar }) {
+// reloj: de dónde sale la hora para la luz del día (en la app, la actual; se puede cambiar para probar).
+export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now }) {
   const [elegidoId, setElegidoId] = useState(null)
   const [pestana, setPestana] = useState('ahora')
   const [charlas, setCharlas] = useState({})
@@ -111,11 +128,78 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const cuenta = contarEstados(agentes)
   const abrir = (id, p = 'ahora') => { setElegidoId(id); setPestana(p) }
   const [tres] = useState(hayWebGL)
+
+  // ---------- Reunión ----------
+  // reunion: { id, modo: 'sala' | 'turnos', estado: 'convocada' | 'en_curso' | 'volviendo', asistentes, inicio,
+  // empezo, vuelta, turnos: { [id]: { llamado, fin } } }. La escena 3D mueve a los agentes; acá se lleva el estado.
+  const [reunion, setReunion] = useState(null)
+  const [convocando, setConvocando] = useState(false)
+  const [llegadas, setLlegadas] = useState(null)
+  const [hablando, setHablando] = useState(null)
+  const [reloj, setReloj] = useState(() => Date.now())
+  const [lejos, setLejos] = useState(false)
+  const [volverDaniela, setVolverDaniela] = useState(0)
+  const activa = Boolean(reunion && reunion.estado !== 'volviendo')
+  useEffect(() => {
+    if (!activa) return
+    const i = setInterval(() => setReloj(Date.now()), 1000)
+    return () => clearInterval(i)
+  }, [activa])
+  const convocar = (asistentes, modo) => {
+    setConvocando(false)
+    setElegidoId(null)
+    setLlegadas(null)
+    setReunion({ id: Date.now(), modo, estado: 'convocada', asistentes, inicio: Date.now(), turnos: {} })
+  }
+  const empezar = useCallback(async () => {
+    // Antes de empezar se vuelve a leer todo: vienen con su información más actualizada.
+    setReunion(r => (r && r.estado === 'convocada' ? { ...r, estado: 'preparando' } : r))
+    await actualizar()
+    setReunion(r => {
+      if (!r || r.estado !== 'preparando') return r
+      const turnos = r.modo === 'turnos' ? { [r.asistentes[0]]: { llamado: Date.now() } } : {}
+      return { ...r, estado: 'en_curso', empezo: Date.now(), turnos }
+    })
+  }, [actualizar])
+  // Empieza sola cuando llegaron todos o se cumplió el plazo.
+  useEffect(() => {
+    if (reunion?.estado !== 'convocada' || !llegadas) return
+    const pasado = (reloj - reunion.inicio) / 1000
+    const todos = reunion.asistentes.every(id => llegadas[id] != null && llegadas[id] <= pasado)
+    if (todos || pasado >= PLAZO_REUNION_S) empezar()
+  }, [reloj, reunion, llegadas, empezar])
+  const terminar = () => {
+    setHablando(null)
+    setReunion(r => {
+      if (!r) return r
+      const turnos = { ...r.turnos }
+      for (const [id, tu] of Object.entries(turnos)) if (tu.llamado && !tu.fin) turnos[id] = { ...tu, fin: Date.now() }
+      return { ...r, estado: 'volviendo', vuelta: Date.now(), turnos }
+    })
+  }
+  const siguiente = () => setReunion(r => {
+    if (!r) return r
+    const turnos = { ...r.turnos }
+    for (const [id, tu] of Object.entries(turnos)) if (tu.llamado && !tu.fin) turnos[id] = { ...tu, fin: Date.now() }
+    const prox = r.asistentes.find(id => !turnos[id]?.llamado)
+    if (prox) turnos[prox] = { llamado: Date.now() }
+    return { ...r, turnos }
+  })
+  const alPlanificar = useCallback((id, ll) => setReunion(r => { if (r?.id === id) setLlegadas(ll); return r }), [])
+  const alVolvieron = useCallback(id => setReunion(r => (r?.id === id ? null : r)), [])
+  const enCurso = reunion?.estado === 'en_curso'
+  const superpuesto = reunion?.estado === 'convocada' || reunion?.estado === 'preparando'
+    ? <AvisoLlegada reunion={reunion} agentes={agentes} llegadas={llegadas} ahora={reloj} empezar={empezar} cancelar={terminar} />
+    : enCurso && reunion.modo === 'sala'
+      ? <VistaSala reunion={reunion} agentes={agentes} pendientes={pendientes} ahora={reloj} hablando={hablando} setHablando={setHablando} hablarReunion={hablarReunion} terminar={terminar} />
+      : enCurso && reunion.modo === 'turnos'
+        ? <VistaTurnos reunion={reunion} agentes={agentes} pendientes={pendientes} ahora={reloj} hablando={hablando} setHablando={setHablando} hablar={hablar} siguiente={siguiente} terminar={terminar} />
+        : null
   const sin3D = <p className="oficina-sin-3d">Este equipo no puede mostrar la oficina en 3D. Los agentes están en la lista de abajo.</p>
 
   return <div className="oficina">
     <CabeceraPantalla sobretitulo="Agentes" titulo="Oficina" cargando={cargando}
-      subtitulo={`${agentes.length} agentes: Trabajadores, UP y PDG comercial. Tocá uno para ver qué hace o hablarle.`}
+      subtitulo={`${agentes.length} agentes: Trabajadores, UP, PDG comercial y Administración. Tocá uno para ver qué hace o hablarle.`}
       cifras={[
         { valor: cuenta.total, etiqueta: 'agentes' },
         { valor: cuenta.trabajando, etiqueta: 'trabajando ahora' },
@@ -124,12 +208,20 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
       ]} />
     {errores.map(e => <p key={e} role="alert" className="feedback-error">{e}</p>)}
     <Bloques disposicion="principal">
-      <Bloque titulo="La oficina" ancho="completo">
+      <Bloque titulo="La oficina" ancho="completo" accion={!cargando && tres && <button type="button" className="btn btn-sm btn-primary"
+        disabled={Boolean(reunion)} onClick={() => setConvocando(true)}>{reunion ? 'Reunión en curso' : 'Convocar reunión'}</button>}>
         {cargando ? <p className="empty-state">Abriendo la oficina…</p> : <>
           {tres
-            ? <SiFalla respaldo={sin3D}><Suspense fallback={<p className="oficina-sin-3d">Abriendo la oficina…</p>}><Oficina3D agentes={agentes} elegidoId={elegidoId} abrir={abrir} /></Suspense></SiFalla>
+            ? <SiFalla respaldo={sin3D}><Suspense fallback={<p className="oficina-sin-3d">Abriendo la oficina…</p>}>
+              <Oficina3D agentes={agentes} elegidoId={elegidoId} abrir={abrir} reunion={reunion} hablando={hablando}
+                alPlanificar={alPlanificar} alVolvieron={alVolvieron} volverDaniela={volverDaniela} alMoverDaniela={setLejos}
+                pantallaCompleta={enCurso} reloj={relojLuz}>{superpuesto}</Oficina3D>
+            </Suspense></SiFalla>
             : sin3D}
-          {tres && <p className="oficina-ayuda">Arrastrá para girar · rueda o dos dedos para acercar · tocá un agente para ver qué hace.</p>}
+          {tres && <div className="oficina-ayuda">
+            <span>Arrastrá para moverte · botón derecho o ⟲ ⟳ para girar · rueda, + y − para acercar · tocá un agente para ver qué hace · <strong>doble click</strong> en el piso para caminar vos.</span>
+            {lejos && <button type="button" className="btn btn-sm" onClick={() => setVolverDaniela(n => n + 1)}>Volver a mi escritorio</button>}
+          </div>}
           <Leyenda />
           <nav className="oficina-plantel" aria-label="Todos los agentes">
             {agentes.map(a => <button key={a.id} type="button" className={`oficina-ficha estado-${a.estado}${a.id === elegidoId ? ' is-elegido' : ''}`} onClick={() => abrir(a.id)}
@@ -152,6 +244,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
         {cargando ? <p className="tenue">Revisando…</p> : <ActividadAhora agentes={agentes} abrir={abrir} />}
       </Bloque>
     </Bloques>
+    {convocando && <ConvocarReunion agentes={agentes} alConvocar={convocar} cerrar={() => setConvocando(false)} />}
     {elegido && <PanelAgente key={elegido.id} agente={elegido} pestana={pestana} setPestana={setPestana} ahora={ahora} cerrar={() => setElegidoId(null)}
       charla={charlas[elegido.id] ?? []} setCharla={m => setCharlas(c => ({ ...c, [elegido.id]: typeof m === 'function' ? m(c[elegido.id] ?? []) : m }))} hablar={hablar} />}
   </div>
@@ -219,14 +312,14 @@ function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, se
         <button type="button" className="close-x" onClick={cerrar} aria-label="Cerrar">✕</button>
       </header>
       <div className="oficina-pestanas" role="tablist">
-        {PESTANAS.map(([id, texto]) => <button key={id} type="button" role="tab" aria-selected={pestana === id} className={pestana === id ? 'is-activa' : ''} onClick={() => setPestana(id)}>{texto}</button>)}
+        {PESTANAS.filter(([id]) => id !== 'charla' || !a.sinCharla).map(([id, texto]) => <button key={id} type="button" role="tab" aria-selected={pestana === id} className={pestana === id ? 'is-activa' : ''} onClick={() => setPestana(id)}>{texto}</button>)}
       </div>
       <div className="oficina-panel-cuerpo" role="tabpanel">
         {pestana === 'ahora' && <>
           <p><span className={`oficina-estado estado-${a.estado}`}>{ESTADOS[a.estado]}</span></p>
           <p className="oficina-ahora">{a.ahora}</p>
           {a.ultima && <p className="tenue">Última actividad: {haceCuanto(new Date(a.ultima).toISOString(), ahora)} ({horaAR(a.ultima)}).</p>}
-          <button type="button" className="btn btn-sm" onClick={() => setPestana('charla')}>Preguntarle algo</button>
+          {!a.sinCharla && <button type="button" className="btn btn-sm" onClick={() => setPestana('charla')}>Preguntarle algo</button>}
         </>}
         {pestana === 'que' && <p className="oficina-descripcion">{a.descripcion || 'Sin descripción cargada.'}</p>}
         {pestana === 'tareas' && (a.tareas.length
