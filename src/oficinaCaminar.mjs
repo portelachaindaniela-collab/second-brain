@@ -3,7 +3,7 @@
 // línea recta donde puede. Las medidas de los muebles son las de oficina3d/mundo.js.
 import {
   PISO, ZONAS, PUFS, MESA_REUNION, PUERTA_REUNION, DIRECCION, DANIELA, VISITA, ROBERTA, MUEBLES_DIRECCION, OFICINAS, DIVISOR,
-  asientosReunion, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RACK, MACETONES,
+  asientosReunion, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RINCON_TABLONES, EXPENDEDORAS, RACK, MACETONES,
 } from './oficinaPlano.mjs'
 
 export const CELDA = 0.25
@@ -34,6 +34,13 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
     }
   }
   rect(OFICINAS.x0, OFICINAS.x1, OFICINAS.y0 - pared, OFICINAS.y0 + pared)
+  for (const o of oficinas.values()) if (o.sofa) rect(o.sofa.x0, o.sofa.x1, o.sofa.y0, o.sofa.y1)
+  const RT = RINCON_TABLONES
+  circulo(RT.mesa.x, RT.mesa.y, RT.mesa.radio)
+  for (const [x, y] of RT.banquetas) circulo(x, y, 0.2)
+  rect(RT.pizarra.x0, RT.pizarra.x1, RT.pizarra.y - 0.15, RT.pizarra.y + 0.15)
+  for (const [x, y] of RT.macetones) circulo(x, y, 0.4)
+  for (const m of EXPENDEDORAS) rect(m.x0, m.x1, m.y0, m.y1)
   // Escritorios y sillas de cada agente.
   for (const l of lugares) {
     if (l.escritorio) {
