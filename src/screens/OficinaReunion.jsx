@@ -7,12 +7,13 @@ import { PLAZO_REUNION_S, MAX_ASISTENTES, asientosEspera, variante } from '../of
 // Daniela por turnos (pasan de a uno). Los informes salen de los datos de cada agente; lo que responden en la
 // conversación lo arma la IA con sus datos (oficina-chat), sin poder cambiar nada.
 const nombreCorto = n => String(n).split(' (')[0]
-const AREAS = ['trabajadores', 'up', 'pdg']
+const AREAS = ['trabajadores', 'up', 'pdg', 'admin']
 export const ESPERA_TURNOS = asientosEspera().length
 
 // ---------- Convocar ----------
 export function ConvocarReunion({ agentes, alConvocar, cerrar }) {
-  const [areas, setAreas] = useState(() => new Set(AREAS))
+  // Administración (tareas programadas, no conversan) viene solo si la marcás.
+  const [areas, setAreas] = useState(() => new Set(AREAS.filter(e => e !== 'admin')))
   const [modo, setModo] = useState('sala')
   const vienen = agentes.filter(a => areas.has(a.equipo) && a.estado !== 'pausado')
   const pausados = agentes.filter(a => areas.has(a.equipo) && a.estado === 'pausado')

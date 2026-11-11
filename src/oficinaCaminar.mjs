@@ -2,34 +2,37 @@
 // y muebles marcados (con las puertas libres) y el camino más corto que los esquiva (A*), suavizado para que vaya en
 // línea recta donde puede. Las medidas de los muebles son las de oficina3d/mundo.js.
 import {
-  PISO, ZONAS, PUFS, FONDO_OFICINAS, MESA_REUNION, PUERTA_REUNION, DIRECCION, DANIELA, VISITA, ROBERTA, MUEBLES_DIRECCION,
-  asientosReunion, asientosEspera, mesaUp, mesaPdg,
+  PISO, ZONAS, PUFS, MESA_REUNION, PUERTA_REUNION, DIRECCION, DANIELA, VISITA, ROBERTA, MUEBLES_DIRECCION, OFICINAS, DIVISOR,
+  asientosReunion, asientosEspera, mesaUp, mesaPdg, mesaAdmin,
 } from './oficinaPlano.mjs'
 
 export const CELDA = 0.25
 const RADIO = 0.24 // lo que ocupa una persona: se agranda cada obstáculo esto
 
 // Rectángulos que no se pueden pisar: { x0, x1, y0, y1 }. lugares: los de todos los agentes (oficinas y tablones).
-export function obstaculos(lugares, nUp, nPdg = 0) {
+// nUp, nPdg, nAdmin: cuántos hay en cada tablón (el largo de la mesa depende de eso).
+export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0) {
   const r = []
   const rect = (x0, x1, y0, y1) => r.push({ x0, x1, y0, y1 })
   const circulo = (x, y, radio) => rect(x - radio, x + radio, y - radio, y + radio)
   const pared = 0.06
-  // Paredes y vidrios de las oficinas (con el hueco de la puerta).
+  // Oficinas (las de los trabajadores y la de María): paredes, frente de vidrio con puerta y pared del fondo.
   const oficinas = new Map()
   for (const l of lugares) if (l.oficina) oficinas.set(l.oficina.id, l.oficina)
   for (const o of oficinas.values()) {
-    rect(o.x0 - pared, o.x0 + pared, 0, FONDO_OFICINAS)
-    rect(o.x1 - pared, o.x1 + pared, 0, FONDO_OFICINAS)
-    rect(o.x0, o.puerta.x - 0.5, FONDO_OFICINAS - pared, FONDO_OFICINAS + pared)
-    rect(o.puerta.x + 0.5, o.x1, FONDO_OFICINAS - pared, FONDO_OFICINAS + pared)
+    rect(o.x0 - pared, o.x0 + pared, o.y0, o.y1)
+    rect(o.x1 - pared, o.x1 + pared, o.y0, o.y1)
+    rect(o.x0, o.puerta.x - 0.5, o.y1 - pared, o.y1 + pared)
+    rect(o.puerta.x + 0.5, o.x1, o.y1 - pared, o.y1 + pared)
+    if (o.y0 > 0) rect(o.x0, o.x1, o.y0 - pared, o.y0 + pared)
     if (o.jefa) {
       const zona = o.x1 - 2.6
-      rect(o.x0 + 0.2, o.x0 + 2.6, 0, 0.5)
-      rect(zona, o.x1, 2.15, 3.55)
-      circulo(zona - 0.55, 3.75, 0.38)
+      rect(o.x0 + 0.2, o.x0 + 2.6, o.y0, o.y0 + 0.5)
+      rect(zona, o.x1, o.y0 + 2.15, o.y0 + 3.55)
+      circulo(zona - 0.55, o.y0 + 3.75, 0.38)
     }
   }
+  rect(OFICINAS.x0, OFICINAS.x1, OFICINAS.y0 - pared, OFICINAS.y0 + pared)
   // Escritorios y sillas de cada agente.
   for (const l of lugares) {
     if (l.escritorio) {
@@ -38,43 +41,44 @@ export function obstaculos(lugares, nUp, nPdg = 0) {
     }
     circulo(l.sentado.x, l.sentado.y, 0.3)
   }
-  // Tablones de UP y de PDG.
-  for (const { mesa } of [mesaUp(nUp), mesaPdg(nPdg)]) rect(mesa.x0, mesa.x1, mesa.y0, mesa.y1)
-  // Sala de reuniones: vidrios (puerta abajo, en el rincón de la pantalla), mesa redonda y sillas.
+  // Tablones y la mampara (con su paso en el medio).
+  for (const { mesa } of [mesaUp(nUp), mesaPdg(nPdg), mesaAdmin(nAdmin)]) rect(mesa.x0, mesa.x1, mesa.y0, mesa.y1)
+  rect(DIVISOR.x0, DIVISOR.hueco[0], DIVISOR.y - 0.15, DIVISOR.y + 0.15)
+  rect(DIVISOR.hueco[1], DIVISOR.x1, DIVISOR.y - 0.15, DIVISOR.y + 0.15)
+  // Sala de reuniones: vidrios (la puerta, del lado de la pantalla), mesa redonda y sillas.
   const R = ZONAS.reuniones
   rect(R.x0, R.x1, R.y0 - pared, R.y0 + pared)
+  rect(R.x0, R.x1, R.y1 - pared, R.y1 + pared)
   rect(R.x0 - pared, R.x0 + pared, R.y0, R.y1)
-  rect(R.x1 - pared, R.x1 + pared, R.y0, R.y1)
-  rect(R.x0, PUERTA_REUNION.x - 0.5, R.y1 - pared, R.y1 + pared)
-  rect(PUERTA_REUNION.x + 0.5, R.x1, R.y1 - pared, R.y1 + pared)
+  rect(R.x1 - pared, R.x1 + pared, R.y0, PUERTA_REUNION.y - 0.5)
+  rect(R.x1 - pared, R.x1 + pared, PUERTA_REUNION.y + 0.5, R.y1)
   circulo(MESA_REUNION.x, MESA_REUNION.y, MESA_REUNION.radio)
   for (const a of asientosReunion()) if (a.pose === 'sentado') circulo(a.x, a.y, 0.3)
   // Cafetería, comedor, ocio y ping pong.
-  rect(28.3, 35.7, 7.0, 7.8)
-  for (const x of [29.3, 30.9, 32.5, 34.1]) circulo(x, 8.6, 0.22)
-  circulo(31.7, 11.3, 0.45)
-  for (const [x0, x1] of [[8.4, 11.0], [12.4, 15.0]]) {
-    rect(x0, x1, 16.4, 17.4)
-    for (const x of [x0 + 0.65, x0 + 1.95]) { circulo(x, 15.75, 0.3); circulo(x, 18.05, 0.3) }
+  rect(1.0, 9.5, 8.3, 9.1)
+  for (const x of [2.0, 3.6, 5.2, 6.8]) circulo(x, 9.9, 0.22)
+  circulo(10.5, 11.9, 0.45)
+  for (const [x0, x1] of [[1.5, 4.1], [5.8, 8.4]]) {
+    rect(x0, x1, 15.5, 16.5)
+    for (const x of [x0 + 0.65, x0 + 1.95]) { circulo(x, 14.85, 0.3); circulo(x, 17.15, 0.3) }
   }
-  rect(19.25, 23.75, 15.2, 16.6)
-  rect(20.6, 22.4, 17.8, 18.6)
-  rect(ZONAS.ocio.x1 - 0.6, ZONAS.ocio.x1 - 0.2, 15.2, 17.6)
+  rect(0.9, 5.3, 19.8, 21.2)
+  rect(2.2, 4.0, 22.4, 23.2)
   for (const p of PUFS) circulo(p.x, p.y, 0.45)
-  rect(29.6, 33.8, 17.0, 18.6)
-  // Dirección: paredes (puerta al frente), escritorio, biblioteca, sillón y la silla de las visitas.
-  const Dd = DIRECCION
+  rect(8.6, 12.4, 22.0, 23.6)
+  // La oficina de Daniela: pared con la de María, frente de vidrio (puerta al corredor), sus muebles y la camita.
+  const Dd = DIRECCION, M = MUEBLES_DIRECCION
   rect(Dd.x0 - pared, Dd.x0 + pared, Dd.y0, Dd.y1)
   rect(Dd.x0, Dd.puerta.x - 0.5, Dd.y1 - pared, Dd.y1 + pared)
   rect(Dd.puerta.x + 0.5, Dd.x1, Dd.y1 - pared, Dd.y1 + pared)
+  for (const b of [M.biblioteca, M.sillon, M.bano]) rect(b.x0, b.x1, b.y0, b.y1)
+  rect(Dd.x0, Dd.x0 + 0.5, M.tele.y0, M.tele.y1)
+  circulo(M.mesita.x, M.mesita.y, M.mesita.radio)
   rect(DANIELA.escritorio.x - 1.3, DANIELA.escritorio.x + 1.3, DANIELA.escritorio.y - 0.6, DANIELA.escritorio.y + 0.6)
   circulo(DANIELA.sentado.x, DANIELA.sentado.y, 0.35)
   circulo(VISITA.x, VISITA.y, 0.3)
-  const M = MUEBLES_DIRECCION
-  for (const r of [M.biblioteca, M.sillon, M.bano]) rect(r.x0, r.x1, r.y0, r.y1)
-  circulo(M.mesita.x, M.mesita.y, M.mesita.radio)
   circulo(ROBERTA.cama.x, ROBERTA.cama.y, 0.35)
-  for (const a of asientosEspera()) if (a.pose === 'sentado') circulo(a.x, a.y, 0.28)
+  for (const a of asientosEspera()) if (a.pose === 'sentado') circulo(a.x, a.y, 0.26)
   return r
 }
 

@@ -46,7 +46,7 @@ async function cargarOficina() {
     if (error) { errores.push(`${nombre}: ${error.message}`); return vacio }
     return data ?? vacio
   }
-  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas] = await Promise.all([
+  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin] = await Promise.all([
     leer('trabajadores', supabase.from('trabajadores').select('*').order('id'), []),
     leer('salud del sistema', supabase.rpc('salud_sistema'), null),
     leer('corridas de UP', supabase.from('up_corridas').select('estado,error,pasos,iniciado_at').order('iniciado_at', { ascending: false }).limit(15), []),
@@ -55,6 +55,7 @@ async function cargarOficina() {
     leer('agentes de PDG', supabase.from('pdg_agentes').select('clave,nombre,rol,orden'), []),
     leer('trabajos de PDG', supabase.from('pdg_trabajos').select('agente,estado,pedido,created_at,pdg_cuentas(nombre)').order('created_at', { ascending: false }).limit(80), []),
     leer('cuentas de PDG', supabase.from('pdg_cuentas').select('nombre,etapa,proxima_fecha').not('proxima_fecha', 'is', null), []),
+    leer('Administración', supabase.rpc('oficina_administracion'), []),
   ])
   const corridasPor = {}
   await Promise.all(trabajadores.map(async t => {
@@ -63,7 +64,7 @@ async function cargarOficina() {
   return {
     trabajadores, corridasPor, salud, upCorridas, chequeo, hoy, errores,
     piezas: piezas.map(p => ({ fecha: p.fecha, estado: p.estado, tiene_texto: Boolean(p.texto) })),
-    pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas,
+    pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin,
   }
 }
 
@@ -98,8 +99,10 @@ export default function Oficina() {
 }
 
 // Reunión: una pregunta de Daniela y responden los que tengan algo que decir ({ agente, texto }).
+// Los de Administración son tareas programadas: escuchan pero no hablan (no tienen IA).
+const conversan = id => !String(id).startsWith('admin:')
 async function hablarEnReunion(asistentes, mensajes) {
-  const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { reunion: true, asistentes, mensajes } })
+  const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { reunion: true, asistentes: asistentes.filter(conversan), mensajes } })
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
   if (error || !respuesta?.respuestas?.length) throw new Error(respuesta?.error || 'Nadie pudo responder. Probá de nuevo.')
@@ -107,6 +110,7 @@ async function hablarEnReunion(asistentes, mensajes) {
 }
 
 async function hablarConAgente(agente, mensajes) {
+  if (!conversan(agente)) throw new Error('Es una tarea programada: no conversa. Mirá sus corridas en «Tareas».')
   const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { agente, mensajes } })
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
@@ -195,7 +199,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
 
   return <div className="oficina">
     <CabeceraPantalla sobretitulo="Agentes" titulo="Oficina" cargando={cargando}
-      subtitulo={`${agentes.length} agentes: Trabajadores, UP y PDG comercial. Tocá uno para ver qué hace o hablarle.`}
+      subtitulo={`${agentes.length} agentes: Trabajadores, UP, PDG comercial y Administración. Tocá uno para ver qué hace o hablarle.`}
       cifras={[
         { valor: cuenta.total, etiqueta: 'agentes' },
         { valor: cuenta.trabajando, etiqueta: 'trabajando ahora' },
@@ -308,14 +312,14 @@ function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, se
         <button type="button" className="close-x" onClick={cerrar} aria-label="Cerrar">✕</button>
       </header>
       <div className="oficina-pestanas" role="tablist">
-        {PESTANAS.map(([id, texto]) => <button key={id} type="button" role="tab" aria-selected={pestana === id} className={pestana === id ? 'is-activa' : ''} onClick={() => setPestana(id)}>{texto}</button>)}
+        {PESTANAS.filter(([id]) => id !== 'charla' || !a.sinCharla).map(([id, texto]) => <button key={id} type="button" role="tab" aria-selected={pestana === id} className={pestana === id ? 'is-activa' : ''} onClick={() => setPestana(id)}>{texto}</button>)}
       </div>
       <div className="oficina-panel-cuerpo" role="tabpanel">
         {pestana === 'ahora' && <>
           <p><span className={`oficina-estado estado-${a.estado}`}>{ESTADOS[a.estado]}</span></p>
           <p className="oficina-ahora">{a.ahora}</p>
           {a.ultima && <p className="tenue">Última actividad: {haceCuanto(new Date(a.ultima).toISOString(), ahora)} ({horaAR(a.ultima)}).</p>}
-          <button type="button" className="btn btn-sm" onClick={() => setPestana('charla')}>Preguntarle algo</button>
+          {!a.sinCharla && <button type="button" className="btn btn-sm" onClick={() => setPestana('charla')}>Preguntarle algo</button>}
         </>}
         {pestana === 'que' && <p className="oficina-descripcion">{a.descripcion || 'Sin descripción cargada.'}</p>}
         {pestana === 'tareas' && (a.tareas.length

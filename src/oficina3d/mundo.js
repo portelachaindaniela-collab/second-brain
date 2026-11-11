@@ -2,7 +2,10 @@
 // Las medidas y los lugares salen de oficinaPlano.mjs.
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
-import { PISO, ZONAS, PUFS, FONDO_OFICINAS, MESA_REUNION, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, asientosEspera, estiloDe, CUADROS_PDG, MUEBLES_DIRECCION, ROBERTA } from '../oficinaPlano.mjs'
+import {
+  PISO, ZONAS, PUFS, MESA_REUNION, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, asientosEspera, estiloDe, CUADROS_PDG,
+  MUEBLES_DIRECCION, ROBERTA, EJECUTIVO, X0, OFICINAS, DIVISOR, ENTRADA, alturaPiso,
+} from '../oficinaPlano.mjs'
 import { texturaCuadro, texturaAlfombra } from './cuadros.js'
 
 export const COLORES = {
@@ -314,37 +317,43 @@ function globo(x, z) {
   return g
 }
 
-// Oficina del fondo (de uno o compartida): paredes, frente de vidrio con puerta, ventana, alfombra, decoración y, si
-// es de un grupo, su cartel. o: el `oficina` de oficinaPlano.mjs.
+// Oficina (de uno, compartida o la de María): paredes, frente de vidrio con puerta, alfombra, decoración y, si es de un
+// grupo, su cartel. o: el `oficina` de oficinaPlano.mjs.
 export function crearOficina(o) {
+  // Se arma en coordenadas propias (el fondo de la oficina en z = 0) y se ubica en su fila; las de la fila ejecutiva
+  // (la de María) van sobre la tarima.
   const g = new THREE.Group()
+  g.position.set(0, alturaPiso(o.x0 + 0.1, o.y0 + 0.1), o.y0)
+  const D = o.y1 - o.y0
   const altoTabique = 2.1
   const estilo = estiloDe(o.id)
   const acento = mat(estilo.pared)
   {
-    g.add(caja(o.x0, o.x0 + 0.08, 0, altoTabique, 0, FONDO_OFICINAS, mat(COLORES.tabique), { r: 0.02 }))
-    g.add(caja(o.x1 - 0.08, o.x1, 0, altoTabique, 0, FONDO_OFICINAS, mat(COLORES.tabique), { r: 0.02 }))
-    g.add(vidriera(o.x0, o.x1, FONDO_OFICINAS, 'x', altoTabique, [o.puerta.x - 0.5, o.puerta.x + 0.5]))
-    g.add(alfombraConEstilo(o.x0 + 0.3, o.x1 - 0.3, 0.3, FONDO_OFICINAS - 0.3, estilo.alfombra))
+    g.add(caja(o.x0, o.x0 + 0.08, 0, altoTabique, 0, D, mat(COLORES.tabique), { r: 0.02 }))
+    g.add(caja(o.x1 - 0.08, o.x1, 0, altoTabique, 0, D, mat(COLORES.tabique), { r: 0.02 }))
+    if (o.y0 > 0) g.add(caja(o.x0, o.x1, 0, altoTabique, -0.08, 0, mat(COLORES.tabique), { r: 0.02 }))
+    g.add(vidriera(o.x0, o.x1, D, 'x', altoTabique, [o.puerta.x - 0.5, o.puerta.x + 0.5]))
+    g.add(alfombraConEstilo(o.x0 + 0.3, o.x1 - 0.3, 0.3, D - 0.3, estilo.alfombra))
     g.add(caja(o.x0 + 0.08, o.x1 - 0.08, 0.15, altoTabique, 0.004, 0.012, acento, { sombra: false }))
     const cx = (o.x0 + o.x1) / 2
-    g.add(ventana(cx - 0.9, cx + 0.9, 'fondo'))
+    if (o.y0 === 0) g.add(ventana(cx - 0.9, cx + 0.9, 'fondo'))
     if (o.nombre && !o.jefa) {
       const ancho = Math.min(o.x1 - o.x0 - 1.8, 0.24 * o.nombre.length + 0.6)
       const cartel = new THREE.Mesh(new THREE.PlaneGeometry(ancho, 0.34), new THREE.MeshStandardMaterial({ map: textoTextura(o.nombre, { fondo: COLORES.lila, tam: 60, ancho: 640 }), transparent: true }))
-      cartel.position.set(o.x0 + 0.3 + ancho / 2, 1.85, FONDO_OFICINAS + 0.06)
+      cartel.position.set(o.x0 + 0.3 + ancho / 2, 1.85, D + 0.06)
       g.add(cartel)
     }
     if (!o.jefa) {
       g.add(planta(o.x1 - 0.45, 0.45, 0.8))
       g.add(caja(o.x0 + 0.15, o.x0 + 0.75, 0, 0.9, 0.1, 0.5, mat(COLORES.blanco), { r: 0.03 }))
-      // Cuadros y objeto de pared a los costados de la ventana, de adentro hacia afuera.
+      // Cuadros y objeto de pared en la pared del fondo, desde el centro hacia los costados.
       const piezas = [...estilo.cuadros.map(t => ({ t, w: 0.86, h: 0.64 })), ...(estilo.objeto === 'tablero' || estilo.objeto === 'corcho' ? [{ t: estilo.objeto, w: 1.1, h: 0.72 }] : [])]
-      let izq = cx - 1.05, der = cx + 1.05
+      const libre = o.y0 === 0 ? 1.05 : 0.1
+      let izq = cx - libre, der = cx + libre
       piezas.forEach((pz, k) => {
         const aIzq = k % 2 === 0
         const x = aIzq ? izq - pz.w / 2 : der + pz.w / 2
-        if (x - pz.w / 2 < o.x0 + 0.2 || x + pz.w / 2 > o.x1 - 0.2) return
+        if (x - pz.w / 2 < o.x0 + 0.85 || x + pz.w / 2 > o.x1 - 0.85) return
         g.add(cuadroDeArea(pz.t, { x, z: 0.02, w: pz.w, h: pz.h, y: pz.t === 'tablero' ? 1.45 : 1.5 }))
         if (aIzq) izq -= pz.w + 0.2; else der += pz.w + 0.2
       })
@@ -369,7 +378,7 @@ export function crearOficina(o) {
     g.add(planta(zona - 0.3, 0.5, 1.1))
     g.add(cuadro(zona + 0.6, 0, COLORES.dorado))
     const cartel = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.36), new THREE.MeshStandardMaterial({ map: textoTextura('Dirección', { fondo: '#6e432a', color: '#f6dd8b', tam: 66 }), transparent: true }))
-    cartel.position.set(o.puerta.x + 1.6, 1.85, FONDO_OFICINAS + 0.06)
+    cartel.position.set(o.puerta.x + 1.6, 1.85, D + 0.06)
     g.add(cartel)
     // Su oficina tiene luz propia de noche (la escena la prende si ella está).
     const luz = new THREE.PointLight('#ffcf8a', 0, 6, 1.6)
@@ -380,10 +389,19 @@ export function crearOficina(o) {
   return g
 }
 
-// Todo lo común: piso, paredes, tablones y salas. mesa / mesaP: { x0, x1, y0, y1 } de los tablones de UP y de PDG.
-export function crearSala(mesa, mesaP) {
+// Un tablón: la mesa larga con su travesaño y patas (los puestos los arma crearPuestoMesa).
+function tablonMesa(g, mesa) {
+  g.add(caja(mesa.x0, mesa.x1, 0.7, 0.76, mesa.y0, mesa.y1, mat(COLORES.madera), { r: 0.03 }))
+  g.add(caja(mesa.x0 + 0.1, mesa.x1 - 0.1, 0.3, 0.36, (mesa.y0 + mesa.y1) / 2 - 0.08, (mesa.y0 + mesa.y1) / 2 + 0.08, mat(COLORES.maderaOscura)))
+  for (const x of [mesa.x0 + 0.15, mesa.x1 - 0.15]) g.add(caja(x - 0.05, x + 0.05, 0, 0.7, mesa.y0 + 0.1, mesa.y1 - 0.1, mat(COLORES.maderaOscura)))
+}
+
+// Todo lo común: piso, paredes, tarima, salas comunes, tablones, mampara, Administración y entrada.
+// mesas: { up, pdg, admin } con { x0, x1, y0, y1 } de cada tablón.
+export function crearSala(mesas) {
   const g = new THREE.Group()
   const { ancho: W, fondo: D, pared: P } = PISO
+  const Z = ZONAS
 
   const piso = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: texturaPiso(), roughness: 0.65 }))
   piso.rotation.x = -Math.PI / 2
@@ -394,10 +412,17 @@ export function crearSala(mesa, mesaP) {
   g.add(caja(-0.2, 0, 0, P, -0.2, D, mat(COLORES.paredLado), { sombra: false }))
   g.add(caja(0, W, 0, 0.14, 0, 0.04, mat(COLORES.zocalo), { sombra: false }))
   g.add(caja(0, 0.04, 0, 0.14, 0, D, mat(COLORES.zocalo), { sombra: false }))
+  for (const [a, b] of [[14.5, 18.2], [20.2, 24]]) g.add(ventana(a, b, 'izquierda'))
 
-  // Reloj con la hora real, en la pared izquierda del corredor.
+  // La tarima de la fila ejecutiva (María y Daniela) con su escalón.
+  g.add(caja(X0, W, 0, EJECUTIVO.tarima, EJECUTIVO.y0, EJECUTIVO.y1, mat('#e6cfa8'), { sombra: false }))
+  g.add(caja(X0, W, 0, EJECUTIVO.tarima / 2, EJECUTIVO.y1, EJECUTIVO.y1 + 0.25, mat('#d8bd92'), { sombra: false }))
+  // La pared del fondo de la fila de oficinas de los trabajadores (da al corredor de la fila ejecutiva).
+  g.add(caja(OFICINAS.x0, OFICINAS.x1, 0, 2.1, OFICINAS.y0 - 0.08, OFICINAS.y0, mat(COLORES.tabique), { r: 0.02 }))
+
+  // Reloj con la hora real, en la pared izquierda (cafetería).
   const reloj = new THREE.Group()
-  reloj.position.set(0.05, 1.7, 5.5)
+  reloj.position.set(0.05, 1.9, 10.5)
   reloj.rotation.y = Math.PI / 2
   const fondoReloj = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.05, 32), mat('#ffffff'))
   fondoReloj.rotation.x = Math.PI / 2
@@ -415,107 +440,117 @@ export function crearSala(mesa, mesaP) {
   g.add(reloj)
 
   // Carteles en el piso de cada zona.
-  const Z = ZONAS
-  for (const z of Object.values(Z)) g.add(textoEnPiso(z.nombre, (z.x0 + z.x1) / 2, z.y1 - 0.45))
+  for (const [id, z] of Object.entries(Z)) {
+    if (id === 'admin') g.add(textoEnPiso(z.nombre, 20, z.y1 - 0.45))
+    else g.add(textoEnPiso(z.nombre, (z.x0 + z.x1) / 2, z.y1 - 0.45))
+  }
 
-  // UP: el tablón con las PC enfrentadas.
-  g.add(alfombra(Z.up.x0 + 0.3, Z.up.x1 - 0.3, Z.up.y0 + 0.6, Z.up.y1 - 0.9, COLORES.duraznoClaro))
-  g.add(caja(mesa.x0, mesa.x1, 0.7, 0.76, mesa.y0, mesa.y1, mat(COLORES.madera), { r: 0.03 }))
-  g.add(caja(mesa.x0 + 0.1, mesa.x1 - 0.1, 0.3, 0.36, (mesa.y0 + mesa.y1) / 2 - 0.08, (mesa.y0 + mesa.y1) / 2 + 0.08, mat(COLORES.maderaOscura)))
-  for (const x of [mesa.x0 + 0.15, mesa.x1 - 0.15]) g.add(caja(x - 0.05, x + 0.05, 0, 0.7, mesa.y0 + 0.1, mesa.y1 - 0.1, mat(COLORES.maderaOscura)))
-  g.add(planta(Z.up.x0 + 0.5, Z.up.y0 + 0.5, 1.1))
-  g.add(planta(Z.up.x1 - 0.5, Z.up.y0 + 0.5, 0.9))
-
-  // PDG comercial: su tablón a lo largo de la pared izquierda y, en la pared, el sistema de punta a punta.
-  const Pz = Z.pdg
-  g.add(alfombra(Pz.x0 + 0.25, Pz.x1 - 0.4, Pz.y0 + 0.9, Math.min(Pz.y1 - 1.0, mesaP.y1 + 1.6), COLORES.mentaClaro))
-  g.add(caja(mesaP.x0, mesaP.x1, 0.7, 0.76, mesaP.y0, mesaP.y1, mat(COLORES.madera), { r: 0.03 }))
-  g.add(caja((mesaP.x0 + mesaP.x1) / 2 - 0.08, (mesaP.x0 + mesaP.x1) / 2 + 0.08, 0.3, 0.36, mesaP.y0 + 0.1, mesaP.y1 - 0.1, mat(COLORES.maderaOscura)))
-  for (const z of [mesaP.y0 + 0.15, mesaP.y1 - 0.15]) g.add(caja(mesaP.x0 + 0.1, mesaP.x1 - 0.1, 0, 0.7, z - 0.05, z + 0.05, mat(COLORES.maderaOscura)))
-  const paso = (mesaP.y1 - mesaP.y0 + 2.2) / CUADROS_PDG.length
-  CUADROS_PDG.forEach((tipo, k) => {
-    const marco = cuadroDeArea(tipo, { x: 0, y: 1.55, z: 0, w: 0.9, h: 0.66 })
-    marco.rotation.y = Math.PI / 2
-    marco.position.set(0.02, 0, mesaP.y0 - 0.9 + paso * (k + 0.5))
-    g.add(marco)
-  })
-  const ventasPdg = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.4), new THREE.MeshStandardMaterial({ map: textoTextura('Ventas PDG', { fondo: COLORES.menta, tam: 62 }), transparent: true }))
-  ventasPdg.rotation.y = Math.PI / 2
-  ventasPdg.position.set(0.03, 2.2, (mesaP.y0 + mesaP.y1) / 2)
+  // Los tablones: UP y PDG comercial (un mismo sistema), y el panel del sistema comercial junto al de PDG.
+  g.add(alfombra(Z.up.x0 + 0.4, Z.up.x1 - 0.4, Z.up.y0 + 0.4, Z.up.y1 - 0.9, COLORES.duraznoClaro))
+  g.add(alfombra(Z.pdg.x0 + 0.4, Z.pdg.x1 - 0.4, Z.pdg.y0 + 0.4, Z.pdg.y1 - 0.9, COLORES.mentaClaro))
+  tablonMesa(g, mesas.up)
+  tablonMesa(g, mesas.pdg)
+  const panel = { x0: 38.0, x1: 44.6, y: 14.85 }
+  g.add(caja(panel.x0, panel.x1, 0, 1.75, panel.y - 0.05, panel.y + 0.02, mat(COLORES.blanco), { r: 0.02 }))
+  for (const x of [panel.x0 + 0.1, panel.x1 - 0.1]) g.add(caja(x - 0.04, x + 0.04, 0, 1.75, panel.y - 0.12, panel.y + 0.06, mat(COLORES.gris)))
+  CUADROS_PDG.forEach((tipo, k) => g.add(cuadroDeArea(tipo, { x: panel.x0 + 0.75 + k * 1.27, y: 1.05, z: panel.y + 0.02, w: 0.95, h: 0.7 })))
+  const ventasPdg = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.38), new THREE.MeshStandardMaterial({ map: textoTextura('Ventas PDG', { fondo: COLORES.menta, tam: 62 }), transparent: true }))
+  ventasPdg.position.set((panel.x0 + panel.x1) / 2, 1.6, panel.y + 0.03)
   g.add(ventasPdg)
-  g.add(ventana(16.5, 20.5, 'izquierda'))
-  g.add(globo(0.6, Pz.y1 - 2.2))
-  g.add(planta(4.4, Pz.y1 - 0.6, 1.2))
-  g.add(planta(0.6, Pz.y1 - 0.6, 1.0))
+  g.add(globo(44.4, 19.8))
+  g.add(planta(Z.up.x0 + 0.5, Z.up.y0 + 0.5, 1.0))
 
-  // Sala de reuniones: vidriada, mesa redonda con sillas en herradura y pantalla con cámara.
+  // La mampara: maceteros con plantas y vidrio esmerilado arriba, con un paso en el medio.
+  for (const [x0, x1] of [[DIVISOR.x0, DIVISOR.hueco[0]], [DIVISOR.hueco[1], DIVISOR.x1]]) {
+    g.add(caja(x0, x1, 0, 0.5, DIVISOR.y - 0.18, DIVISOR.y + 0.18, mat(COLORES.madera), { r: 0.04 }))
+    g.add(caja(x0 + 0.05, x1 - 0.05, 0.5, 1.45, DIVISOR.y - 0.03, DIVISOR.y + 0.03, mat('#eef6f8', { transparent: true, opacity: 0.55, roughness: 0.3 }), { sombra: false }))
+    for (let x = x0 + 0.5; x < x1 - 0.3; x += 1.4) {
+      const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), mat(COLORES.hoja, { flatShading: true }))
+      h.position.set(x, 0.66, DIVISOR.y)
+      h.castShadow = true
+      g.add(h)
+    }
+  }
+
+  // Administración: su mesa, un archivero, la impresora y la entrada.
+  const A = Z.admin
+  g.add(alfombra(A.x0 + 0.4, 27.6, A.y0 + 0.5, A.y1 - 0.4, COLORES.lilaClaro))
+  tablonMesa(g, mesas.admin)
+  g.add(caja(25.2, 26.0, 0, 1.3, 25.2, 26.1, mat('#c9c3d9'), { r: 0.03 }))
+  for (const y of [0.35, 0.75, 1.15]) g.add(caja(25.18, 25.2, y - 0.03, y + 0.03, 25.4, 25.9, mat(COLORES.gris), { sombra: false }))
+  g.add(caja(24.0, 24.9, 0, 0.75, 25.4, 26.1, mat(COLORES.blanco), { r: 0.03 }))
+  g.add(caja(24.1, 24.8, 0.75, 1.0, 25.5, 26.0, mat('#e9e6f0'), { r: 0.04 }))
+  g.add(caja(ENTRADA.x - 0.9, ENTRADA.x + 0.9, 0, 0.02, ENTRADA.y - 1.0, ENTRADA.y - 0.1, mat('#8a5a36', { roughness: 1 }), { sombra: false }))
+  g.add(textoEnPiso('Entrada', ENTRADA.x, ENTRADA.y - 1.6))
+  g.add(planta(ENTRADA.x - 1.4, ENTRADA.y - 0.5, 1.2))
+  g.add(planta(ENTRADA.x + 1.4, ENTRADA.y - 0.5, 1.2))
+  g.add(planta(44.4, 25.8, 1.1))
+
+  // Sala de reuniones: vidriada, mesa redonda con sillas en herradura y pantalla con cámara (del lado de la puerta).
   const R = Z.reuniones
   g.add(alfombra(R.x0 + 0.2, R.x1 - 0.2, R.y0 + 0.2, R.y1 - 0.2, COLORES.lilaClaro))
   g.add(vidriera(R.x0, R.x1, R.y0, 'x', 2.1))
-  g.add(vidriera(R.x0, R.x1, R.y1, 'x', 2.1, [PUERTA_REUNION.x - 0.5, PUERTA_REUNION.x + 0.5]))
+  g.add(vidriera(R.x0, R.x1, R.y1, 'x', 2.1))
   g.add(vidriera(R.y0, R.y1, R.x0, 'z', 2.1))
-  g.add(vidriera(R.y0, R.y1, R.x1, 'z', 2.1))
+  g.add(vidriera(R.y0, R.y1, R.x1, 'z', 2.1, [PUERTA_REUNION.y - 0.5, PUERTA_REUNION.y + 0.5]))
   const MR = MESA_REUNION
-  // Mesa redonda: tapa, pie central y base; las sillas en herradura mirando a la mesa (el lado de la pantalla, libre).
   g.add(cilindro(MR.x, MR.y, MR.radio, 0.7, 0.76, mat(COLORES.blanco), MR.radio, 48))
   g.add(cilindro(MR.x, MR.y, 0.14, 0, 0.7, mat(COLORES.gris)))
   g.add(cilindro(MR.x, MR.y, 0.55, 0, 0.05, mat(COLORES.gris)))
   g.add(cilindro(MR.x, MR.y, 0.32, 0.76, 0.79, mat(COLORES.mentaClaro), 0.32, 32))
   for (const a of asientosReunion()) if (a.pose === 'sentado') g.add(silla(a.x, a.y, a.mira, COLORES.menta))
-  // Pantalla con cámara en la cabecera: desde ahí los ves cuando hay reunión.
-  g.add(caja(25.55, 25.65, 0, 1.05, 9.85, 10.15, mat(COLORES.gris)))
-  g.add(caja(25.5, 25.62, 1.05, 1.85, 9.3, 10.7, mat(COLORES.negro), { r: 0.02 }))
-  g.add(caja(25.47, 25.5, 1.1, 1.8, 9.36, 10.64, mat('#2a3550', { emissive: '#3a5a9a', emissiveIntensity: 0.4 }), { sombra: false }))
-  g.add(cilindro(25.52, 10, 0.04, 1.86, 1.94, mat(COLORES.negro)))
+  const xp = R.x1 - 0.1
+  g.add(caja(xp - 0.08, xp, 0, 1.05, MR.y - 0.15, MR.y + 0.15, mat(COLORES.gris)))
+  g.add(caja(xp - 0.12, xp, 1.05, 1.85, MR.y - 0.7, MR.y + 0.7, mat(COLORES.negro), { r: 0.02 }))
+  g.add(caja(xp - 0.15, xp - 0.12, 1.1, 1.8, MR.y - 0.64, MR.y + 0.64, mat('#2a3550', { emissive: '#3a5a9a', emissiveIntensity: 0.4 }), { sombra: false }))
+  g.add(cilindro(xp - 0.08, MR.y, 0.04, 1.86, 1.94, mat(COLORES.negro)))
   g.add(planta(R.x0 + 0.45, R.y1 - 0.45, 0.9))
 
   // Cafetería: barra con cafetera, vitrina y banquetas; mesa alta.
   const C = Z.cafeteria
-  g.add(alfombra(C.x0 + 0.3, C.x1 - 0.3, C.y0 + 0.9, C.y1 - 0.9, COLORES.rosaClaro))
-  g.add(caja(28.3, 35.7, 0, 1.0, 7.0, 7.8, mat(COLORES.rosa), { r: 0.04 }))
-  g.add(caja(28.2, 35.8, 1.0, 1.07, 6.95, 7.9, mat(COLORES.blanco)))
-  g.add(caja(28.6, 29.4, 1.07, 1.6, 7.1, 7.6, mat('#6d6383'), { r: 0.05 }))
-  const luzCafetera = caja(28.95, 29.05, 1.4, 1.46, 7.6, 7.62, new THREE.MeshStandardMaterial({ color: '#ff7a7a', emissive: '#ff4d4d', emissiveIntensity: 1.2 }), { sombra: false })
+  g.add(alfombra(C.x0 + 0.3, C.x1 - 0.3, C.y0 + 0.2, C.y1 - 0.3, COLORES.rosaClaro))
+  g.add(caja(1.0, 9.5, 0, 1.0, 8.3, 9.1, mat(COLORES.rosa), { r: 0.04 }))
+  g.add(caja(0.95, 9.55, 1.0, 1.07, 8.25, 9.15, mat(COLORES.blanco)))
+  g.add(caja(1.3, 2.1, 1.07, 1.6, 8.4, 8.9, mat('#6d6383'), { r: 0.05 }))
+  const luzCafetera = caja(1.65, 1.75, 1.4, 1.46, 8.9, 8.92, new THREE.MeshStandardMaterial({ color: '#ff7a7a', emissive: '#ff4d4d', emissiveIntensity: 1.2 }), { sombra: false })
   g.add(luzCafetera)
-  g.add(caja(33.2, 35.2, 1.07, 1.5, 7.1, 7.7, mat('#e9f6ff', { transparent: true, opacity: 0.45 }), { sombra: false }))
-  for (const [x, c] of [[33.6, '#e8b15b'], [34.1, '#f6a5c0'], [34.6, '#c98a4b']]) g.add(cilindro(x, 7.4, 0.14, 1.1, 1.2, mat(c)))
-  for (const x of [29.3, 30.9, 32.5, 34.1]) { g.add(cilindro(x, 8.6, 0.04, 0, 0.62, mat(COLORES.gris))); g.add(cilindro(x, 8.6, 0.22, 0.62, 0.68, mat(COLORES.amarillo))) }
-  g.add(cilindro(31.7, 11.3, 0.05, 0, 1.05, mat(COLORES.gris)))
-  g.add(cilindro(31.7, 11.3, 0.45, 1.05, 1.1, mat(COLORES.blanco)))
-  g.add(planta(C.x1 - 0.5, C.y1 - 0.9, 1))
+  g.add(caja(6.8, 8.8, 1.07, 1.5, 8.4, 9.0, mat('#e9f6ff', { transparent: true, opacity: 0.45 }), { sombra: false }))
+  for (const [x, c] of [[7.2, '#e8b15b'], [7.8, '#f6a5c0'], [8.4, '#c98a4b']]) g.add(cilindro(x, 8.7, 0.14, 1.1, 1.2, mat(c)))
+  for (const x of [2.0, 3.6, 5.2, 6.8]) { g.add(cilindro(x, 9.9, 0.04, 0, 0.62, mat(COLORES.gris))); g.add(cilindro(x, 9.9, 0.22, 0.62, 0.68, mat(COLORES.amarillo))) }
+  g.add(cilindro(10.5, 11.9, 0.05, 0, 1.05, mat(COLORES.gris)))
+  g.add(cilindro(10.5, 11.9, 0.45, 1.05, 1.1, mat(COLORES.blanco)))
   const menu = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.5), new THREE.MeshStandardMaterial({ map: textoTextura('Cafetería', { fondo: COLORES.rosa, tam: 64 }), transparent: true }))
-  menu.position.set(32, 2.0, 7.0)
+  menu.position.set(5.2, 2.0, 8.25)
   g.add(menu)
 
   // Comedor: dos mesas con sillas y platos.
-  const M = Z.comedor
-  g.add(alfombra(M.x0 + 0.4, M.x1 - 0.4, M.y0 + 0.6, M.y1 - 1.0, COLORES.amarilloClaro))
-  for (const [x0, x1] of [[8.4, 11.0], [12.4, 15.0]]) {
-    g.add(caja(x0, x1, 0.7, 0.76, 16.4, 17.4, mat(COLORES.madera), { r: 0.03 }))
-    for (const x of [x0 + 0.1, x1 - 0.1]) g.add(caja(x - 0.05, x + 0.05, 0, 0.7, 16.5, 17.3, mat(COLORES.maderaOscura)))
+  for (const [x0, x1] of [[1.5, 4.1], [5.8, 8.4]]) {
+    g.add(caja(x0, x1, 0.7, 0.76, 15.5, 16.5, mat(COLORES.madera), { r: 0.03 }))
+    for (const x of [x0 + 0.1, x1 - 0.1]) g.add(caja(x - 0.05, x + 0.05, 0, 0.7, 15.6, 16.4, mat(COLORES.maderaOscura)))
     for (const x of [x0 + 0.65, x0 + 1.95]) {
-      g.add(silla(x, 15.75, 0, COLORES.menta))
-      g.add(silla(x, 18.05, Math.PI, COLORES.menta))
-      for (const z of [16.65, 17.15]) g.add(cilindro(x, z, 0.16, 0.76, 0.79, mat('#ffffff')))
+      g.add(silla(x, 14.85, 0, COLORES.menta))
+      g.add(silla(x, 17.15, Math.PI, COLORES.menta))
+      for (const z of [15.75, 16.25]) g.add(cilindro(x, z, 0.16, 0.76, 0.79, mat('#ffffff')))
     }
-    g.add(cilindro((x0 + x1) / 2, 16.9, 0.08, 0.76, 1.0, mat('#bfe3ff', { transparent: true, opacity: 0.75 })))
+    g.add(cilindro((x0 + x1) / 2, 16.0, 0.08, 0.76, 1.0, mat('#bfe3ff', { transparent: true, opacity: 0.75 })))
   }
-  g.add(planta(M.x0 + 0.5, M.y1 - 0.6, 1.1))
+  g.add(alfombra(Z.comedor.x0 + 0.4, 9.2, 14.4, 18.4, COLORES.amarilloClaro))
+  g.add(planta(11.8, 18.2, 1.1))
 
-  // Ocio: sillón, mesita, pufs, biblioteca baja y planta grande.
+  // Ocio: sillón, mesita, pufs y planta grande.
   const O = Z.ocio
-  g.add(alfombra(O.x0 + 0.5, O.x1 - 0.5, O.y0 + 0.5, O.y1 - 0.8, COLORES.lilaClaro))
-  g.add(caja(19.4, 23.6, 0, 1.05, 15.2, 15.6, mat(COLORES.rosa), { r: 0.12 }))
-  g.add(caja(19.6, 23.4, 0, 0.42, 15.55, 16.6, mat(COLORES.rosaClaro), { r: 0.1 }))
-  g.add(caja(19.25, 19.65, 0, 0.7, 15.2, 16.6, mat(COLORES.rosa), { r: 0.1 }))
-  g.add(caja(23.35, 23.75, 0, 0.7, 15.2, 16.6, mat(COLORES.rosa), { r: 0.1 }))
-  for (const x of [20.1, 21.5, 22.9]) {
-    const a = caja(x - 0.32, x + 0.32, 0.42, 0.86, 15.55, 15.75, mat(COLORES.amarillo), { r: 0.08 })
+  g.add(alfombra(O.x0 + 0.3, O.x1 - 0.2, O.y0 + 0.2, O.y1 - 0.6, COLORES.lilaClaro))
+  g.add(caja(0.9, 5.3, 0, 1.05, 19.8, 20.2, mat(COLORES.rosa), { r: 0.12 }))
+  g.add(caja(1.1, 5.1, 0, 0.42, 20.15, 21.2, mat(COLORES.rosaClaro), { r: 0.1 }))
+  g.add(caja(0.75, 1.15, 0, 0.7, 19.8, 21.2, mat(COLORES.rosa), { r: 0.1 }))
+  g.add(caja(5.05, 5.45, 0, 0.7, 19.8, 21.2, mat(COLORES.rosa), { r: 0.1 }))
+  for (const x of [1.75, 3.1, 4.45]) {
+    const a = caja(x - 0.32, x + 0.32, 0.42, 0.86, 20.15, 20.35, mat(COLORES.amarillo), { r: 0.08 })
     a.rotation.x = -0.15
     g.add(a)
   }
-  g.add(caja(20.6, 22.4, 0.36, 0.42, 17.8, 18.6, mat(COLORES.blanco), { r: 0.05 }))
-  for (const [x, z] of [[20.75, 17.95], [22.25, 17.95], [20.75, 18.45], [22.25, 18.45]]) g.add(cilindro(x, z, 0.03, 0, 0.36, mat(COLORES.gris)))
+  g.add(caja(2.2, 4.0, 0.36, 0.42, 22.4, 23.2, mat(COLORES.blanco), { r: 0.05 }))
+  for (const [x, z] of [[2.35, 22.55], [3.85, 22.55], [2.35, 23.05], [3.85, 23.05]]) g.add(cilindro(x, z, 0.03, 0, 0.36, mat(COLORES.gris)))
   PUFS.forEach((p, k) => {
     const puf = new THREE.Mesh(new THREE.SphereGeometry(0.45, 24, 16), mat([COLORES.amarillo, COLORES.menta, COLORES.durazno][k % 3]))
     puf.scale.set(1, 0.55, 1)
@@ -523,21 +558,17 @@ export function crearSala(mesa, mesaP) {
     puf.castShadow = true; puf.receiveShadow = true
     g.add(puf)
   })
-  g.add(caja(O.x1 - 0.6, O.x1 - 0.2, 0, 1.2, 15.2, 17.6, mat(COLORES.madera), { r: 0.03 }))
-  ;['#f6a5c0', '#8fd9bd', '#b9a2e8', '#f7b98b'].forEach((c, k) => g.add(caja(O.x1 - 0.55, O.x1 - 0.25, 0.75, 1.1, 15.4 + k * 0.5, 15.7 + k * 0.5, mat(c))))
-  g.add(planta(O.x0 + 0.6, O.y1 - 0.9, 1.4))
+  g.add(planta(0.8, 25.6, 1.4))
 
   // Ping pong.
-  const G = Z.ping
-  g.add(alfombra(G.x0 + 0.4, G.x1 - 0.4, G.y0 + 1.2, G.y1 - 1.4, COLORES.mentaClaro))
-  g.add(caja(29.6, 33.8, 0.66, 0.72, 17.0, 18.6, mat('#9f86df'), { r: 0.01 }))
-  g.add(caja(29.62, 33.78, 0.725, 0.727, 17.78, 17.82, mat('#ffffff'), { sombra: false }))
-  for (const [x, z] of [[29.8, 17.15], [33.6, 17.15], [29.8, 18.45], [33.6, 18.45]]) g.add(cilindro(x, z, 0.05, 0, 0.66, mat(COLORES.gris)))
-  g.add(caja(31.68, 31.72, 0.72, 0.9, 16.95, 18.65, mat('#ffffff', { transparent: true, opacity: 0.75 }), { sombra: false }))
-  g.add(planta(G.x1 - 0.5, G.y0 + 0.7, 1.1))
-  g.add(planta(G.x0 + 0.5, G.y1 - 0.7, 0.9))
+  const Gp = Z.ping
+  g.add(alfombra(Gp.x0 + 0.3, Gp.x1 - 0.3, 20.6, 25.4, COLORES.mentaClaro))
+  g.add(caja(8.6, 12.4, 0.66, 0.72, 22.0, 23.6, mat('#9f86df'), { r: 0.01 }))
+  g.add(caja(8.62, 12.38, 0.725, 0.727, 22.78, 22.82, mat('#ffffff'), { sombra: false }))
+  for (const [x, z] of [[8.8, 22.15], [12.2, 22.15], [8.8, 23.45], [12.2, 23.45]]) g.add(cilindro(x, z, 0.05, 0, 0.66, mat(COLORES.gris)))
+  g.add(caja(10.48, 10.52, 0.72, 0.9, 21.95, 23.65, mat('#ffffff', { transparent: true, opacity: 0.75 }), { sombra: false }))
 
-  // Lámparas colgantes de las salas comunes y una luz cálida por sala (se prenden de noche).
+  // Lámparas colgantes y una luz cálida por sala (se prenden de noche).
   const lamparas = materialLampara()
   const luces = []
   const sala = (x, z, focos) => {
@@ -547,24 +578,26 @@ export function crearSala(mesa, mesaP) {
     g.add(luz)
     luces.push(luz)
   }
-  const medio = (mesa.x0 + mesa.x1) / 2
-  sala(medio, 10.4, [[mesa.x0 + 1.2, 10.4], [medio, 10.4], [mesa.x1 - 1.2, 10.4]])
-  sala(22.25, 10, [[21.2, 10], [23.3, 10]])
-  sala(31.8, 9.5, [[29.9, 8.4], [32.5, 8.4], [31.7, 11.3]])
-  sala(11.7, 17.4, [[9.7, 16.9], [13.7, 16.9]])
-  sala(22, 17.5, [[21.5, 18.2]])
-  sala(31.7, 17.8, [[30.6, 17.8], [32.8, 17.8]])
+  const centro = m => ({ x: (m.x0 + m.x1) / 2, y: (m.y0 + m.y1) / 2 })
+  for (const m of [mesas.up, mesas.pdg, mesas.admin]) { const c = centro(m); sala(c.x, c.y, [[m.x0 + 1.0, c.y], [m.x1 - 1.0, c.y]]) }
+  sala(MR.x, MR.y, [[MR.x, MR.y]])
+  sala(5.5, 10.5, [[3.6, 9.9], [6.8, 9.9], [10.5, 11.9]])
+  sala(5.0, 16.0, [[2.8, 16.0], [7.1, 16.0]])
+  sala(6.5, 22.5, [[3.1, 22.8], [10.5, 22.8]])
 
   return { grupo: g, agujas, luzCafetera, lamparas, luces }
 }
 
-// El ala de Dirección: la oficina de Daniela (la más grande del edificio), la sala de espera y un jardín.
-// Devuelve su escritorio (pantalla y lámpara) y la luz de su oficina para la escena.
+// La oficina de Daniela (la más grande del edificio, sobre la tarima, con balcón) y la sala de espera frente a su
+// puerta. Devuelve su escritorio (pantalla y lámpara) y la luz de su oficina para la escena.
 export function crearDireccion() {
+  const raiz = new THREE.Group()
   const g = new THREE.Group()
+  g.position.y = EJECUTIVO.tarima
+  raiz.add(g)
   const D = DIRECCION
   const M = MUEBLES_DIRECCION
-  g.add(alfombraConEstilo(37.4, 44.2, 1.4, 8.3, { patron: 'borde', colores: ['#f3e6c4', '#c9a24a'] }))
+  g.add(alfombraConEstilo(31.8, 41.8, 1.2, 6.5, { patron: 'borde', colores: ['#f3e6c4', '#c9a24a'] }))
   g.add(caja(D.x0 - 0.05, D.x0 + 0.05, 0, 2.1, D.y0, D.y1, mat(COLORES.tabique), { r: 0.02 }))
   g.add(vidriera(D.x0, D.x1, D.y1, 'x', 2.1, [D.puerta.x - 0.5, D.puerta.x + 0.5]))
   // Escritorio ejecutivo mirando a la puerta y la silla de las visitas enfrente.
@@ -577,16 +610,17 @@ export function crearDireccion() {
   const nogal = mat(COLORES.nogal)
   g.add(caja(B.x0, B.x1, 0, 2.55, 0.02, 0.08, nogal, { sombra: false }))
   for (const y of [0, 0.62, 1.22, 1.82, 2.5]) g.add(caja(B.x0, B.x1, y, y + 0.05, 0.02, B.y1, nogal))
-  for (let x = B.x0; x <= B.x1 + 1e-6; x += (B.x1 - B.x0) / 8) g.add(caja(x - 0.03, x + 0.03, 0, 2.55, 0.02, B.y1, nogal))
+  const tramoB = (B.x1 - B.x0) / 9
+  for (let k = 0; k <= 9; k++) { const x = B.x0 + k * tramoB; g.add(caja(x - 0.03, x + 0.03, 0, 2.55, 0.02, B.y1, nogal)) }
   const tonos = ['#f6a5c0', '#8fd9bd', '#b9a2e8', '#f7b98b', '#f6dd8b', '#9fc5f8', '#e2b552', '#e86df2', '#c8323f', '#3b4a8a', '#6fb07a', '#e9e2d2']
   let semilla = 11
   const azar = () => { semilla = (semilla * 16807) % 2147483647; return semilla / 2147483647 }
   for (const base of [0.05, 0.67, 1.27, 1.87]) {
     let x = B.x0 + 0.08
     while (x < B.x1 - 0.1) {
-      if (Math.abs(((x - B.x0) / ((B.x1 - B.x0) / 8)) % 1) < 0.04) { x += 0.07; continue }
+      if (Math.abs(((x - B.x0) / tramoB) % 1) < 0.04) { x += 0.07; continue }
       const ancho = 0.05 + azar() * 0.05, alto = 0.36 + azar() * 0.16
-      if (azar() < 0.06) { // de vez en cuando, libros acostados o un adorno
+      if (azar() < 0.06) {
         g.add(caja(x, x + 0.3, base, base + 0.12, 0.12, 0.42, mat(tonos[Math.floor(azar() * tonos.length)])))
         x += 0.36
         continue
@@ -597,42 +631,41 @@ export function crearDireccion() {
   }
 
   // Tele en la pared izquierda, con el sillón y la mesita enfrente.
-  g.add(caja(D.x0 + 0.05, D.x0 + 0.12, 0.85, 1.95, 4.5, 6.5, mat(COLORES.negro), { r: 0.02 }))
-  g.add(caja(D.x0 + 0.12, D.x0 + 0.13, 0.9, 1.9, 4.56, 6.44, mat('#2a3550', { emissive: '#4a6ab0', emissiveIntensity: 0.45 }), { sombra: false }))
-  g.add(caja(D.x0 + 0.05, D.x0 + 0.5, 0, 0.45, 4.6, 6.4, mat(COLORES.nogal), { r: 0.03 }))
+  const T = M.tele
+  g.add(caja(D.x0 + 0.05, D.x0 + 0.12, 0.85, 1.95, T.y0, T.y1, mat(COLORES.negro), { r: 0.02 }))
+  g.add(caja(D.x0 + 0.12, D.x0 + 0.13, 0.9, 1.9, T.y0 + 0.06, T.y1 - 0.06, mat('#2a3550', { emissive: '#4a6ab0', emissiveIntensity: 0.45 }), { sombra: false }))
+  g.add(caja(D.x0 + 0.05, D.x0 + 0.5, 0, 0.45, T.y0 + 0.1, T.y1 - 0.1, mat(COLORES.nogal), { r: 0.03 }))
   const S = M.sillon
   g.add(caja(S.x1 - 0.32, S.x1, 0, 1.0, S.y0, S.y1, mat(COLORES.lila), { r: 0.1 }))
   g.add(caja(S.x0, S.x1 - 0.3, 0, 0.45, S.y0 + 0.2, S.y1 - 0.2, mat(COLORES.lilaClaro), { r: 0.1 }))
   for (const z of [S.y0, S.y1 - 0.22]) g.add(caja(S.x0, S.x1, 0, 0.68, z, z + 0.22, mat(COLORES.lila), { r: 0.08 }))
-  for (const z of [4.9, 5.5, 6.1]) g.add(caja(S.x1 - 0.42, S.x1 - 0.22, 0.45, 0.85, z - 0.25, z + 0.25, mat(COLORES.amarillo), { r: 0.08 }))
+  for (const z of [3.4, 4.0, 4.6]) g.add(caja(S.x1 - 0.42, S.x1 - 0.22, 0.45, 0.85, z - 0.25, z + 0.25, mat(COLORES.amarillo), { r: 0.08 }))
   g.add(cilindro(M.mesita.x, M.mesita.y, M.mesita.radio, 0.38, 0.43, mat(COLORES.blanco), M.mesita.radio, 28))
   g.add(cilindro(M.mesita.x, M.mesita.y, 0.04, 0, 0.38, mat(COLORES.dorado)))
 
   // Baño privado en el rincón: paredes, puerta entreabierta, inodoro, lavatorio y espejo.
-  const W = M.bano
-  const azulejo = mat('#e3f1f7')
-  g.add(caja(W.x0, W.x1, 0, 2.1, W.y0, W.y0 + 0.08, mat(COLORES.tabique), { r: 0.02 }))
-  g.add(caja(W.x1 - 0.08, W.x1, 0, 2.1, W.y0, W.puerta.y0, mat(COLORES.tabique)))
-  g.add(caja(W.x1 - 0.08, W.x1, 0, 2.1, W.puerta.y1, W.y1, mat(COLORES.tabique)))
-  g.add(caja(W.x1 - 0.08, W.x1, 1.95, 2.1, W.puerta.y0, W.puerta.y1, mat(COLORES.tabique)))
-  const puerta = caja(0, 0.05, 0, 1.95, 0, W.puerta.y1 - W.puerta.y0, mat(COLORES.blanco))
+  const Wb = M.bano
+  g.add(caja(Wb.x0, Wb.x1, 0, 2.1, Wb.y0, Wb.y0 + 0.08, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(caja(Wb.x0, Wb.x0 + 0.08, 0, 2.1, Wb.y0, Wb.puerta.y0, mat(COLORES.tabique)))
+  g.add(caja(Wb.x0, Wb.x0 + 0.08, 0, 2.1, Wb.puerta.y1, Wb.y1, mat(COLORES.tabique)))
+  g.add(caja(Wb.x0, Wb.x0 + 0.08, 1.95, 2.1, Wb.puerta.y0, Wb.puerta.y1, mat(COLORES.tabique)))
+  const puerta = caja(0, 0.05, 0, 1.95, 0, Wb.puerta.y1 - Wb.puerta.y0, mat(COLORES.blanco))
   const bisagra = new THREE.Group()
-  bisagra.position.set(W.x1, 0, W.puerta.y0)
-  puerta.position.set(0.025, 0.975, (W.puerta.y1 - W.puerta.y0) / 2)
+  bisagra.position.set(Wb.x0, 0, Wb.puerta.y0)
+  puerta.position.set(-0.025, 0.975, (Wb.puerta.y1 - Wb.puerta.y0) / 2)
   bisagra.add(puerta)
-  bisagra.rotation.y = -0.6
+  bisagra.rotation.y = 0.6
   g.add(bisagra)
-  g.add(caja(W.x0 + 0.05, W.x1 - 0.1, 0.005, 0.012, W.y0 + 0.1, W.y1 - 0.05, azulejo, { sombra: false }))
-  g.add(cilindro(36.55, 8.4, 0.2, 0, 0.42, mat('#ffffff'), 0.22))
-  g.add(caja(36.1, 36.35, 0.4, 0.9, 8.2, 8.6, mat('#ffffff'), { r: 0.04 }))
-  g.add(caja(36.1, 36.55, 0.75, 0.85, 7.3, 7.9, mat('#ffffff'), { r: 0.04 }))
-  g.add(caja(36.08, 36.11, 1.1, 1.75, 7.35, 7.85, mat('#cfe8f5', { roughness: 0.1, metalness: 0.3 }), { sombra: false }))
-  g.add(planta(38.15, 8.6, 0.6))
+  g.add(caja(Wb.x0 + 0.1, Wb.x1 - 0.05, 0.005, 0.012, Wb.y0 + 0.1, Wb.y1 - 0.05, mat('#e3f1f7'), { sombra: false }))
+  g.add(cilindro(44.4, 6.4, 0.2, 0, 0.42, mat('#ffffff'), 0.22))
+  g.add(caja(44.65, 44.9, 0.4, 0.9, 6.2, 6.6, mat('#ffffff'), { r: 0.04 }))
+  g.add(caja(44.45, 44.9, 0.75, 0.85, 5.15, 5.75, mat('#ffffff'), { r: 0.04 }))
+  g.add(caja(44.89, 44.92, 1.1, 1.75, 5.2, 5.7, mat('#cfe8f5', { roughness: 0.1, metalness: 0.3 }), { sombra: false }))
 
-  // Balcón del lado abierto: ventanal corredizo, piso de madera, baranda, plantas y dos sillitas.
+  // Balcón del lado abierto: ventanal corredizo, piso de madera, baranda de vidrio, plantas y dos sillitas.
   const L = M.balcon
-  g.add(vidriera(D.y0 + 0.3, D.y1 - 0.3, D.x1, 'z', 2.1, [L.puerta.y0, L.puerta.y1]))
-  g.add(caja(L.x0, L.x1, -0.12, 0.0, L.y0, L.y1, mat(COLORES.madera), { r: 0.02 }))
+  g.add(vidriera(D.y0 + 0.3, Wb.y0, D.x1, 'z', 2.1, [L.puerta.y0, L.puerta.y1]))
+  g.add(caja(L.x0, L.x1, -EJECUTIVO.tarima, 0.0, L.y0, L.y1, mat(COLORES.madera), { r: 0.02 }))
   const baranda = mat('#a9a0c4', { roughness: 0.4 })
   g.add(caja(L.x1 - 0.04, L.x1, 0, 1.0, L.y0, L.y1, VIDRIO(), { sombra: false, recibe: false }))
   g.add(caja(L.x0, L.x1, 0, 1.0, L.y0, L.y0 + 0.04, VIDRIO(), { sombra: false, recibe: false }))
@@ -640,13 +673,13 @@ export function crearDireccion() {
   for (const [x0, x1, z0, z1] of [[L.x1 - 0.06, L.x1, L.y0, L.y1], [L.x0, L.x1, L.y0, L.y0 + 0.06], [L.x0, L.x1, L.y1 - 0.06, L.y1]]) g.add(caja(x0, x1, 0.98, 1.04, z0, z1, baranda))
   g.add(planta(L.x1 - 0.4, L.y0 + 0.4, 1.1))
   g.add(planta(L.x1 - 0.4, L.y1 - 0.4, 1.0))
-  for (const z of [4.9, 5.7]) g.add(silla(46.1, z, -Math.PI / 2, COLORES.amarillo))
-  g.add(cilindro(45.6, 5.3, 0.25, 0.5, 0.54, mat(COLORES.blanco)))
-  g.add(cilindro(45.6, 5.3, 0.03, 0, 0.5, mat(COLORES.gris)))
+  for (const z of [2.2, 3.0]) g.add(silla(46.1, z, -Math.PI / 2, COLORES.amarillo))
+  g.add(cilindro(45.6, 2.6, 0.25, 0.5, 0.54, mat(COLORES.blanco)))
+  g.add(cilindro(45.6, 2.6, 0.03, 0, 0.5, mat(COLORES.gris)))
 
   // Plantas grandes y la camita de Roberta.
-  g.add(planta(44.5, 8.5, 1.4))
-  g.add(planta(44.5, 0.85, 1.2))
+  g.add(planta(31.0, 6.4, 1.3))
+  g.add(planta(41.6, 6.4, 1.1))
   const cama = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.1, 12, 28), mat('#e86df2', { roughness: 0.95 }))
   cama.rotation.x = Math.PI / 2
   cama.position.set(ROBERTA.cama.x, 0.1, ROBERTA.cama.y)
@@ -654,24 +687,16 @@ export function crearDireccion() {
   g.add(cama)
   g.add(cilindro(ROBERTA.cama.x, ROBERTA.cama.y, 0.3, 0.02, 0.08, mat('#f6c6ef', { roughness: 1 })))
   const cartel = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.42), new THREE.MeshStandardMaterial({ map: textoTextura('Dirección general · Daniela', { fondo: '#3b2f4f', color: '#f6dd8b', tam: 50, ancho: 900 }), transparent: true }))
-  cartel.position.set(38.2, 1.85, D.y1 + 0.06)
+  cartel.position.set(D.puerta.x - 2.6, 1.85, D.y1 + 0.06)
   g.add(cartel)
-  // Su luz: la escena la prende de noche.
   const luz = new THREE.PointLight('#ffd08a', 0, 8, 1.5)
-  luz.position.set(40.5, 2.1, 4.5)
+  luz.position.set(36.5, 2.1, 3.5)
   g.add(luz)
-  // Sala de espera: las sillas miran a su oficina; mesita con revistas y planta.
-  g.add(alfombra(36.6, 44.6, 9.9, 12.6, COLORES.lilaClaro))
-  for (const a of asientosEspera()) if (a.pose === 'sentado') g.add(silla(a.x, a.y, a.mira, COLORES.menta))
-  g.add(textoEnPiso('Sala de espera', 40.5, 13.0))
-  g.add(planta(44.5, 12.2, 0.9))
-  // Jardín.
-  g.add(alfombra(36.6, 44.6, 14.6, 21.6, '#cfeccb'))
-  for (const [x, z, e] of [[37.4, 15.4, 1.3], [44.1, 15.6, 1.1], [38.2, 20.8, 1.5], [43.6, 20.6, 1.2], [40.8, 18.1, 1.7]]) g.add(planta(x, z, e))
-  for (const [x0, x1, z] of [[38.4, 40.0, 16.8], [41.4, 43.0, 19.4]]) {
-    g.add(caja(x0, x1, 0.38, 0.46, z - 0.25, z + 0.25, mat(COLORES.madera), { r: 0.03 }))
-    for (const x of [x0 + 0.15, x1 - 0.15]) g.add(caja(x - 0.05, x + 0.05, 0, 0.38, z - 0.2, z + 0.2, mat(COLORES.maderaOscura)))
-  }
-  g.add(textoEnPiso('Jardín', 40.5, 21.5))
-  return { grupo: g, escritorio, luz }
+
+  // Sala de espera (a nivel del piso, frente a su puerta): las sillas miran a su oficina.
+  const E = ZONAS.espera
+  raiz.add(alfombra(E.x0 + 0.1, E.x1 - 0.2, E.y0 + 0.4, E.y1 - 0.2, COLORES.lilaClaro))
+  for (const a of asientosEspera()) if (a.pose === 'sentado') raiz.add(silla(a.x, a.y, a.mira, COLORES.menta))
+  raiz.add(planta(44.6, 12.6, 0.9))
+  return { grupo: raiz, escritorio, luz }
 }

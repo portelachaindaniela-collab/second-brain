@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agenteTrabajador, agentesUp, agentesPdg, teToca, contarEstados, hoyAR, partirId } from './oficina.mjs'
+import { agenteTrabajador, agentesUp, agentesPdg, agentesAdmin, teToca, contarEstados, hoyAR, partirId } from './oficina.mjs'
 
 const ahora = Date.parse('2026-11-11T15:00:00Z')
 const hace = min => new Date(ahora - min * 60_000).toISOString()
@@ -129,4 +129,27 @@ test('armarOficina: las alertas de un trabajador quedan asociadas a él', async 
   const { pendientes } = armarOficina(d, ahora)
   const suya = pendientes.find(p => p.texto.startsWith('Ópera:'))
   assert.equal(suya?.agente, 'trabajadores:opera')
+})
+
+test('Administración: cada tarea programada con su estado según sus corridas', () => {
+  const ahora = Date.parse('2026-11-11T15:00:00Z')
+  const fila = (jobname, inicio, estado, extra = {}) => ({ jobname, schedule: '0 9 * * *', activo: true, inicio, fin: inicio, estado, mensaje: null, ...extra })
+  const corridas = [
+    fila('search-console', '2026-11-11T09:00:00Z', 'succeeded'),
+    fila('resumen-diario-push', '2026-11-11T10:00:00Z', 'failed', { mensaje: 'timeout' }),
+    fila('agenda-dulce-1410', '2026-11-10T17:10:00Z', 'succeeded'),
+    fila('agenda-dulce-1900', '2026-11-11T14:59:00Z', 'running'),
+    fila('up-historial', null, null),
+    fila('limpiar-historial', '2026-11-01T03:00:00Z', 'succeeded', { activo: false }),
+  ]
+  const por = Object.fromEntries(agentesAdmin(corridas, ahora).map(a => [a.clave, a]))
+  assert.equal(por.search_console.estado, 'libre')
+  assert.equal(por.search_console.id, 'admin:search_console')
+  assert.equal(por.resumen_diario.estado, 'error')
+  assert.match(por.resumen_diario.ahora, /timeout/)
+  assert.equal(por.agenda_dulce.estado, 'trabajando', 'la más reciente de sus dos tareas')
+  assert.equal(por.historial_up.estado, 'nuevo')
+  assert.equal(por.limpieza.estado, 'pausado')
+  assert.ok(Object.values(por).every(a => a.sinCharla && a.equipo === 'admin'))
+  assert.equal(agentesAdmin([], ahora).length, 5)
 })
