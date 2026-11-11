@@ -91,6 +91,11 @@ export function oficinasTrabajadores(claves) {
     const columnas = Math.ceil(g.miembros.length / 2)
     const paso = (w - 1.6) / columnas
     const pasoFrente = y1 - 0.6
+    // Un sofá contra la pared derecha, mirando hacia adentro: de dos plazas si entra, si no de una.
+    const libre = w - 0.2 - paso * (columnas - 0.5) - 0.82
+    const plazas = libre >= 2.2 ? 2 : 1
+    const largoSofa = plazas === 2 ? 1.6 : 0.9
+    oficina.sofa = { x0: x1 - 0.9, x1: x1 - 0.05, y0: y0 + 0.95, y1: y0 + 0.95 + largoSofa, plazas }
     g.miembros.forEach((clave, j) => {
       const enfrentado = j % 2 === 1
       const cx = x0 + 0.2 + paso * (Math.floor(j / 2) + 0.5)
@@ -139,6 +144,19 @@ export function mesaPdg(n) { return tablon(n, 31.2, 17.4, 'pasillo') }
 export function mesaAdmin(n) { return tablon(n, 17.5, 23.6, 'admin') }
 // Sistemas: su mesa, del otro lado de la entrada (también sale por el paso de la mampara).
 export function mesaSistemas(n) { return tablon(n, 37.8, 23.6, 'admin') }
+// Entre los dos tablones: un rincón de trabajo en equipo (mesa alta con banquetas, pizarra con ruedas y macetones).
+// Deja libre el paso de la mampara (x 28.3 a 30.3).
+export const RINCON_TABLONES = {
+  mesa: { x: 26.0, y: 17.3, radio: 0.55 },
+  banquetas: [[26.0, 16.45], [26.85, 17.3], [26.0, 18.15], [25.15, 17.3]],
+  pizarra: { x0: 24.6, x1: 27.4, y: 19.7 },
+  macetones: [[24.3, 15.0], [27.8, 15.0]],
+}
+// Zona de descanso: dos máquinas expendedoras contra la pared del fondo (chocolates y café).
+export const EXPENDEDORAS = [
+  { tipo: 'chocolates', x0: 5.75, x1: 6.65, y0: 0.1, y1: 0.85 },
+  { tipo: 'cafe', x0: 6.8, x1: 7.7, y0: 0.1, y1: 0.85 },
+]
 // Un rincón de descanso entre la entrada y Sistemas: dos sillones, mesa ratona, alfombra y macetones.
 export const RINCON_ENTRADA = {
   sillones: [{ x: 32.2, y: 24.1, mira: Math.PI / 2 }, { x: 34.6, y: 24.1, mira: -Math.PI / 2 }],
