@@ -166,7 +166,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const [tres] = useState(hayWebGL)
 
   // ---------- Reunión ----------
-  // reunion: { id, modo: 'sala' | 'turnos', estado: 'convocada' | 'en_curso' | 'volviendo', asistentes, inicio,
+  // reunion: { id, modo: 'sala' | 'oficina' | 'turnos', estado: 'convocada' | 'en_curso' | 'volviendo', asistentes, inicio,
   // empezo, vuelta, turnos: { [id]: { llamado, fin } } }. La escena 3D mueve a los agentes; acá se lleva el estado.
   const [reunion, setReunion] = useState(null)
   const [convocando, setConvocando] = useState(false)
@@ -232,10 +232,10 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const enCurso = reunion?.estado === 'en_curso'
   const superpuesto = reunion?.estado === 'convocada' || reunion?.estado === 'preparando'
     ? <AvisoLlegada reunion={reunion} agentes={agentes} llegadas={llegadas} ahora={reloj} empezar={empezar} cancelar={terminar} />
-    : enCurso && reunion.modo === 'sala'
-      ? <VistaSala reunion={reunion} agentes={agentes} pendientes={pendientes} ahora={reloj} hablando={hablando} setHablando={setHablando} hablarReunion={hablarReunion} terminar={terminar} />
+    : enCurso && (reunion.modo === 'sala' || reunion.modo === 'oficina')
+      ? <VistaSala reunion={reunion} agentes={agentes} ahora={reloj} hablando={hablando} setHablando={setHablando} hablarReunion={hablarReunion} terminar={terminar} />
       : enCurso && reunion.modo === 'turnos'
-        ? <VistaTurnos reunion={reunion} agentes={agentes} pendientes={pendientes} ahora={reloj} hablando={hablando} setHablando={setHablando} hablar={hablar} siguiente={siguiente} terminar={terminar} />
+        ? <VistaTurnos reunion={reunion} agentes={agentes} ahora={reloj} hablando={hablando} setHablando={setHablando} hablar={hablar} siguiente={siguiente} terminar={terminar} />
         : null
   const sin3D = <p className="oficina-sin-3d">Este equipo no puede mostrar la oficina en 3D. Los agentes están en la lista de abajo.</p>
 
@@ -364,7 +364,7 @@ function Actas({ actas, agentes }) {
   const quien = id => nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)
   return <ul className="oficina-actas">{actas.map(a => <li key={a.id}>
     <button type="button" className="oficina-acta-cabeza" aria-expanded={abierta === a.id} onClick={() => setAbierta(v => (v === a.id ? null : a.id))}>
-      <strong>{a.modo === 'sala' ? 'Reunión en la sala' : 'Turnos en tu oficina'}</strong>
+      <strong>{{ sala: 'Reunión en la sala', oficina: 'Reunión en tu oficina', turnos: 'Turnos en tu oficina' }[a.modo] ?? 'Reunión'}</strong>
       <span className="tenue">{new Date(a.fin).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {a.asistentes.length} participantes</span>
     </button>
     {abierta === a.id && <div className="oficina-acta">

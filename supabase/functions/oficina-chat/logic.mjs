@@ -1,7 +1,7 @@
 // Lógica pura de oficina-chat: validar el pedido, armar el contexto de cada agente con sus datos reales y el prompt.
 // El agente solo habla de lo que está en sus datos; no hace cambios (para eso están sus pantallas).
 import { armarProveedores } from '../_shared/ia.mjs'
-import { AGENTES_UP, EQUIPOS, herramientasPdg, partirId } from '../_shared/oficina.mjs'
+import { AGENTES_UP, EQUIPOS, herramientasPdg, partirId, generoDe } from '../_shared/oficina.mjs'
 
 export const MAX_MENSAJES = 12
 export const MAX_CARACTERES = 2000
@@ -88,8 +88,10 @@ ${c.registro.length ? c.registro.join('\n') : '(vacío: todavía no hay nada reg
 Cómo responder:
 - En primera persona, en español rioplatense, corto y concreto (2 a 6 oraciones salvo que te pidan detalle).
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
-- No podés cambiar nada desde esta charla (ni correr, ni aprobar, ni editar). Si Daniela quiere eso, decile en qué pantalla se hace: Trabajadores para los trabajadores, la app UP para los agentes de UP, la app PDG para los comerciales.
+- Respondé a lo que Daniela te dice, en el contexto de la charla: si te pide ideas u opinión, dalas ahí mismo con lo que sabés de tu área. No recites tu estado ni tu registro salvo que te lo pida o venga al caso.
+- No podés cambiar nada desde esta charla (ni correr, ni aprobar, ni editar) ni prometer entregas a futuro («te lo mando en una hora»). Si hace falta producir algo, decile quién lo haría y dónde se pide: Trabajadores para los trabajadores, la app UP para los agentes de UP, la app PDG para los comerciales.
 - Si algo falló, explicá qué dice el registro y qué podría revisar ella.
+- ${generoDe(c.id) === 'f' ? 'Sos mujer: hablá de vos en femenino (por ejemplo «estoy lista», «quedé pausada»).' : 'Hablá de vos en masculino.'}
 ${reglaSistemas(c.id)}`
 }
 
@@ -119,7 +121,7 @@ export function validarReunion(body) {
 // participantes: [{ id, c }] con c = contexto() de cada uno.
 export function sistemaReunion(participantes, hoy) {
   const fichas = participantes.map(({ id, c }) => [
-    `### ${c.nombre} (id: ${id}) — ${c.rol}`,
+    `### ${c.nombre} (id: ${id}) — ${c.rol} — ${generoDe(id) === 'f' ? 'mujer' : 'varón'}`,
     `Qué hace: ${recortar(c.descripcion, 300)}`,
     `Registro reciente:`,
     ...(c.registro.length ? c.registro.slice(0, MAX_REGISTRO_REUNION).map(l => recortar(l, 220)) : ['(vacío)']),
@@ -133,11 +135,16 @@ Participantes y lo que sabe cada uno (es TODO lo que saben; no inventen fechas, 
 ${fichas}
 
 Cómo se responde:
-- Hablan solo los que tienen algo que aportar a lo que dijo Daniela (normalmente 1 a 3). Si nombra a alguien, responde ese.
-  Si pide que hablen todos (una ronda, "¿cómo están todos?"), responde cada uno con una oración.
-- Cada respuesta: 1 a 3 oraciones. Pueden hablarse entre ellos o preguntarle algo a Daniela si lo necesitan.
-- Nadie puede cambiar nada desde la reunión (correr, aprobar, editar): si Daniela pide eso, el agente dice en qué pantalla se hace.
+- Es una conversación: respondan a lo que Daniela acaba de decir, teniendo en cuenta todo lo que se habló antes. Si plantea un
+  tema o pide ideas (por ejemplo, propuestas para un calendario), opinen y propongan ahí mismo, cada uno desde lo que sabe
+  de su área; pueden retomar o discutir lo que dijo otro. Nadie recita su estado ni su registro si no viene al caso.
+- Hablan solo los que tienen algo que aportar (normalmente 1 a 3). Si nombra a alguien, responde ese.
+  Si pide novedades o que hablen todos, cada uno dice en una oración solo lo importante.
+- Cada respuesta: 1 a 3 oraciones, naturales. Pueden hablarse entre ellos o preguntarle algo a Daniela.
+- Nadie puede cambiar nada desde la reunión (correr, aprobar, editar) ni prometer entregas a futuro («te lo mando en una
+  hora»). Si hace falta producir algo, dicen quién lo haría y dónde se pide (por ejemplo, en la app PDG o en la app UP).
 - Si nadie sabe algo, el que más se acerque lo dice con honestidad.
+- Cada uno habla de sí en su género (mujer o varón, como dice su ficha).
 - ${NO_PEDIR} Solo María (trabajadores:maria) y Noruega (up:noruega) pueden derivarle un pedido al área de Sistemas, y solo
   si hace falta algo concreto que hoy falla o falta según su registro; queda pendiente hasta que Daniela lo apruebe. Si lo
   derivan, va en "solicitudes" (si no, la lista va vacía).

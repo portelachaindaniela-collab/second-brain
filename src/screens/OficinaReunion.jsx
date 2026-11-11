@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { EQUIPOS, informeDe, resumenReunion, turnosReunion } from '../oficina.mjs'
-import { PLAZO_REUNION_S, MAX_ASISTENTES, asientosEspera, variante } from '../oficinaPlano.mjs'
+import { EQUIPOS } from '../oficina.mjs'
+import { PLAZO_REUNION_S, MAX_ASISTENTES, MAX_OFICINA, asientosEspera, variante } from '../oficinaPlano.mjs'
 
 // La reunión de la Oficina: convocar (qué áreas y dónde), la llegada (2 minutos), y la reunión en sí, como una
 // videollamada: en la sala todos juntos (ronda de informes y después conversación abierta) o en la oficina de
 // Daniela por turnos (pasan de a uno). Los informes salen de los datos de cada agente; lo que responden en la
 // conversación lo arma la IA con sus datos (oficina-chat), sin poder cambiar nada.
 const nombreCorto = n => String(n).split(' (')[0]
+const conversa = a => !a.sinCharla // Administración y Sistemas no tienen IA: escuchan
 const AREAS = ['trabajadores', 'up', 'pdg', 'admin', 'sistemas']
 export const ESPERA_TURNOS = asientosEspera().length
 
@@ -18,7 +19,7 @@ export function ConvocarReunion({ agentes, alConvocar, cerrar }) {
   const [elegidos, setElegidos] = useState(() => new Set(disponibles.filter(a => a.equipo !== 'admin' && a.equipo !== 'sistemas').map(a => a.id)))
   const [modo, setModo] = useState('sala')
   const vienen = disponibles.filter(a => elegidos.has(a.id))
-  const tope = modo === 'turnos' ? ESPERA_TURNOS : MAX_ASISTENTES
+  const tope = modo === 'turnos' ? ESPERA_TURNOS : modo === 'oficina' ? MAX_OFICINA : MAX_ASISTENTES
   const alternar = id => setElegidos(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const alternarArea = (ids, todos) => setElegidos(s => { const n = new Set(s); for (const id of ids) { if (todos) n.delete(id); else n.add(id) } return n })
   useEffect(() => {
@@ -65,8 +66,12 @@ export function ConvocarReunion({ agentes, alConvocar, cerrar }) {
             <span><strong>Sala de reuniones, todos juntos</strong><span className="tenue"> · los ves por pantalla, como en una videollamada, y conversás con todos</span></span>
           </label>
           <label className="reunion-opcion">
+            <input type="radio" name="reunion-modo" checked={modo === 'oficina'} onChange={() => setModo('oficina')} />
+            <span><strong>En mi oficina, todos juntos (hasta {MAX_OFICINA})</strong><span className="tenue"> · se sientan con vos en tu mesa de reuniones</span></span>
+          </label>
+          <label className="reunion-opcion">
             <input type="radio" name="reunion-modo" checked={modo === 'turnos'} onChange={() => setModo('turnos')} />
-            <span><strong>En mi oficina, por turnos</strong><span className="tenue"> · esperan en la sala de espera y pasan de a uno</span></span>
+            <span><strong>En mi oficina, por turnos</strong><span className="tenue"> · esperan en el living y pasan de a uno</span></span>
           </label>
         </fieldset>
         <p className="tenue">Tienen {PLAZO_REUNION_S / 60} minutos para llegar. Cuando están todos, vienen con su información más actualizada.
@@ -87,7 +92,7 @@ export function AvisoLlegada({ reunion, agentes, llegadas, ahora, empezar, cance
   const pasado = Math.max(0, (ahora - reunion.inicio) / 1000)
   const quedan = Math.max(0, Math.ceil(PLAZO_REUNION_S - pasado))
   const llegaron = reunion.asistentes.filter(id => llegadas && llegadas[id] != null && llegadas[id] <= pasado)
-  const lugar = reunion.modo === 'turnos' ? 'la sala de espera' : 'la sala de reuniones'
+  const lugar = reunion.modo === 'turnos' ? 'el living de espera' : reunion.modo === 'oficina' ? 'tu oficina' : 'la sala de reuniones'
   return <div className="reunion-aviso" role="status" aria-live="polite">
     <p><strong>Reunión convocada</strong> · van a {lugar} · {Math.floor(quedan / 60)}:{String(quedan % 60).padStart(2, '0')} para llegar</p>
     <p className="tenue">Llegaron {llegaron.length} de {reunion.asistentes.length}</p>
@@ -140,6 +145,15 @@ function useCharla(setHablando, voz, agentes) {
     } else timer.current = setTimeout(fin, m.de === 'yo' ? 50 : Math.min(9000, Math.max(2500, m.texto.length * 45)))
   }, [cola, voz, setHablando])
   useEffect(() => () => { clearTimeout(timer.current); if ('speechSynthesis' in window) window.speechSynthesis.cancel() }, [])
+  // Cuando habla Daniela, se calla el que estaba hablando y se descarta lo que seguía en fila: la conversación sigue
+  // por lo que ella dijo, como en una reunión de verdad.
+  const callar = useCallback(() => {
+    clearTimeout(timer.current)
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+    actual.current = null
+    setHablando(null)
+    setCola([])
+  }, [setHablando])
   // urgente: lo que dice Daniela (y lo que le responden) pasa adelante de la ronda, como cuando alguien interrumpe:
   // queda después del que está hablando y de lo urgente que ya estaba en fila, antes del resto.
   const decir = useCallback((lista, urgente = false) => setCola(c => {
@@ -150,7 +164,7 @@ function useCharla(setHablando, voz, agentes) {
     return [...c.slice(0, k), ...nuevos, ...c.slice(k)]
   }), [])
   const ocupado = cola.length > 0
-  return { mensajes, decir, ocupado, nombre: id => (id === 'yo' ? 'Vos' : nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)) }
+  return { mensajes, decir, callar, ocupado, nombre: id => (id === 'yo' ? 'Vos' : nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)) }
 }
 
 // Micrófono: dictado del navegador si lo tiene (en algunos equipos no está; entonces se escribe).
@@ -201,23 +215,24 @@ function Tiempo({ desde, ahora }) {
 }
 
 // Reunión en la sala: ronda de informes y después conversación abierta con todos.
-export function VistaSala({ reunion, agentes, pendientes, ahora, hablando, setHablando, hablarReunion, terminar }) {
+export function VistaSala({ reunion, agentes, ahora, hablando, setHablando, hablarReunion, terminar }) {
   const [voz, setVoz] = useState(false)
   const [esperando, setEsperando] = useState(false)
   const [error, setError] = useState('')
   const asistentes = reunion.asistentes.map(id => agentes.find(a => a.id === id)).filter(Boolean)
   const charla = useCharla(setHablando, voz, agentes)
-  const ronda = useRef(false)
-  // La ronda: cada uno da su informe con lo último que tiene; si María vino, cierra con el resumen.
+  const saludo = useRef(false)
+  // Nadie recita su tarea al empezar: saluda quien hace de anfitrión (María si vino) y se espera lo que plantee Daniela.
   useEffect(() => {
-    if (ronda.current || !asistentes.length) return
-    ronda.current = true
-    const orden = turnosReunion(asistentes)
-    charla.decir(orden.map(a => ({ de: a.id, texto: a.id === 'trabajadores:maria' ? `${informeDe(a, pendientes, ahora)} ${resumenReunion(asistentes, pendientes)}` : informeDe(a, pendientes, ahora) })))
+    if (saludo.current || !asistentes.length) return
+    saludo.current = true
+    const anfitrion = asistentes.find(a => a.id === 'trabajadores:maria') ?? asistentes.find(a => conversa(a)) ?? asistentes[0]
+    charla.decir([{ de: anfitrion.id, texto: `Hola, Daniela. Ya estamos ${asistentes.length === 1 ? 'acá' : `los ${asistentes.length}`}. ¿De qué querés que hablemos?` }])
   })
   const enviar = async texto => {
     setError('')
     const historial = [...charla.mensajes, { de: 'yo', texto }]
+    charla.callar()
     charla.decir([{ de: 'yo', texto }], true)
     setEsperando(true)
     try {
@@ -230,7 +245,7 @@ export function VistaSala({ reunion, agentes, pendientes, ahora, hablando, setHa
   const ultimo = charla.mensajes.at(-1)
   return <>
     <header className="reunion-barra">
-      <strong>Reunión en la sala</strong>
+      <strong>{reunion.modo === 'oficina' ? 'Reunión en tu oficina' : 'Reunión en la sala'}</strong>
       <span className="tenue">{asistentes.length} participantes · <Tiempo desde={reunion.empezo ?? reunion.inicio} ahora={ahora} /></span>
       <label className="reunion-voz"><input type="checkbox" checked={voz} onChange={e => setVoz(e.target.checked)} /> Escucharlos</label>
     </header>
@@ -243,18 +258,19 @@ export function VistaSala({ reunion, agentes, pendientes, ahora, hablando, setHa
     <section className="reunion-sub">
       {ultimo && <p className="reunion-subtitulo"><strong>{charla.nombre(ultimo.de)}:</strong> {ultimo.texto}</p>}
       <Conversacion charla={charla} enviar={enviar} esperando={esperando} mic
-        placeholder="Hablales a todos, o nombrá a alguien (por ejemplo: «Ópera, ¿qué pasó?»)" />
+        placeholder="Planteales un tema, preguntá algo o nombrá a alguien (por ejemplo: «Ópera, ¿qué pasó?»)" />
+      <button type="button" className="btn btn-sm reunion-novedades" disabled={esperando} onClick={() => enviar('Antes de seguir: ¿qué novedades hay? Cuéntenme solo lo importante y si necesitan algo de mí.')}>Pedir novedades</button>
       {error && <p role="alert" className="feedback-error">{error}</p>}
     </section>
     <footer className="reunion-controles">
-      <span className="tenue">Responden con sus datos reales; desde la reunión nadie cambia nada.</span>
+      <span className="tenue">Conversan en contexto, con sus datos reales; desde la reunión nadie cambia nada.</span>
       <button type="button" className="btn reunion-salir" onClick={() => terminar(charla.mensajes.map(m => ({ de: charla.nombre(m.de), texto: m.texto })))}>Terminar reunión</button>
     </footer>
   </>
 }
 
-// Reunión en la oficina de Daniela por turnos: el que está adentro da su informe y conversa; después pasa el siguiente.
-export function VistaTurnos({ reunion, agentes, pendientes, ahora, hablando, setHablando, hablar, siguiente, terminar }) {
+// Reunión en la oficina de Daniela por turnos: el que está adentro saluda y conversa con vos; después pasa el siguiente.
+export function VistaTurnos({ reunion, agentes, ahora, hablando, setHablando, hablar, siguiente, terminar }) {
   const [voz, setVoz] = useState(false)
   const [esperando, setEsperando] = useState(false)
   const [error, setError] = useState('')
@@ -264,18 +280,18 @@ export function VistaTurnos({ reunion, agentes, pendientes, ahora, hablando, set
   const charla = useCharla(setHablando, voz, agentes)
   const informados = useRef(new Set())
   const charlaDe = useRef({})
-  // Al entrar (unos segundos después de que lo llamás, lo que tarda en llegar a la silla) da su informe.
-  const ultimoActual = useRef({ actual, pendientes })
-  useEffect(() => { ultimoActual.current = { actual, pendientes } })
+  // Al entrar (unos segundos después de que lo llamás, lo que tarda en llegar a la silla) saluda y espera tu tema.
+  const ultimoActual = useRef({ actual })
+  useEffect(() => { ultimoActual.current = { actual } })
   const decir = charla.decir
   useEffect(() => {
     if (!actualId || informados.current.has(actualId)) return
     const llamado = reunion.turnos[actualId].llamado
     const timer = setTimeout(() => {
-      const { actual: a, pendientes: p } = ultimoActual.current
+      const { actual: a } = ultimoActual.current
       if (!a || a.id !== actualId) return
       informados.current.add(actualId)
-      decir([{ de: actualId, texto: informeDe(a, p, Date.now()) }])
+      decir([{ de: actualId, texto: a.estado === 'error' ? 'Hola, Daniela. Acá estoy. Tengo algo que está fallando; si querés lo vemos, o contame qué necesitás.' : 'Hola, Daniela. Acá estoy, ¿qué necesitás?' }])
     }, Math.max(0, 6000 - (Date.now() - llamado)))
     return () => clearTimeout(timer)
   }, [actualId, reunion.turnos, decir])

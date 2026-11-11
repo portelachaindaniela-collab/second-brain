@@ -14,6 +14,8 @@
 // Qué hace cada uno sale de su estado real (ver oficina.mjs): trabajando o con un problema está en su lugar;
 // libre trabaja y cada tanto sale a la cafetería, el comedor, el ocio o el ping pong y vuelve; pausado duerme en un puf.
 
+import { generoDe } from '../supabase/functions/_shared/oficina.mjs'
+
 export const PISO = { ancho: 45, fondo: 26.5, pared: 2.6 }
 export const VX = 13.75 // pasillo vertical: separa la columna de salas comunes del resto
 export const X0 = 14.5 // donde empieza el área de trabajo
@@ -292,10 +294,25 @@ export function momentoRutina(t, largoCamino) {
 }
 
 // Variante del muñequito (pelo, color de pelo y de piel) fija por agente: siempre se ve igual.
-export function variante(id) {
+const hashDe = id => {
   let h = 2166136261
   for (const c of String(id)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0 }
-  return { pelo: h % 4, colorPelo: (h >>> 3) % 5, piel: (h >>> 7) % 3 }
+  return h
+}
+// Cómo se ve cada uno: las mujeres con pelo largo o rodete; los varones, corto o con rulos.
+export function variante(id) {
+  const h = hashDe(id)
+  const pelo = generoDe(id) === 'f' ? [2, 1][h % 2] : [0, 3][h % 2]
+  return { pelo, colorPelo: (h >>> 3) % 5, piel: (h >>> 7) % 3 }
+}
+
+// Lo que cada uno se lleva a las reuniones: mate, café, una botella de agua o nada (siempre lo mismo para cada
+// agente). María, la jefa de los trabajadores, va con su mate.
+export const BEBIDAS = ['mate', 'taza', 'botella']
+export function bebidaDe(id) {
+  if (id === 'trabajadores:maria') return 'mate'
+  const k = (hashDe(id) >>> 11) % 5
+  return k < 2 ? 'mate' : k === 2 ? 'taza' : k === 3 ? 'botella' : null
 }
 
 // Hora de Buenos Aires para el reloj de la pared: ángulos de las agujas en grados.
@@ -334,6 +351,9 @@ export const ACCESORIOS = {
   'admin:agenda_dulce': 'vincha',
   'admin:historial_up': 'visera',
   'admin:limpieza': 'gorra-canillita',
+  'sistemas:mesa_entrada': 'headset',
+  'sistemas:guardian': 'lentes-sol',
+  'sistemas:operador': 'auriculares',
 }
 
 // Luz según la hora de Buenos Aires. luz: 1 de día, 0 de noche (con media hora de transición);
@@ -423,6 +443,26 @@ export const VISITA = { x: 36.5, y: 4.3, mira: Math.PI } // la silla frente a su
 // Roberta, la perra de Daniela: su camita al lado del escritorio. Cuando Daniela camina, la sigue.
 // Las mesas de reuniones chicas (redondas, 3 sillas) de Daniela y de María, y las plantas de la oficina de Daniela.
 export const MESA_CHICA_DANIELA = { x: 40.3, y: 3.0 }
+// Reunión en la oficina de Daniela: hasta 5 agentes en su mesa redonda (6 sillas; la del lado de su escritorio es
+// la de ella). Entran por su puerta y se sientan rodeando la mesa.
+export const MAX_OFICINA = 5
+const RADIO_SILLAS_OFICINA = 1.0
+const enMesaOficina = (r, ang) => ({ x: Math.round((MESA_CHICA_DANIELA.x + r * Math.cos(ang)) * 1000) / 1000, y: Math.round((MESA_CHICA_DANIELA.y + r * Math.sin(ang)) * 1000) / 1000 })
+export const DANIELA_OFICINA = { ...enMesaOficina(RADIO_SILLAS_OFICINA, Math.PI), mira: Math.PI / 2 }
+export function asientosOficina() {
+  return [0, 1, 2, 4, 5].map(k => {
+    const ang = (k * Math.PI) / 3
+    const p = enMesaOficina(RADIO_SILLAS_OFICINA, ang)
+    return { ...p, ang, mira: Math.atan2(MESA_CHICA_DANIELA.x - p.x, MESA_CHICA_DANIELA.y - p.y), pose: 'sentado' }
+  })
+}
+// Desde el pasillo principal: por el paso junto al living al corredor de Dirección, entra por la puerta y se acerca
+// a su silla desde afuera de la mesa.
+export function caminoOficina(hastaPasillo, asiento) {
+  const P = DIRECCION.puerta, xPaso = (PASO_ESTE.x0 + PASO_ESTE.x1) / 2
+  const afuera = enMesaOficina(1.75, asiento.ang)
+  return ancho([...hastaPasillo, { x: xPaso, y: PASILLO }, { x: xPaso, y: CORREDOR_EJECUTIVO }, { x: P.x, y: CORREDOR_EJECUTIVO }, { ...P }, { x: P.x, y: 5.6 }, afuera, { x: asiento.x, y: asiento.y }])
+}
 export const MESA_CHICA_MARIA = { dx: 3.7, dy: 4.6 } // relativa a la oficina de María (x0, y0)
 export const PLANTAS_DANIELA = [
   { x: 29.0, y: 6.55, escala: 1.2 }, { x: 31.0, y: 6.4, escala: 1.3 }, { x: 33.6, y: 6.55, escala: 1.0 },

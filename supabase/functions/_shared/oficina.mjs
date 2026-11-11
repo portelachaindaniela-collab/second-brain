@@ -55,6 +55,11 @@ export function herramientasPdg(clave) {
   return clave === 'prospector' || clave === 'demo' ? [...HERRAMIENTAS_PDG, 'Lee la web de la cuenta'] : HERRAMIENTAS_PDG
 }
 
+// Quiénes son mujeres (el resto habla en masculino). Lo usan los prompts de oficina-chat, los informes de las
+// reuniones y el dibujo de cada personaje.
+export const MUJERES = new Set(['trabajadores:maria', 'up:noruega', 'sistemas:mesa_entrada'])
+export function generoDe(id) { return MUJERES.has(id) ? 'f' : 'm' }
+
 // Id de un agente en la Oficina: "<equipo>:<clave>".
 export function idAgente(equipo, clave) { return `${equipo}:${clave}` }
 export function partirId(id) {
