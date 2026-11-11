@@ -35,10 +35,12 @@ export const ZONAS = {
   comedor: { x0: 0.5, y0: 13.5, x1: 13, y1: 19, nombre: 'Cocina y comedor' },
   ocio: { x0: 0.5, y0: 0.5, x1: 8, y1: 7, nombre: 'Ocio' },
   ping: { x0: 7.5, y0: 0.5, x1: 13.3, y1: 7, nombre: 'Ping pong' },
-  up: { x0: X0, y0: 14.5, x1: 29, y1: 20.5, nombre: 'UP · mesa de trabajo' },
+  up: { x0: X0, y0: 14.5, x1: 23.5, y1: 20.5, nombre: 'UP · mesa de trabajo' },
+  sistemas: { x0: 23.7, y0: 14.5, x1: 29, y1: 20.5, nombre: 'Sistemas' },
   pdg: { x0: 29.6, y0: 14.5, x1: 45, y1: 20.5, nombre: 'PDG comercial' },
   admin: { x0: X0, y0: 21, x1: 45, y1: PISO.fondo, nombre: 'Administración' },
   espera: { x0: 39.3, y0: 8.5, x1: 45, y1: 13, nombre: 'Living' },
+  servidores: { x0: 37.2, y0: 21.4, x1: 44.8, y1: 26.3, nombre: 'Sala de servidores' },
 }
 
 // ---------- Oficinas ----------
@@ -143,27 +145,37 @@ export function mesaUp(n) { return tablon(n, 16, 17.4, 'pasillo') }
 export function mesaPdg(n) { return tablon(n, 31.2, 17.4, 'pasillo') }
 export function mesaAdmin(n) { return tablon(n, 17.5, 23.6, 'admin') }
 // Sistemas: su mesa, del otro lado de la entrada (también sale por el paso de la mampara).
-export function mesaSistemas(n) { return tablon(n, 37.8, 23.6, 'admin') }
-// Entre los dos tablones: un rincón de trabajo en equipo (mesa alta con banquetas, pizarra con ruedas y macetones).
-// Deja libre el paso de la mampara (x 28.3 a 30.3).
+// Sistemas: su tablón, con el resto de los que trabajan en mesa (entre UP y PDG).
+export function mesaSistemas(n) { return tablon(n, 24.4, 17.4, 'pasillo') }
+// La sala de servidores, vidriada, junto a Administración: dos filas de racks con un pasillo en el medio y la
+// puerta del lado de la entrada.
+export const SALA_SERVIDORES = {
+  x0: 37.2, y0: 21.4, x1: 44.8, y1: 26.3,
+  puerta: { y0: 23.35, y1: 24.35 },
+  racks: [0, 1, 2, 3, 4, 5].flatMap(k => [
+    { x0: 38.7 + k * 0.95, x1: 39.5 + k * 0.95, y0: 21.75, y1: 22.6 },
+    { x0: 38.7 + k * 0.95, x1: 39.5 + k * 0.95, y0: 25.1, y1: 25.95 },
+  ]),
+  aire: { x0: 37.4, x1: 38.2, y0: 25.2, y1: 26.1 },
+}
+// Al lado del tablón de PDG: un rincón de trabajo en equipo (mesa alta con banquetas, pizarra con ruedas y macetones).
 export const RINCON_TABLONES = {
-  mesa: { x: 26.0, y: 17.3, radio: 0.55 },
-  banquetas: [[26.0, 16.45], [26.85, 17.3], [26.0, 18.15], [25.15, 17.3]],
-  pizarra: { x0: 24.6, x1: 27.4, y: 19.7 },
-  macetones: [[24.3, 15.0], [27.8, 15.0]],
+  mesa: { x: 40.6, y: 17.5, radio: 0.55 },
+  banquetas: [[40.6, 16.65], [41.45, 17.5], [40.6, 18.35], [39.75, 17.5]],
+  pizarra: { x0: 39.2, x1: 42.0, y: 19.9 },
+  macetones: [[38.2, 15.7], [43.4, 16.0]],
 }
 // Zona de descanso: dos máquinas expendedoras contra la pared del fondo (chocolates y café).
 export const EXPENDEDORAS = [
   { tipo: 'chocolates', x0: 5.75, x1: 6.65, y0: 0.1, y1: 0.85 },
   { tipo: 'cafe', x0: 6.8, x1: 7.7, y0: 0.1, y1: 0.85 },
 ]
-// Un rincón de descanso entre la entrada y Sistemas: dos sillones, mesa ratona, alfombra y macetones.
+// Un rincón de descanso entre la entrada y la sala de servidores: dos sillones, mesa ratona, alfombra y macetones.
 export const RINCON_ENTRADA = {
   sillones: [{ x: 32.2, y: 24.1, mira: Math.PI / 2 }, { x: 34.6, y: 24.1, mira: -Math.PI / 2 }],
   mesa: { x: 33.4, y: 24.1, radio: 0.4 },
 }
-// El rack de servidores de Sistemas y los macetones grandes del rincón de la entrada.
-export const RACK = { x0: 43.6, x1: 44.4, y0: 21.9, y1: 22.7 }
+// Los macetones grandes del rincón de la entrada.
 export const MACETONES = [[31.5, 25.9], [35.3, 25.9], [31.5, 22.3]]
 // Sobre la pared de PDG (la mampara de atrás de su tablón): el sistema comercial de punta a punta.
 export const CUADROS_PDG = ['mapa', 'presentacion', 'escudo', 'documento', 'megafono']

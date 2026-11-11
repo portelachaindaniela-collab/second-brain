@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   PISO, ZONAS, PASILLO, VX, X0, EJECUTIVO, OFICINAS, DIVISOR, alturaPiso, oficinasTrabajadores, oficinaMaria, GRUPOS_TRABAJADORES,
-  mesaUp, mesaPdg, mesaAdmin, CUADROS_PDG, lugares, DESCANSOS, PUFS, rutinas, camino, alPasillo, largo, puntoEn, momentoRutina,
+  mesaUp, mesaPdg, mesaAdmin, mesaSistemas, CUADROS_PDG, lugares, DESCANSOS, PUFS, rutinas, camino, alPasillo, largo, puntoEn, momentoRutina,
   VELOCIDAD, TIEMPOS, variante, agujas, CICLO_REFERENCIA, ACCESORIOS, luzDelDia, asientosReunion, caminoReunion, haciaPasillo,
   MESA_REUNION, PUERTA_REUNION, MAX_ASISTENTES, DIRECCION, DANIELA, VISITA, asientosEspera, caminoEspera, caminoTurno,
   caminoVueltaTurno, ESTILOS, estiloDe,
@@ -67,7 +67,7 @@ test('trabajadores: los que hacen cosas parecidas comparten oficina, sin pisarse
 })
 
 test('tablones: UP, PDG y Administración con las PC enfrentadas y la cabecera, dentro de su zona', () => {
-  for (const [mesaDe, n, zona] of [[mesaUp, 7, ZONAS.up], [mesaPdg, 5, ZONAS.pdg], [mesaAdmin, 5, ZONAS.admin]]) {
+  for (const [mesaDe, n, zona] of [[mesaUp, 7, ZONAS.up], [mesaPdg, 5, ZONAS.pdg], [mesaAdmin, 5, ZONAS.admin], [mesaSistemas, 3, ZONAS.sistemas]]) {
     const { mesa, asientos } = mesaDe(n)
     assert.equal(asientos.length, n)
     assert.equal(asientos[0].sentado.x, asientos[1].sentado.x, 'el primer par queda enfrentado')
@@ -79,6 +79,7 @@ test('tablones: UP, PDG y Administración con las PC enfrentadas y la cabecera, 
     }
   }
   assert.ok(mesaUp(7).mesa.x1 + 1.5 < mesaPdg(5).mesa.x0, 'los tablones no se tocan')
+  assert.ok(mesaUp(7).mesa.x1 + 1.5 < mesaSistemas(3).mesa.x0 && mesaSistemas(3).asientos.at(-1).sentado.x + 0.3 < DIVISOR.hueco[0], 'Sistemas entre UP y el paso de la mampara')
   assert.equal(CUADROS_PDG.length, 5)
 })
 
