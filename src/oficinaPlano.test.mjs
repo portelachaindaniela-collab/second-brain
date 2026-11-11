@@ -126,10 +126,10 @@ test('punto en el camino y momento de la rutina', () => {
   assert.equal(momentoRutina(TIEMPOS.sentado + ida + TIEMPOS.descanso + ida / 2, 7).fase, 'volviendo')
 })
 
-test('reunión: mesa redonda con herradura y lugares parados, sin nadie del lado de la pantalla', () => {
+test('reunión: mesa redonda con un arco de sillas y una fila de pie entre ellas, sin nadie del lado de la pantalla', () => {
   const lista = asientosReunion()
   assert.equal(lista.length, MAX_ASISTENTES)
-  assert.equal(lista.filter(a => a.pose === 'sentado').length, 16)
+  assert.equal(lista.filter(a => a.pose === 'sentado').length, 15)
   for (const a of lista) assert.ok(dentro({ x: a.x, y: a.y }, ZONAS.reuniones), JSON.stringify(a))
   for (let i = 0; i < lista.length; i++) for (let j = i + 1; j < lista.length; j++) assert.ok(Math.hypot(lista[i].x - lista[j].x, lista[i].y - lista[j].y) > 0.6)
   for (const a of lista) assert.ok(a.x < MESA_REUNION.x + 1.6)

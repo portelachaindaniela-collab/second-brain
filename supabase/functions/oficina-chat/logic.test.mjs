@@ -82,3 +82,22 @@ test('reunión: lee las respuestas aunque vengan con texto alrededor y descarta 
   assert.deepEqual(r, [{ agente: 'up:redactor', texto: 'Ya escribí LinkedIn.' }])
   assert.deepEqual(leerRespuestas('no es json', ['up:redactor']), [])
 })
+
+test('Sistemas: solo María y Noruega derivan pedidos, y solo si están en la reunión', async () => {
+  const { leerSolicitudes, extraerSolicitud, reglaSistemas } = await import('./logic.mjs')
+  const crudo = JSON.stringify({ respuestas: [], solicitudes: [
+    { agente: 'up:noruega', titulo: 'Revisar la tarea del Publicador', detalle: 'falló 3 veces' },
+    { agente: 'up:redactor', titulo: 'Quiero tokens', detalle: 'x' },
+    { agente: 'trabajadores:maria', titulo: 'Algo', detalle: 'no vino' },
+    { agente: 'up:noruega', titulo: 'ok', detalle: 'título muy corto' },
+  ] })
+  const r = leerSolicitudes(crudo, ['up:noruega', 'up:redactor'])
+  assert.deepEqual(r.map(s => s.titulo), ['Revisar la tarea del Publicador'])
+  assert.deepEqual(leerSolicitudes('sin json', ['up:noruega']), [])
+  const e = extraerSolicitud('Te cuento lo que pasó.\nSOLICITUD: Revisar el cron | se trabó dos veces', 'trabajadores:maria')
+  assert.equal(e.texto, 'Te cuento lo que pasó.')
+  assert.deepEqual(e.solicitud, { agente: 'trabajadores:maria', titulo: 'Revisar el cron', detalle: 'se trabó dos veces' })
+  assert.equal(extraerSolicitud('SOLICITUD: Dame acceso | ya', 'up:redactor').solicitud, null)
+  assert.match(reglaSistemas('up:redactor'), /No pidan accesos/)
+  assert.match(reglaSistemas('up:noruega'), /SOLICITUD:/)
+})

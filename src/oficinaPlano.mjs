@@ -302,29 +302,30 @@ export function luzDelDia(ahoraMs) {
 }
 
 // ---------- Reuniones ----------
-// La sala de reuniones (arriba de la columna de salas comunes) tiene una mesa redonda. Las sillas forman una
-// herradura que deja libre el lado de la pantalla (al este, donde está la cámara): así Daniela ve a todos de frente.
-// Si vienen más de 16, el resto queda parado detrás. Se entra por la puerta del lado de la pantalla.
-export const MESA_REUNION = { x: 5.1, y: 4.0, radio: 1.6 }
+// La sala de reuniones (arriba de la columna de salas comunes) tiene una mesa redonda grande. Del lado de la pantalla
+// (al este, donde está la cámara) no se sienta nadie: las sillas forman un arco del otro lado, de frente a Daniela, y
+// detrás, a media distancia entre silla y silla, una segunda fila de pie. Así nadie le tapa la cara a otro.
+export const MESA_REUNION = { x: 4.9, y: 4.0, radio: 1.75 }
 export const PUERTA_REUNION = { x: ZONAS.reuniones.x1, y: 6.5 }
-const RADIO_SILLAS = 2.4
-const RADIO_PASO = 1.98 // por donde se camina adentro: entre la mesa y las sillas
-const LIBRE_PANTALLA = (52 * Math.PI) / 180 // a cada lado del este no hay sillas
+const RADIO_SILLAS = 2.55
+const RADIO_PIE = 3.25
+const RADIO_PASO = 2.15 // por donde se camina adentro: entre la mesa y las sillas
+const LIBRE_PANTALLA = (75 * Math.PI) / 180 // a cada lado del este no hay sillas
+const SENTADOS = 15
 export const MAX_ASISTENTES = 24
 const enCirculo = (r, ang) => ({ x: Math.round((MESA_REUNION.x + r * Math.cos(ang)) * 1000) / 1000, y: Math.round((MESA_REUNION.y + r * Math.sin(ang)) * 1000) / 1000 })
 export function asientosReunion() {
   const lista = []
   const desde = LIBRE_PANTALLA, hasta = 2 * Math.PI - LIBRE_PANTALLA
-  for (let k = 0; k < 16; k++) {
-    const ang = desde + ((hasta - desde) * k) / 15
-    const p = enCirculo(RADIO_SILLAS, ang)
-    lista.push({ ...p, ang, mira: Math.atan2(MESA_REUNION.x - p.x, MESA_REUNION.y - p.y), pose: 'sentado' })
-  }
-  for (let k = 0; k < 8; k++) {
-    const ang = Math.PI - 0.9 + (1.8 * k) / 7
-    const p = enCirculo(3.05, ang)
-    lista.push({ ...p, ang, mira: Math.atan2(MESA_REUNION.x - p.x, MESA_REUNION.y - p.y), pose: 'parado' })
-  }
+  const paso = (hasta - desde) / (SENTADOS - 1)
+  const lugar = (r, ang, pose) => { const p = enCirculo(r, ang); lista.push({ ...p, ang, mira: Math.atan2(MESA_REUNION.x - p.x, MESA_REUNION.y - p.y), pose }) }
+  // Primero se ocupan las sillas del centro del arco (las que mejor se ven) y después las de los costados.
+  const orden = Array.from({ length: SENTADOS }, (_, k) => k).sort((a, b) => Math.abs(a - (SENTADOS - 1) / 2) - Math.abs(b - (SENTADOS - 1) / 2) || a - b)
+  for (const k of orden) lugar(RADIO_SILLAS, desde + paso * k, 'sentado')
+  const parados = MAX_ASISTENTES - SENTADOS
+  // De pie, cada uno entre dos sillas (a media distancia), centrados en el arco.
+  const inicio = Math.floor((SENTADOS - 1) / 2) - Math.floor(parados / 2) + 0.5
+  for (let k = 0; k < parados; k++) lugar(RADIO_PIE, desde + paso * (inicio + k), 'parado')
   return lista
 }
 
@@ -378,12 +379,14 @@ export const MUEBLES_DIRECCION = {
   bano: { x0: 42.4, x1: 44.95, y0: 4.9, y1: 6.95, puerta: { y0: 5.3, y1: 6.1 } },
   balcon: { x0: 45, x1: 47.2, y0: 0.8, y1: 4.4, puerta: { y0: 1.6, y1: 3.2 } },
 }
+export const PASO_ESTE = { x0: ZONAS.espera.x0, x1: ZONAS.espera.x0 + 1.2 }
 export function asientosEspera() {
-  const Z = ZONAS.espera
   const lista = []
-  for (let k = 0; k < 6; k++) lista.push({ x: Z.x0 + 0.45 + k * 0.92, y: 9.4, mira: Math.PI, pose: 'sentado' })
-  for (let k = 0; k < 5; k++) lista.push({ x: Z.x0 + 0.91 + k * 0.92, y: 10.6, mira: Math.PI, pose: 'sentado' })
-  for (let k = 0; k < 6; k++) lista.push({ x: Z.x0 + 0.45 + k * 0.92, y: 11.9, mira: Math.PI, pose: 'parado' })
+  // Del lado de las oficinas queda un pasillo libre (PASO_ESTE): por ahí se va del corredor de Dirección al centro.
+  const x0 = PASO_ESTE.x1 + 0.45
+  for (let k = 0; k < 5; k++) lista.push({ x: x0 + k * 0.88, y: 9.4, mira: Math.PI, pose: 'sentado' })
+  for (let k = 0; k < 4; k++) lista.push({ x: x0 + 0.44 + k * 0.88, y: 10.6, mira: Math.PI, pose: 'sentado' })
+  for (let k = 0; k < 5; k++) lista.push({ x: x0 + k * 0.88, y: 11.9, mira: Math.PI, pose: 'parado' })
   return lista
 }
 // Ir a esperar: desde donde esté (hasta el pasillo principal) por el pasillo hasta su lugar en la espera.

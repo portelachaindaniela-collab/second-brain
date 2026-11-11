@@ -72,3 +72,10 @@ test('los descansos y la espera son alcanzables, y vuelve a su oficina', () => {
   assert.ok(vuelta && caminable(vuelta))
   assert.ok(vuelta.at(-1).x > DIRECCION.x0 && vuelta.at(-1).y < DIRECCION.y1, 'vuelve adentro de su oficina')
 })
+
+test('de su oficina al centro sale por el pasillo junto a la sala de espera (sin dar la vuelta entera)', async () => {
+  const { largo } = await import('./oficinaPlano.mjs')
+  const c = buscarCamino(g, salida, { x: 30, y: 18 })
+  assert.ok(c && caminable(c))
+  assert.ok(largo(c) < 30, `largo ${largo(c)}`)
+})

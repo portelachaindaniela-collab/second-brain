@@ -2,7 +2,7 @@ import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, use
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, resumenReunion, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -46,7 +46,7 @@ async function cargarOficina() {
     if (error) { errores.push(`${nombre}: ${error.message}`); return vacio }
     return data ?? vacio
   }
-  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin] = await Promise.all([
+  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas] = await Promise.all([
     leer('trabajadores', supabase.from('trabajadores').select('*').order('id'), []),
     leer('salud del sistema', supabase.rpc('salud_sistema'), null),
     leer('corridas de UP', supabase.from('up_corridas').select('estado,error,pasos,iniciado_at').order('iniciado_at', { ascending: false }).limit(15), []),
@@ -56,6 +56,8 @@ async function cargarOficina() {
     leer('trabajos de PDG', supabase.from('pdg_trabajos').select('agente,estado,pedido,created_at,pdg_cuentas(nombre)').order('created_at', { ascending: false }).limit(80), []),
     leer('cuentas de PDG', supabase.from('pdg_cuentas').select('nombre,etapa,proxima_fecha').not('proxima_fecha', 'is', null), []),
     leer('Administración', supabase.rpc('oficina_administracion'), []),
+    leer('Sistemas', supabase.from('oficina_solicitudes').select('id,agente,titulo,detalle,estado,nota,creada,decidida').order('creada', { ascending: false }).limit(40), []),
+    leer('actas', supabase.from('oficina_actas').select('id,modo,inicio,fin,asistentes,mensajes,resumen').order('fin', { ascending: false }).limit(10), []),
   ])
   const corridasPor = {}
   await Promise.all(trabajadores.map(async t => {
@@ -64,7 +66,7 @@ async function cargarOficina() {
   return {
     trabajadores, corridasPor, salud, upCorridas, chequeo, hoy, errores,
     piezas: piezas.map(p => ({ fecha: p.fecha, estado: p.estado, tiene_texto: Boolean(p.texto) })),
-    pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin,
+    pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin, solicitudes, actas,
   }
 }
 
@@ -94,11 +96,34 @@ export default function Oficina() {
 
   const oficina = useMemo(() => (datos ? armarOficina(datos, ahora) : null), [datos, ahora])
   return <OficinaVista cargando={!datos} agentes={oficina?.agentes ?? []} pendientes={oficina?.pendientes ?? []}
-    errores={[error, ...(datos?.errores ?? [])].filter(Boolean)} ahora={ahora} hablar={hablarConAgente}
-    hablarReunion={hablarEnReunion} actualizar={recargar} />
+    errores={[error, ...(datos?.errores ?? [])].filter(Boolean)} ahora={ahora} hablar={conAviso(hablarConAgente, recargar)}
+    hablarReunion={conAviso(hablarEnReunion, recargar)} actualizar={recargar}
+    solicitudes={datos?.solicitudes ?? []} actas={datos?.actas ?? []} decidir={async (id, estado, nota) => { await decidirSolicitud(id, estado, nota); await recargar() }}
+    guardarActa={async acta => { await guardarActa(acta); await recargar() }} />
 }
 
 // Reunión: una pregunta de Daniela y responden los que tengan algo que decir ({ agente, texto }).
+// Sistemas: Daniela aprueba, rechaza o da por hecho un pedido (con una nota opcional).
+async function decidirSolicitud(id, estado, nota) {
+  const { error } = await supabase.from('oficina_solicitudes').update({ estado, nota: nota || null, decidida: new Date().toISOString() }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+async function guardarActa(acta) {
+  const { error } = await supabase.from('oficina_actas').insert(acta)
+  if (error) throw new Error(error.message)
+}
+// Si en la charla María o Noruega derivaron un pedido a Sistemas, se avisa en su respuesta y se vuelve a leer.
+const avisoPedido = s => ` (Lo derivé a Sistemas: «${s.titulo}». Queda esperando tu aprobación.)`
+function conAviso(hablarFn, recargar) {
+  return async (...args) => {
+    const r = await hablarFn(...args)
+    if (!r.solicitudes?.length) return r.valor
+    recargar()
+    if (typeof r.valor === 'string') return r.valor + r.solicitudes.map(avisoPedido).join('')
+    return r.valor.map(x => ({ ...x, texto: x.texto + r.solicitudes.filter(s => s.agente === x.agente).map(avisoPedido).join('') }))
+  }
+}
+
 // Los de Administración son tareas programadas: escuchan pero no hablan (no tienen IA).
 const conversan = id => !String(id).startsWith('admin:')
 async function hablarEnReunion(asistentes, mensajes) {
@@ -106,7 +131,7 @@ async function hablarEnReunion(asistentes, mensajes) {
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
   if (error || !respuesta?.respuestas?.length) throw new Error(respuesta?.error || 'Nadie pudo responder. Probá de nuevo.')
-  return respuesta.respuestas
+  return { valor: respuesta.respuestas, solicitudes: respuesta.solicitudes ?? [] }
 }
 
 async function hablarConAgente(agente, mensajes) {
@@ -115,12 +140,13 @@ async function hablarConAgente(agente, mensajes) {
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
   if (error || !respuesta?.texto) throw new Error(respuesta?.error || 'No pude hablar con el agente. Probá de nuevo.')
-  return respuesta.texto
+  return { valor: respuesta.texto, solicitudes: respuesta.solicitudes ?? [] }
 }
 
 // ---------- Vista ----------
 // reloj: de dónde sale la hora para la luz del día (en la app, la actual; se puede cambiar para probar).
-export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now }) {
+export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now,
+  solicitudes = [], actas = [], decidir = async () => {}, guardarActa = async () => {} }) {
   const [elegidoId, setElegidoId] = useState(null)
   const [pestana, setPestana] = useState('ahora')
   const [charlas, setCharlas] = useState({})
@@ -168,8 +194,14 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     const todos = reunion.asistentes.every(id => llegadas[id] != null && llegadas[id] <= pasado)
     if (todos || pasado >= PLAZO_REUNION_S) empezar()
   }, [reloj, reunion, llegadas, empezar])
-  const terminar = () => {
+  // Al terminar una reunión que llegó a empezar, se guarda su acta (participantes, conversación y resumen).
+  const terminar = mensajes => {
     setHablando(null)
+    if (reunion?.estado === 'en_curso' && Array.isArray(mensajes)) {
+      const vinieron = reunion.asistentes.map(id => agentes.find(a => a.id === id)).filter(Boolean)
+      guardarActa({ modo: reunion.modo, inicio: new Date(reunion.empezo ?? reunion.inicio).toISOString(), asistentes: reunion.asistentes, mensajes, resumen: resumenReunion(vinieron, pendientes) })
+        .catch(() => { /* el acta es un extra: si no se pudo guardar, la reunión termina igual */ })
+    }
     setReunion(r => {
       if (!r) return r
       const turnos = { ...r.turnos }
@@ -221,6 +253,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
           {tres && <div className="oficina-ayuda">
             <span>Arrastrá para moverte · botón derecho o ⟲ ⟳ para girar · rueda, + y − para acercar · tocá un agente para ver qué hace · <strong>doble click</strong> en el piso para caminar vos.</span>
             {lejos && <button type="button" className="btn btn-sm" onClick={() => setVolverDaniela(n => n + 1)}>Volver a mi escritorio</button>}
+            <SonidoOficina />
           </div>}
           <Leyenda />
           <nav className="oficina-plantel" aria-label="Todos los agentes">
@@ -240,6 +273,12 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
           </li>)}</ul>
           : <p className="tenue">Nada pendiente: los agentes no te necesitan por ahora.</p>}
       </Bloque>
+      <Bloque titulo={`Sistemas${solicitudes.filter(x => x.estado === 'pendiente').length ? ` · ${solicitudes.filter(x => x.estado === 'pendiente').length} para aprobar` : ''}`}>
+        {cargando ? <p className="tenue">Revisando…</p> : <Sistemas solicitudes={solicitudes} agentes={agentes} decidir={decidir} ahora={ahora} />}
+      </Bloque>
+      <Bloque titulo="Actas de reuniones">
+        {cargando ? <p className="tenue">Revisando…</p> : <Actas actas={actas} agentes={agentes} />}
+      </Bloque>
       <Bloque titulo="Trabajando ahora">
         {cargando ? <p className="tenue">Revisando…</p> : <ActividadAhora agentes={agentes} abrir={abrir} />}
       </Bloque>
@@ -251,6 +290,79 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
 }
 
 const nombreCorto = n => String(n).split(' (')[0]
+
+// Sonido ambiente de oficina (el de cafetería de la app), apagado hasta que lo prendas.
+function SonidoOficina() {
+  const audio = useRef(null)
+  const [activo, setActivo] = useState(false)
+  useEffect(() => { const a = audio.current; return () => a?.pause() }, [])
+  const alternar = async () => {
+    const a = audio.current
+    if (!a) return
+    if (activo) { a.pause(); setActivo(false); return }
+    try { a.volume = 0.25; await a.play(); setActivo(true) } catch { setActivo(false) }
+  }
+  return <>
+    <button type="button" className="btn btn-sm" aria-pressed={activo} onClick={alternar}>{activo ? '🔊 Sonido de oficina' : '🔈 Sonido de oficina'}</button>
+    <audio ref={audio} src={`${import.meta.env.BASE_URL}sonidos/coffee.ogg`} loop preload="none" />
+  </>
+}
+
+// ---------- Sistemas ----------
+// Los pedidos que María y Noruega derivan. Ninguno avanza sin vos: lo aprobás, lo rechazás o, cuando ya está hecho,
+// lo cerrás. La nota de Sistemas explica qué implica cada uno.
+const ESTADO_SOLICITUD = { pendiente: 'Esperando tu aprobación', aprobada: 'Aprobado', rechazada: 'Rechazado', hecha: 'Hecho' }
+function Sistemas({ solicitudes, agentes, decidir, ahora }) {
+  const [ocupado, setOcupado] = useState(null)
+  const [error, setError] = useState('')
+  const [verTodas, setVerTodas] = useState(false)
+  const quien = id => nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)
+  const pendientes = solicitudes.filter(x => x.estado === 'pendiente' || x.estado === 'aprobada')
+  const lista = verTodas ? solicitudes : pendientes
+  const accion = async (x, estado) => {
+    setOcupado(x.id); setError('')
+    try { await decidir(x.id, estado, x.nota) } catch (e) { setError(`No se pudo guardar: ${e.message}`) }
+    setOcupado(null)
+  }
+  return <>
+    <p className="tenue">María y Noruega derivan acá lo que necesitan. Nada se hace sin tu aprobación.</p>
+    {error && <p role="alert" className="feedback-error">{error}</p>}
+    {lista.length ? <ul className="oficina-sistemas">{lista.map(x => <li key={x.id} className={`estado-${x.estado}`}>
+      <div className="oficina-sistemas-cabeza">
+        <strong>{x.titulo}</strong>
+        <span className="tenue">{quien(x.agente)} · {haceCuanto(x.creada, ahora)} · {ESTADO_SOLICITUD[x.estado]}</span>
+      </div>
+      {x.detalle && <p className="oficina-sistemas-detalle">{x.detalle}</p>}
+      {x.nota && <p className="oficina-sistemas-nota">{x.nota}</p>}
+      <div className="oficina-sistemas-acciones">
+        {x.estado === 'pendiente' && <>
+          <button type="button" className="btn btn-sm btn-primary" disabled={ocupado === x.id} onClick={() => accion(x, 'aprobada')}>Aprobar</button>
+          <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'rechazada')}>Rechazar</button>
+        </>}
+        {x.estado === 'aprobada' && <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'hecha')}>Marcar hecho</button>}
+      </div>
+    </li>)}</ul> : <p className="tenue">No hay pedidos abiertos.</p>}
+    {solicitudes.length > pendientes.length && <button type="button" className="btn btn-sm" onClick={() => setVerTodas(v => !v)}>{verTodas ? 'Ver solo los abiertos' : `Ver todos (${solicitudes.length})`}</button>}
+  </>
+}
+
+// ---------- Actas ----------
+function Actas({ actas, agentes }) {
+  const [abierta, setAbierta] = useState(null)
+  if (!actas.length) return <p className="tenue">Todavía no hubo reuniones. Cada vez que termines una, su acta queda acá.</p>
+  const quien = id => nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)
+  return <ul className="oficina-actas">{actas.map(a => <li key={a.id}>
+    <button type="button" className="oficina-acta-cabeza" aria-expanded={abierta === a.id} onClick={() => setAbierta(v => (v === a.id ? null : a.id))}>
+      <strong>{a.modo === 'sala' ? 'Reunión en la sala' : 'Turnos en tu oficina'}</strong>
+      <span className="tenue">{new Date(a.fin).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {a.asistentes.length} participantes</span>
+    </button>
+    {abierta === a.id && <div className="oficina-acta">
+      <p>{a.resumen}</p>
+      <p className="tenue">Vinieron: {a.asistentes.map(quien).join(', ')}.</p>
+      {a.mensajes.length > 0 && <ol>{a.mensajes.map((m, i) => <li key={i}><strong>{m.de}:</strong> {m.texto}</li>)}</ol>}
+    </div>}
+  </li>)}</ul>
+}
 
 function Leyenda() {
   return <ul className="oficina-leyenda" aria-label="Qué significa lo que se ve">

@@ -139,3 +139,29 @@
   .reunion-gente li { flex-shrink: 0; }
   .reunion-mensajes { max-height: 16vh; }
 }
+
+/* Sistemas y actas */
+.oficina-sistemas, .oficina-actas { list-style: none; margin: 0 0 var(--esp-8); padding: 0; }
+.oficina-sistemas li { padding: var(--esp-8) 0 var(--esp-8) var(--esp-12); border-bottom: 1px solid var(--gray-200); border-left: 3px solid var(--amber-600); font-size: var(--letra-13); }
+.oficina-sistemas li.estado-aprobada { border-left-color: var(--green-600); }
+.oficina-sistemas li.estado-rechazada, .oficina-sistemas li.estado-hecha { border-left-color: var(--gray-200); opacity: 0.75; }
+.oficina-sistemas-cabeza { display: flex; flex-direction: column; gap: 2px; }
+.oficina-sistemas-detalle, .oficina-sistemas-nota { margin: var(--esp-4) 0 0; overflow-wrap: anywhere; }
+.oficina-sistemas-nota { color: var(--gray-500, inherit); font-style: italic; }
+.oficina-sistemas-acciones { display: flex; gap: var(--esp-8); margin-top: var(--esp-8); flex-wrap: wrap; }
+.oficina-sistemas-acciones:empty { display: none; }
+.oficina-actas li { border-bottom: 1px solid var(--gray-200); }
+.oficina-acta-cabeza { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 2px; width: 100%; padding: var(--esp-8) 0; font-size: var(--letra-13); }
+.oficina-acta-cabeza:focus-visible { outline: 2px solid var(--amber-600); outline-offset: 2px; }
+.oficina-acta { font-size: var(--letra-13); padding-bottom: var(--esp-8); }
+.oficina-acta ol { margin: var(--esp-8) 0 0; padding-left: 1.2em; display: grid; gap: 4px; }
+
+/* Convocar: lista desplegable por área */
+.reunion-area { border: 1px solid var(--gray-300); border-radius: var(--radius); }
+.reunion-area > summary { display: flex; align-items: center; gap: var(--esp-8); padding: var(--esp-8) var(--esp-12); cursor: pointer; font-size: var(--letra-13); list-style: none; }
+.reunion-area > summary::-webkit-details-marker { display: none; }
+.reunion-area > summary::after { content: '▾'; margin-left: auto; color: var(--gray-500); transition: transform 0.15s; }
+.reunion-area[open] > summary::after { transform: rotate(180deg); }
+.reunion-area > summary input { width: auto; margin: 0; accent-color: var(--accent); }
+.reunion-area > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reunion-area ul { list-style: none; margin: 0; padding: 0 var(--esp-12) var(--esp-12); display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--esp-8); }

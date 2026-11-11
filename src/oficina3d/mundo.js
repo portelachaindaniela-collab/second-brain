@@ -326,15 +326,18 @@ export function crearOficina(o) {
   g.position.set(0, alturaPiso(o.x0 + 0.1, o.y0 + 0.1), o.y0)
   const D = o.y1 - o.y0
   const altoTabique = 2.1
+  // Las oficinas de la fila del medio tienen paredes bajas (tipo casa de muñecas): así no tapan a la de al lado ni a
+  // quien camina por el corredor de atrás. La fila del fondo (María) va contra la pared del edificio.
+  const altoMuro = o.y0 > 0 ? 1.2 : altoTabique
   const estilo = estiloDe(o.id)
   const acento = mat(estilo.pared)
   {
-    g.add(caja(o.x0, o.x0 + 0.08, 0, altoTabique, 0, D, mat(COLORES.tabique), { r: 0.02 }))
-    g.add(caja(o.x1 - 0.08, o.x1, 0, altoTabique, 0, D, mat(COLORES.tabique), { r: 0.02 }))
-    if (o.y0 > 0) g.add(caja(o.x0, o.x1, 0, altoTabique, -0.08, 0, mat(COLORES.tabique), { r: 0.02 }))
+    g.add(caja(o.x0, o.x0 + 0.08, 0, altoMuro, 0, D, mat(COLORES.tabique), { r: 0.02 }))
+    g.add(caja(o.x1 - 0.08, o.x1, 0, altoMuro, 0, D, mat(COLORES.tabique), { r: 0.02 }))
+    if (o.y0 > 0) g.add(caja(o.x0, o.x1, 0, altoMuro, -0.08, 0, mat(COLORES.tabique), { r: 0.02 }))
     g.add(vidriera(o.x0, o.x1, D, 'x', altoTabique, [o.puerta.x - 0.5, o.puerta.x + 0.5]))
     g.add(alfombraConEstilo(o.x0 + 0.3, o.x1 - 0.3, 0.3, D - 0.3, estilo.alfombra))
-    g.add(caja(o.x0 + 0.08, o.x1 - 0.08, 0.15, altoTabique, 0.004, 0.012, acento, { sombra: false }))
+    g.add(caja(o.x0 + 0.08, o.x1 - 0.08, 0.15, altoMuro, 0.004, 0.012, acento, { sombra: false }))
     const cx = (o.x0 + o.x1) / 2
     if (o.y0 === 0) g.add(ventana(cx - 0.9, cx + 0.9, 'fondo'))
     if (o.nombre && !o.jefa) {
@@ -354,7 +357,8 @@ export function crearOficina(o) {
         const aIzq = k % 2 === 0
         const x = aIzq ? izq - pz.w / 2 : der + pz.w / 2
         if (x - pz.w / 2 < o.x0 + 0.85 || x + pz.w / 2 > o.x1 - 0.85) return
-        g.add(cuadroDeArea(pz.t, { x, z: 0.02, w: pz.w, h: pz.h, y: pz.t === 'tablero' ? 1.45 : 1.5 }))
+        const yCuadro = altoMuro < altoTabique ? altoMuro - 0.08 - pz.h / 2 : pz.t === 'tablero' ? 1.45 : 1.5
+        g.add(cuadroDeArea(pz.t, { x, z: 0.02, w: pz.w, h: pz.h, y: yCuadro }))
         if (aIzq) izq -= pz.w + 0.2; else der += pz.w + 0.2
       })
       if (estilo.objeto === 'diarios') g.add(mesitaConDiarios(o.x0 + 1.25, 0.4))
@@ -418,7 +422,7 @@ export function crearSala(mesas) {
   g.add(caja(X0, W, 0, EJECUTIVO.tarima, EJECUTIVO.y0, EJECUTIVO.y1, mat('#e6cfa8'), { sombra: false }))
   g.add(caja(X0, W, 0, EJECUTIVO.tarima / 2, EJECUTIVO.y1, EJECUTIVO.y1 + 0.25, mat('#d8bd92'), { sombra: false }))
   // La pared del fondo de la fila de oficinas de los trabajadores (da al corredor de la fila ejecutiva).
-  g.add(caja(OFICINAS.x0, OFICINAS.x1, 0, 2.1, OFICINAS.y0 - 0.08, OFICINAS.y0, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(caja(OFICINAS.x0, OFICINAS.x1, 0, 1.2, OFICINAS.y0 - 0.08, OFICINAS.y0, mat(COLORES.tabique), { r: 0.02 }))
 
   // Reloj con la hora real, en la pared izquierda (cafetería).
   const reloj = new THREE.Group()
@@ -695,7 +699,7 @@ export function crearDireccion() {
 
   // Sala de espera (a nivel del piso, frente a su puerta): las sillas miran a su oficina.
   const E = ZONAS.espera
-  raiz.add(alfombra(E.x0 + 0.1, E.x1 - 0.2, E.y0 + 0.4, E.y1 - 0.2, COLORES.lilaClaro))
+  raiz.add(alfombra(E.x0 + 1.3, E.x1 - 0.2, E.y0 + 0.4, E.y1 - 0.2, COLORES.lilaClaro))
   for (const a of asientosEspera()) if (a.pose === 'sentado') raiz.add(silla(a.x, a.y, a.mira, COLORES.menta))
   raiz.add(planta(44.6, 12.6, 0.9))
   return { grupo: raiz, escritorio, luz }

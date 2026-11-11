@@ -25,8 +25,8 @@ const ORDEN = ['trabajadores', 'up', 'pdg', 'admin']
 const ROPA_EQUIPO = { up: '#d9734e', pdg: '#3fa98a', admin: '#8a7fc4' }
 const COLOR_PUESTO = { up: COLORES.durazno, pdg: COLORES.menta, admin: COLORES.lila }
 const CENTRO = new THREE.Vector3(22.5, 0.4, 13.25)
-// Videollamada: la cámara está en la pantalla de la sala (el lado sin sillas) y ve la herradura entera de frente.
-const CAMARA_SALA = { pos: new THREE.Vector3(10.2, 2.35, 4.0), target: new THREE.Vector3(5.85, 0.75, 4.0), fov: 56 }
+// Videollamada: la cámara está arriba de la pantalla de la sala (el lado sin sillas) y ve el arco entero de frente.
+const CAMARA_SALA = { pos: new THREE.Vector3(9.1, 4.9, 4.0), target: new THREE.Vector3(3.5, 0.75, 4.0), fov: 56 }
 const CAMARA_DESPACHO = { pos: new THREE.Vector3(37.25, 1.92, 1.05), target: new THREE.Vector3(36.5, 1.12, 4.7), fov: 46 }
 const nombreCorto = n => String(n).split(' (')[0]
 // Al costado de la silla de Daniela, del lado libre: por ahí se levanta y se vuelve a sentar.
@@ -218,6 +218,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     let medida = ''
     const general = { pos: new THREE.Vector3(), target: CENTRO.clone(), fov: 30 }
     let encuadrada = false
+    let pedirEntrada = false
     const medir = () => {
       const completa = contenedor.classList.contains('o3-completa')
       const w = caja.clientWidth
@@ -234,6 +235,11 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         camara.position.copy(CENTRO).add(new THREE.Vector3(0.62, 0.62, 0.48).normalize().multiplyScalar(lejos))
         general.pos.copy(camara.position)
         encuadrada = true
+        // Al abrir, la cámara entra recorriendo la oficina: arranca alta, del lado de la entrada, y baja a la vista general.
+        if (!sinMovimiento) {
+          camara.position.set(CENTRO.x + 8, lejos * 0.95, PISO.fondo + lejos * 0.55)
+          pedirEntrada = true
+        }
       }
     }
     medir()
@@ -332,6 +338,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     // ---------- Reuniones ----------
     // Al convocar, cada asistente arma su camino desde donde esté; se avisa cuándo llega cada uno.
     let plan = null
+    let reunionUp = null
     const situacion = (ac, r, t) => {
       if (r?.tipo === 'rutina' && !sinMovimiento) {
         if (ac.descansoId !== r.descanso.id) { ac.camino = camino(ac.lugar, r.descanso); ac.largo = largo(ac.camino); ac.descansoId = r.descanso.id }
@@ -359,7 +366,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         p.por.set(id, item)
         llegadas[id] = Math.round(espera + item.largo / VELOCIDAD)
       })
-      datos.current.alPlanificar?.(R.id, llegadas)
+      if (!R.propia) datos.current.alPlanificar?.(R.id, llegadas)
       return p
     }
 
@@ -406,7 +413,13 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       const t = ahoraMs / 1000
       const D = datos.current
       const { agentes: lista, elegidoId: elegido, rut } = D
-      const R = D.reunion
+      // Cuando corre la cadena de UP (dos o más de sus agentes trabajando), se juntan solos en la sala de reuniones;
+      // cuando terminan, vuelven a sus puestos. Si Daniela convoca una reunión, manda la suya.
+      const upTrabajando = lista.filter(a => a.equipo === 'up' && a.estado === 'trabajando').map(a => a.id)
+      if (D.reunion) reunionUp = null
+      else if (!reunionUp && upTrabajando.length >= 2 && !sinMovimiento) reunionUp = { id: `up-${Date.now()}`, propia: true, modo: 'sala', estado: 'convocada', inicio: Date.now(), asistentes: upTrabajando }
+      else if (reunionUp && reunionUp.estado !== 'volviendo' && upTrabajando.length < 2) reunionUp = { ...reunionUp, estado: 'volviendo', vuelta: Date.now() }
+      const R = D.reunion ?? reunionUp
       if (t - ultimaLuz > 2) { aplicarLuz(); ultimaLuz = t }
       if (R && (!plan || plan.id !== R.id)) plan = planificar(R, t)
       if (!R && plan) plan = null
@@ -511,7 +524,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         if (id === elegido) { aro.visible = aLaVista; aro.position.set(pos.x, 0.03 + alturaPiso(pos.x, pos.z), pos.z) }
       }
       if (!elegido || !actores.has(elegido)) aro.visible = false
-      if (todosVolvieron && plan && !plan.avisado) { plan.avisado = true; D.alVolvieron?.(R.id) }
+      if (todosVolvieron && plan && !plan.avisado) { plan.avisado = true; if (R.propia) reunionUp = null; else D.alVolvieron?.(R.id) }
 
       // Daniela: camina por su ruta; en una reunión por turnos la esperan sentada en su escritorio.
       if (D.volverDaniela !== daniela.volverVisto) { daniela.volverVisto = D.volverDaniela; volverAlEscritorio() }
@@ -588,6 +601,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         : R?.estado === 'en_curso' && R.modo === 'turnos' ? 'despacho'
           : elegido && actores.has(elegido) ? `agente:${elegido}`
             : daniela.ruta ? 'daniela' : 'general'
+      if (pedirEntrada) { pedirEntrada = false; volar(general.pos, CENTRO, 30, 2.8) }
       if (pedirGeneral) { pedirGeneral = false; if (modo === 'general' || modo === 'daniela') volar(general.pos, general.target, 30) }
       if (nuevoModo !== modo) {
         if (modo === 'general') { general.pos.copy(camara.position); general.target.copy(controles.target) }
