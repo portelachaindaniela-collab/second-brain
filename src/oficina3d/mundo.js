@@ -3,7 +3,7 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import {
-  PISO, ZONAS, PUFS, MESA_REUNION, DANIELA_SALA, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, RINCON_ENTRADA, RACK, MACETONES, RINCON_TABLONES, EXPENDEDORAS, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, estiloDe, CUADROS_PDG,
+  PISO, ZONAS, PUFS, MESA_REUNION, DANIELA_SALA, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, RINCON_ENTRADA, SALA_SERVIDORES, MACETONES, RINCON_TABLONES, EXPENDEDORAS, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, estiloDe, CUADROS_PDG,
   MUEBLES_DIRECCION, ROBERTA, EJECUTIVO, X0, OFICINAS, DIVISOR, ENTRADA, alturaPiso,
 } from '../oficinaPlano.mjs'
 import { texturaCuadro, texturaAlfombra, texturaCamiseta, texturaPosterOasis, texturaPelota } from './cuadros.js'
@@ -591,7 +591,7 @@ export function crearSala(mesas) {
 
   // Entre los dos tablones: rincón de trabajo en equipo con mesa alta, banquetas, pizarra con ruedas y macetones.
   const RT = RINCON_TABLONES
-  g.add(alfombra(24.0, 28.1, 15.6, 20.2, COLORES.duraznoClaro))
+  g.add(alfombra(RT.mesa.x - 2.0, RT.mesa.x + 2.0, 15.4, 20.3, COLORES.duraznoClaro))
   g.add(cilindro(RT.mesa.x, RT.mesa.y, RT.mesa.radio, 1.0, 1.05, mat(COLORES.madera), RT.mesa.radio, 32))
   g.add(cilindro(RT.mesa.x, RT.mesa.y, 0.06, 0, 1.0, mat(COLORES.maderaOscura)))
   g.add(cilindro(RT.mesa.x, RT.mesa.y, 0.3, 0, 0.03, mat(COLORES.maderaOscura)))
@@ -613,15 +613,32 @@ export function crearSala(mesas) {
   g.add(dibujo)
   for (const [x, z] of RT.macetones) g.add(maceton(x, z))
 
-  // Sistemas: su mesa con un rack de servidores (con lucecitas) al lado.
-  g.add(alfombra(36.9, 44.2, 21.7, 26.2, COLORES.grisClaro))
+  // Sistemas: su tablón entre UP y PDG.
+  g.add(alfombra(Z.sistemas.x0 + 0.3, Z.sistemas.x1 - 0.3, Z.sistemas.y0 + 0.4, Z.sistemas.y1 - 0.9, COLORES.grisClaro))
   tablonMesa(g, mesas.sistemas)
-  g.add(caja(RACK.x0, RACK.x1, 0, 1.9, RACK.y0, RACK.y1, mat(COLORES.negro), { r: 0.02 }))
-  for (let k = 0; k < 6; k++) {
-    g.add(caja(RACK.x0 + 0.08, RACK.x1 - 0.08, 0.25 + k * 0.27, 0.45 + k * 0.27, RACK.y1, RACK.y1 + 0.01, mat('#3a3936'), { sombra: false }))
-    g.add(caja(RACK.x0 + 0.12, RACK.x0 + 0.17, 0.33 + k * 0.27, 0.37 + k * 0.27, RACK.y1 + 0.01, RACK.y1 + 0.015, new THREE.MeshStandardMaterial({ color: k % 3 ? '#7fe0a0' : '#d9a441', emissive: k % 3 ? '#3fb878' : '#d9a441', emissiveIntensity: 1 }), { sombra: false }))
+
+  // Sala de servidores: vidriada, piso técnico, dos filas de racks con lucecitas y el aire acondicionado.
+  const SV = SALA_SERVIDORES
+  g.add(caja(SV.x0, SV.x1, 0, 0.03, SV.y0, SV.y1, mat('#d9dcdd'), { sombra: false }))
+  for (let x = SV.x0 + 0.6; x < SV.x1; x += 0.6) g.add(caja(x - 0.006, x + 0.006, 0.03, 0.032, SV.y0, SV.y1, mat('#b9bdbf'), { sombra: false }))
+  g.add(vidriera(SV.x0, SV.x1, SV.y0, 'x', 2.1))
+  g.add(vidriera(SV.x0, SV.x1, SV.y1, 'x', 2.1))
+  g.add(vidriera(SV.y0, SV.y1, SV.x1, 'z', 2.1))
+  g.add(vidriera(SV.y0, SV.y1, SV.x0, 'z', 2.1, [SV.puerta.y0, SV.puerta.y1]))
+  const luzVerde = new THREE.MeshStandardMaterial({ color: '#7fe0a0', emissive: '#3fb878', emissiveIntensity: 1 })
+  const luzAmbar = new THREE.MeshStandardMaterial({ color: '#f2c46b', emissive: '#d9a441', emissiveIntensity: 1 })
+  for (const k of SV.racks) {
+    g.add(caja(k.x0, k.x1, 0, 1.95, k.y0, k.y1, mat(COLORES.negro), { r: 0.02 }))
+    const frente = k.y0 < 23 ? k.y1 : k.y0
+    const signo = k.y0 < 23 ? 1 : -1
+    for (let f = 0; f < 6; f++) {
+      g.add(caja(k.x0 + 0.06, k.x1 - 0.06, 0.25 + f * 0.27, 0.45 + f * 0.27, Math.min(frente, frente + signo * 0.01), Math.max(frente, frente + signo * 0.01), mat('#3a3936'), { sombra: false }))
+      g.add(caja(k.x0 + 0.1, k.x0 + 0.15, 0.33 + f * 0.27, 0.37 + f * 0.27, Math.min(frente + signo * 0.01, frente + signo * 0.015), Math.max(frente + signo * 0.01, frente + signo * 0.015), (f + Math.round(k.x0)) % 4 ? luzVerde : luzAmbar, { sombra: false }))
+    }
   }
-  g.add(textoEnPiso('Sistemas', 40.4, 26.05))
+  const A2 = SV.aire
+  g.add(caja(A2.x0, A2.x1, 0, 1.8, A2.y0, A2.y1, mat(COLORES.blanco), { r: 0.03 }))
+  for (let y = 0.3; y < 1.7; y += 0.12) g.add(caja(A2.x1, A2.x1 + 0.01, y, y + 0.05, A2.y0 + 0.1, A2.y1 - 0.1, mat(COLORES.grisClaro), { sombra: false }))
 
   // Un rincón de descanso al entrar: alfombra, dos sillones de madera y tela, mesa ratona y macetones.
   const RC = RINCON_ENTRADA

@@ -3,7 +3,7 @@
 // línea recta donde puede. Las medidas de los muebles son las de oficina3d/mundo.js.
 import {
   PISO, ZONAS, PUFS, MESA_REUNION, PUERTA_REUNION, DIRECCION, DANIELA, VISITA, ROBERTA, MUEBLES_DIRECCION, OFICINAS, DIVISOR,
-  asientosReunion, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RINCON_TABLONES, EXPENDEDORAS, RACK, MACETONES,
+  asientosReunion, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RINCON_TABLONES, EXPENDEDORAS, SALA_SERVIDORES, MACETONES,
 } from './oficinaPlano.mjs'
 
 export const CELDA = 0.25
@@ -53,7 +53,14 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
   for (const { mesa } of [mesaUp(nUp), mesaPdg(nPdg), mesaAdmin(nAdmin), mesaSistemas(nSistemas)]) rect(mesa.x0, mesa.x1, mesa.y0, mesa.y1)
   for (const c of RINCON_ENTRADA.sillones) circulo(c.x, c.y, 0.5)
   circulo(RINCON_ENTRADA.mesa.x, RINCON_ENTRADA.mesa.y, RINCON_ENTRADA.mesa.radio)
-  rect(RACK.x0, RACK.x1, RACK.y0, RACK.y1)
+  // La sala de servidores: vidrios (la puerta del lado de la entrada), racks y el aire acondicionado.
+  const SV = SALA_SERVIDORES
+  rect(SV.x0, SV.x1, SV.y0 - pared, SV.y0 + pared)
+  rect(SV.x0, SV.x1, SV.y1 - pared, SV.y1 + pared)
+  rect(SV.x1 - pared, SV.x1 + pared, SV.y0, SV.y1)
+  rect(SV.x0 - pared, SV.x0 + pared, SV.y0, SV.puerta.y0)
+  rect(SV.x0 - pared, SV.x0 + pared, SV.puerta.y1, SV.y1)
+  for (const k of [...SV.racks, SV.aire]) rect(k.x0, k.x1, k.y0, k.y1)
   for (const [x, y] of MACETONES) circulo(x, y, 0.4)
   rect(DIVISOR.x0, DIVISOR.hueco[0], DIVISOR.y - 0.15, DIVISOR.y + 0.15)
   rect(DIVISOR.hueco[1], DIVISOR.x1, DIVISOR.y - 0.15, DIVISOR.y + 0.15)
