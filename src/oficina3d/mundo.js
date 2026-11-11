@@ -418,7 +418,7 @@ export function crearOficina(o) {
         if (aIzq) izq -= pz.w + 0.2; else der += pz.w + 0.2
       })
       if (estilo.objeto === 'diarios') g.add(mesitaConDiarios(o.x0 + 1.25, 0.4))
-      if (estilo.objeto === 'maletin') g.add(maletin(o.x0 + 1.15, 0.45))
+      if (estilo.objeto === 'maletin') g.add(maletin(o.x0 + 0.55, D - 0.45))
     }
   }
   if (o.jefa) {
