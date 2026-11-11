@@ -3,7 +3,7 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import {
-  PISO, ZONAS, PUFS, MESA_REUNION, DANIELA_SALA, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, RINCON_ENTRADA, SALA_SERVIDORES, MACETONES, RINCON_TABLONES, EXPENDEDORAS, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, estiloDe, CUADROS_PDG,
+  PISO, ZONAS, PUFS, MESA_REUNION, DANIELA_SALA, LIVING, COCINA, MESA_CHICA_DANIELA, DANIELA_OFICINA, asientosOficina, MESA_CHICA_MARIA, PLANTAS_DANIELA, RINCON_ENTRADA, SALA_SERVIDORES, MACETONES, RINCON_TABLONES, EXPENDEDORAS, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, estiloDe, CUADROS_PDG,
   MUEBLES_DIRECCION, ROBERTA, EJECUTIVO, X0, OFICINAS, DIVISOR, ENTRADA, alturaPiso,
 } from '../oficinaPlano.mjs'
 import { texturaCuadro, texturaAlfombra, texturaCamiseta, texturaPosterOasis, texturaPelota } from './cuadros.js'
@@ -292,9 +292,9 @@ function pelotaEnRepisa(tipo) {
 }
 // Mesa de reuniones chica (redonda) con sus sillas alrededor.
 export const RADIO_MESA_CHICA = 0.45
-function mesaChica(x, z, sillas = 3, color = COLORES.cuero) {
+function mesaChica(x, z, sillas = 3, color = COLORES.cuero, radio = RADIO_MESA_CHICA) {
   const g = new THREE.Group()
-  g.add(cilindro(x, z, RADIO_MESA_CHICA, 0.7, 0.75, mat(COLORES.madera), RADIO_MESA_CHICA, 32))
+  g.add(cilindro(x, z, radio, 0.7, 0.75, mat(COLORES.madera), radio, 32))
   g.add(cilindro(x, z, 0.05, 0, 0.7, mat(COLORES.maderaOscura)))
   g.add(cilindro(x, z, 0.25, 0, 0.03, mat(COLORES.maderaOscura)))
   for (let k = 0; k < sillas; k++) {
@@ -859,7 +859,9 @@ export function crearDireccion() {
   g.add(cilindro(45.6, 2.6, 0.03, 0, 0.5, mat(COLORES.gris)))
 
   // Mesa de reuniones chica, plantas por todos lados y la camita de Roberta.
-  g.add(mesaChica(MESA_CHICA_DANIELA.x, MESA_CHICA_DANIELA.y, 3))
+  // Su mesa de reuniones: para ella y hasta 5 más.
+  g.add(mesaChica(MESA_CHICA_DANIELA.x, MESA_CHICA_DANIELA.y, 0, COLORES.cuero, 0.6))
+  for (const a of [DANIELA_OFICINA, ...asientosOficina()]) g.add(silla(a.x, a.y, a.mira ?? 0, COLORES.cuero))
   for (const p of PLANTAS_DANIELA) g.add(planta(p.x, p.y, p.escala))
 
   // La pared de la tele (la que se ve desde la cámara): a la izquierda la camiseta de LeBron (Lakers, 23), la pelota

@@ -119,7 +119,8 @@ export function crearPersonaje({ ropa, v, accesorio = null }) {
   boca.position.set(0, -0.085, 0.236)
   cabeza.add(boca)
 
-  // Objetos que aparecen según dónde esté: una taza de café o una paleta de ping pong en la mano derecha.
+  // Objetos que aparecen según dónde esté: una taza de café o una paleta de ping pong en la mano derecha (y en las
+  // reuniones, el mate o una botella de agua).
   const taza = new THREE.Group()
   const cuerpoTaza = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.11, 14), mat('#fffaf3'))
   const asa = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.01, 6, 10), mat('#fffaf3'))
@@ -137,9 +138,34 @@ export function crearPersonaje({ ropa, v, accesorio = null }) {
   paleta.position.set(0, -0.42, 0.04)
   paleta.visible = false
   brazoD.grupo.add(paleta)
+  // El mate (calabaza con bombilla) y una botella de agua, para las reuniones.
+  const mate = new THREE.Group()
+  const calabaza = new THREE.Mesh(new THREE.SphereGeometry(0.055, 14, 10), mat('#6b4a2e'))
+  calabaza.scale.set(1, 1.15, 1)
+  const borde = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.02, 12), mat('#c9a24a'))
+  borde.position.y = 0.06
+  const yerba = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.005, 10), mat('#6f8f3a'))
+  yerba.position.y = 0.071
+  const bombilla = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.16, 6), mat('#d6d3cd', { metalness: 0.7, roughness: 0.3 }))
+  bombilla.position.set(0.012, 0.11, 0)
+  bombilla.rotation.z = -0.25
+  mate.add(calabaza, borde, yerba, bombilla)
+  mate.position.set(0, -0.42, 0.05)
+  mate.scale.setScalar(1.4)
+  mate.visible = false
+  brazoD.grupo.add(mate)
+  const botella = new THREE.Group()
+  const envase = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.17, 12), mat('#bfe3ef', { transparent: true, opacity: 0.75, roughness: 0.15 }))
+  const tapa = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.03, 10), mat('#3f6b8f'))
+  tapa.position.y = 0.1
+  botella.add(envase, tapa)
+  botella.position.set(0, -0.42, 0.05)
+  botella.scale.setScalar(1.3)
+  botella.visible = false
+  brazoD.grupo.add(botella)
 
   if (accesorio) ponerAccesorio({ cabeza, cuerpo }, accesorio, v)
-  return { grupo, cuerpo, piernaI, piernaD, brazoI: brazoI.grupo, brazoD: brazoD.grupo, cabeza, ojos, cejas, boca, taza, paleta, torso }
+  return { grupo, cuerpo, piernaI, piernaD, brazoI: brazoI.grupo, brazoD: brazoD.grupo, cabeza, ojos, cejas, boca, taza, paleta, mate, botella, torso }
 }
 
 // ---------- Accesorios ----------
@@ -300,6 +326,9 @@ export function posar(p, { pose, estado, objeto = null, t, fase = 0, habla = fal
   const tt = t + fase
   p.taza.visible = objeto === 'taza'
   p.paleta.visible = objeto === 'paleta'
+  p.mate.visible = objeto === 'mate'
+  p.botella.visible = objeto === 'botella'
+  const bebe = objeto === 'taza' || objeto === 'mate' || objeto === 'botella'
   p.cuerpo.position.set(0, 0, 0)
   p.cuerpo.rotation.set(0, 0, 0)
   p.cabeza.rotation.set(0, 0, 0)
@@ -342,14 +371,14 @@ export function posar(p, { pose, estado, objeto = null, t, fase = 0, habla = fal
     p.brazoD.rotation.set(-2.6, 0, -0.5)
     p.cabeza.rotation.y = Math.sin(tt * 5) * 0.25
     p.cabeza.rotation.x = 0.1
-  } else if (pose === 'sentado' && objeto === 'taza') {
+  } else if (pose === 'sentado' && bebe) {
     p.brazoD.rotation.x = -1.1 - Math.max(0, Math.sin(tt * 0.8)) * 0.8
   } else if (pose === 'sentado') {
     p.brazoI.rotation.x = -0.9
     p.brazoD.rotation.x = -0.9
     p.cabeza.rotation.y = Math.sin(tt * 0.5) * 0.18
   }
-  if (pose === 'parado' && objeto === 'taza') p.brazoD.rotation.x = -1.2 - Math.max(0, Math.sin(tt * 0.9)) * 0.7
+  if (pose === 'parado' && bebe) p.brazoD.rotation.x = -1.2 - Math.max(0, Math.sin(tt * 0.9)) * 0.7
   if (pose === 'parado' && objeto === 'paleta') {
     p.brazoD.rotation.x = -1.1
     p.brazoD.rotation.z = -0.5 + Math.sin(tt * 4.5) * 0.7

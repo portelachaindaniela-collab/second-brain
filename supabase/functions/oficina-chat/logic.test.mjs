@@ -101,3 +101,22 @@ test('Sistemas: solo María y Noruega derivan pedidos, y solo si están en la re
   assert.match(reglaSistemas('up:redactor'), /No pidan accesos/)
   assert.match(reglaSistemas('up:noruega'), /SOLICITUD:/)
 })
+
+test('género: las mujeres hablan en femenino (en la charla y en la reunión)', async () => {
+  const { sistema, sistemaReunion } = await import('./logic.mjs')
+  const ficha = id => ({ id, nombre: 'X', rol: 'r', descripcion: 'd', herramientas: [], registro: [] })
+  assert.match(sistema(ficha('up:noruega'), 'hoy'), /Sos mujer/)
+  assert.match(sistema(ficha('up:redactor'), 'hoy'), /en masculino/)
+  const r = sistemaReunion([{ id: 'trabajadores:maria', c: ficha('trabajadores:maria') }, { id: 'up:redactor', c: ficha('up:redactor') }], 'hoy')
+  assert.match(r, /trabajadores:maria\) — r — mujer/)
+  assert.match(r, /up:redactor\) — r — varón/)
+})
+
+test('reunión y charla: conversan en contexto y no prometen entregas', async () => {
+  const { sistema, sistemaReunion } = await import('./logic.mjs')
+  const ficha = id => ({ id, nombre: 'X', rol: 'r', descripcion: 'd', herramientas: [], registro: [] })
+  const r = sistemaReunion([{ id: 'pdg:marketing', c: ficha('pdg:marketing') }], 'hoy')
+  assert.match(r, /Es una conversación/)
+  assert.match(r, /ni prometer entregas a futuro/)
+  assert.match(sistema(ficha('pdg:marketing'), 'hoy'), /No recites tu estado/)
+})

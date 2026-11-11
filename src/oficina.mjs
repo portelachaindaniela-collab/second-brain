@@ -4,7 +4,7 @@
 import { trabada, haceCuanto, duracionLegible } from './trabajadores.mjs'
 import { RECORRIDOS, FUENTES, vidaDeTrabajador, textoTrabajador, alertas as calcularAlertas } from './tablero.mjs'
 import { NOMBRE_DESTINO } from './orbital.mjs'
-import { AGENTES_UP, ORDEN_UP, herramientasPdg, idAgente } from '../supabase/functions/_shared/oficina.mjs'
+import { AGENTES_UP, ORDEN_UP, herramientasPdg, idAgente, generoDe } from '../supabase/functions/_shared/oficina.mjs'
 
 import { EQUIPOS as EQUIPOS_SERVIDOR } from '../supabase/functions/_shared/oficina.mjs'
 export { partirId } from '../supabase/functions/_shared/oficina.mjs'
@@ -296,7 +296,7 @@ export function informeDe(a, pendientes = [], ahora = Date.now()) {
   const partes = [`Hola, soy ${a.nombre.split(' (')[0]}.`]
   if (a.estado === 'trabajando') partes.push(`Estoy trabajando en este momento: ${minuscula(a.ahora)}.`)
   else if (a.estado === 'error') partes.push(`Tengo un problema: ${minuscula(a.ahora)}.`)
-  else if (a.estado === 'pausado') partes.push('Estoy pausado.')
+  else if (a.estado === 'pausado') partes.push(generoDe(a.id) === 'f' ? 'Estoy pausada.' : 'Estoy pausado.')
   else if (a.estado === 'nuevo') partes.push('Todavía no me tocó trabajar.')
   else partes.push(`Estoy al día: ${minuscula(a.ahora)}.`)
   const ultima = a.tareas?.[0]

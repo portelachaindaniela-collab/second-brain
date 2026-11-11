@@ -98,7 +98,7 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
   circulo(DANIELA.sentado.x, DANIELA.sentado.y, 0.35)
   circulo(VISITA.x, VISITA.y, 0.3)
   circulo(ROBERTA.cama.x, ROBERTA.cama.y, 0.35)
-  circulo(MESA_CHICA_DANIELA.x, MESA_CHICA_DANIELA.y, 1.05)
+  circulo(MESA_CHICA_DANIELA.x, MESA_CHICA_DANIELA.y, 1.3)
   for (const p of PLANTAS_DANIELA) circulo(p.x, p.y, 0.3 * p.escala)
   for (const m of Object.values(LIVING)) rect(m.x0, m.x1, m.y0, m.y1)
   return r

@@ -167,3 +167,4 @@
 .reunion-area ul { list-style: none; margin: 0; padding: 0 var(--esp-12) var(--esp-12); display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--esp-8); }
 .oficina-sistemas-reco { margin: var(--esp-4) 0 0; padding: var(--esp-4) var(--esp-8); border-radius: var(--radius); background: var(--gray-100); font-size: var(--letra-12); }
 .oficina-sistemas-reco.riesgo-alto { background: var(--red-100); }
+.reunion-novedades { justify-self: start; align-self: start; width: auto; }

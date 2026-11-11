@@ -194,3 +194,32 @@ test('estilos, accesorios, luz del día y reloj', () => {
   assert.deepEqual(variante('up:redactor'), variante('up:redactor'))
   assert.ok(X0 > VX)
 })
+
+test('reuniones: cada uno va con su bebida (siempre la misma) y María con su mate; Sistemas tiene accesorios', async () => {
+  const { bebidaDe, BEBIDAS } = await import('./oficinaPlano.mjs')
+  assert.equal(bebidaDe('trabajadores:maria'), 'mate')
+  const ids = [...Object.keys(ACCESORIOS)]
+  for (const id of ids) { const b = bebidaDe(id); assert.ok(b === null || BEBIDAS.includes(b)); assert.equal(bebidaDe(id), b) }
+  const conBebida = ids.filter(id => bebidaDe(id))
+  assert.ok(conBebida.length > ids.length / 2, 'la mayoría lleva algo')
+  assert.ok(ids.some(id => bebidaDe(id) === 'mate') && ids.some(id => bebidaDe(id) === 'taza'))
+  for (const c of ['mesa_entrada', 'guardian', 'operador']) assert.ok(ACCESORIOS[`sistemas:${c}`])
+})
+
+test('reunión en la oficina de Daniela: hasta 5 en su mesa, entran por su puerta', async () => {
+  const { asientosOficina, caminoOficina, DANIELA_OFICINA, MAX_OFICINA, MESA_CHICA_DANIELA, variante } = await import('./oficinaPlano.mjs')
+  const a = asientosOficina()
+  assert.equal(a.length, MAX_OFICINA)
+  for (const s of [...a, DANIELA_OFICINA]) {
+    assert.ok(Math.abs(Math.hypot(s.x - MESA_CHICA_DANIELA.x, s.y - MESA_CHICA_DANIELA.y) - 1) < 1e-3)
+    assert.ok(s.x > DIRECCION.x0 && s.x < DIRECCION.x1 && s.y > DIRECCION.y0 && s.y < DIRECCION.y1)
+  }
+  for (const l of todos()) {
+    const c = caminoOficina(alPasillo(l), a[0])
+    assert.deepEqual(c.at(-1), { x: a[0].x, y: a[0].y })
+    assert.ok(c.some(p => p.x === DIRECCION.puerta.x && p.y === DIRECCION.puerta.y))
+  }
+  // Las mujeres con pelo largo o rodete; los varones, corto o con rulos.
+  for (const id of ['trabajadores:maria', 'up:noruega', 'sistemas:mesa_entrada']) assert.ok([1, 2].includes(variante(id).pelo), id)
+  for (const id of ['up:redactor', 'trabajadores:opera', 'pdg:demo']) assert.ok([0, 3].includes(variante(id).pelo), id)
+})
