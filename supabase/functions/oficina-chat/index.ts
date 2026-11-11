@@ -1,12 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitud } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 
 // Oficina: hablar con un agente. La app manda { agente: 'up:redactor', mensajes } (charla con uno) o
 // { reunion: true, asistentes: [...], mensajes } (reunión con todos los que vinieron: responde con
 // { respuestas: [{ agente, texto }] }). Lee los datos con la sesión de la dueña (RLS, nunca con permisos de servicio)
-// y responde con la IA. Solo lectura: no cambia nada.
+// y responde con la IA. Lo único que escribe: los pedidos que María o Noruega le derivan a Sistemas, que entran
+// pendientes (la base no deja crearlos de otra forma) hasta que Daniela los aprueba.
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -52,6 +53,14 @@ async function leerDatos(db: any, equipo: string, clave: string) {
   return { agente: a.data, trabajos: t.data || [] };
 }
 
+// Guarda los pedidos a Sistemas (pendientes) y devuelve los que quedaron guardados.
+async function derivar(db: any, solicitudes: any[]) {
+  if (!solicitudes.length) return [];
+  const { data, error } = await db.from("oficina_solicitudes").insert(solicitudes.map((s: any) => ({ agente: s.agente, titulo: s.titulo, detalle: s.detalle }))).select("id,agente,titulo");
+  if (error) { console.error("oficina-chat: no se pudo guardar el pedido a Sistemas", error.message); return []; }
+  return data || [];
+}
+
 // Reunión: una sola llamada a la IA con la ficha de cada asistente; responden los que tengan algo que decir.
 async function reunion(db: any, body: any) {
   const v: any = validarReunion(body);
@@ -68,7 +77,8 @@ async function reunion(db: any, body: any) {
     const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: mensajesReunion(participantes, v.mensajes, hoyLargo()), temperature: 0.5, max_tokens: 1400 }, { timeoutMs: 90000 }));
     const respuestas = leerRespuestas((resultado as any)?.content, participantes.map((p: any) => p.id));
     if (!respuestas.length) return json({ error: "Nadie respondió. Probá preguntar de nuevo, o nombrá a alguien." }, 502);
-    return json({ respuestas, ia });
+    const solicitudes = await derivar(db, leerSolicitudes((resultado as any)?.content, participantes.map((p: any) => p.id)));
+    return json({ respuestas, solicitudes, ia });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
     return json({ error: (e as Error).message }, 500);
@@ -99,9 +109,10 @@ Deno.serve(async (req: Request) => {
 
   try {
     const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, v.mensajes, hoyLargo()), temperature: 0.4, max_tokens: 900 }));
-    const texto = String((resultado as any)?.content ?? "").trim();
+    const { texto, solicitud } = extraerSolicitud(String((resultado as any)?.content ?? ""), `${v.equipo}:${v.clave}`);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);
-    return json({ texto, ia });
+    const solicitudes = await derivar(db, solicitud ? [solicitud] : []);
+    return json({ texto, solicitudes, ia });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
     return json({ error: (e as Error).message }, 500);

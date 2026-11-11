@@ -233,7 +233,7 @@ export function VistaSala({ reunion, agentes, pendientes, ahora, hablando, setHa
     </section>
     <footer className="reunion-controles">
       <span className="tenue">Responden con sus datos reales; desde la reunión nadie cambia nada.</span>
-      <button type="button" className="btn reunion-salir" onClick={terminar}>Terminar reunión</button>
+      <button type="button" className="btn reunion-salir" onClick={() => terminar(charla.mensajes.map(m => ({ de: charla.nombre(m.de), texto: m.texto })))}>Terminar reunión</button>
     </footer>
   </>
 }
@@ -307,7 +307,7 @@ export function VistaTurnos({ reunion, agentes, pendientes, ahora, hablando, set
     </section>
     <footer className="reunion-controles">
       <button type="button" className="btn btn-primary" disabled={!quedan} onClick={siguiente}>{actual ? 'Gracias, que pase el siguiente' : 'Que pase el siguiente'}</button>
-      <button type="button" className="btn reunion-salir" onClick={terminar}>Terminar reunión</button>
+      <button type="button" className="btn reunion-salir" onClick={() => terminar(charla.mensajes.map(m => ({ de: charla.nombre(m.de), texto: m.texto })))}>Terminar reunión</button>
     </footer>
   </>
 }

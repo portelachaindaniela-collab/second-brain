@@ -31,7 +31,12 @@ export function validar(body) {
 const hora = iso => (iso ? new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short' }) : '?')
 
 // datos: lo que index.ts leyó de la base para ese agente. Devuelve { nombre, rol, descripcion, herramientas, registro }.
+// La ficha del agente (con su id, que define si puede derivarle pedidos a Sistemas).
 export function contexto(equipo, clave, datos = {}) {
+  const c = fichaDe(equipo, clave, datos)
+  return c ? { ...c, id: `${equipo}:${clave}` } : null
+}
+function fichaDe(equipo, clave, datos) {
   if (equipo === 'trabajadores') {
     const t = datos.trabajador
     if (!t) return null
@@ -62,6 +67,15 @@ export function contexto(equipo, clave, datos = {}) {
   return null
 }
 
+// Sistemas: solo María (la jefa de los trabajadores) y Noruega (la agente madre de UP) pueden derivarle pedidos, y
+// todos quedan pendientes hasta que Daniela los aprueba. Nadie pide accesos, claves ni permisos por las suyas.
+export const PUEDEN_DERIVAR = ['trabajadores:maria', 'up:noruega']
+const NO_PEDIR = 'No pidan accesos, permisos, claves, tokens ni herramientas nuevas: los agentes ya trabajan con lo que tienen en el servidor.'
+export function reglaSistemas(id) {
+  if (!PUEDEN_DERIVAR.includes(id)) return `- ${NO_PEDIR}`
+  return `- Podés derivarle un pedido al área de Sistemas solo si hace falta algo concreto que hoy falla o falta según tu registro (no por las dudas, y nunca claves ni tokens). Queda pendiente hasta que Daniela lo apruebe. Para derivarlo, terminá tu respuesta con una línea aparte: SOLICITUD: <título corto> | <para qué hace falta>`
+}
+
 export function sistema(c, hoy) {
   return `Sos ${c.nombre}, ${c.rol}, en la Oficina de agentes del Second Brain de Daniela. Hoy es ${hoy}.
 
@@ -75,7 +89,8 @@ Cómo responder:
 - En primera persona, en español rioplatense, corto y concreto (2 a 6 oraciones salvo que te pidan detalle).
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
 - No podés cambiar nada desde esta charla (ni correr, ni aprobar, ni editar). Si Daniela quiere eso, decile en qué pantalla se hace: Trabajadores para los trabajadores, la app UP para los agentes de UP, la app PDG para los comerciales.
-- Si algo falló, explicá qué dice el registro y qué podría revisar ella.`
+- Si algo falló, explicá qué dice el registro y qué podría revisar ella.
+${reglaSistemas(c.id)}`
 }
 
 export function armarMensajes(c, mensajes, hoy) {
@@ -123,8 +138,11 @@ Cómo se responde:
 - Cada respuesta: 1 a 3 oraciones. Pueden hablarse entre ellos o preguntarle algo a Daniela si lo necesitan.
 - Nadie puede cambiar nada desde la reunión (correr, aprobar, editar): si Daniela pide eso, el agente dice en qué pantalla se hace.
 - Si nadie sabe algo, el que más se acerque lo dice con honestidad.
+- ${NO_PEDIR} Solo María (trabajadores:maria) y Noruega (up:noruega) pueden derivarle un pedido al área de Sistemas, y solo
+  si hace falta algo concreto que hoy falla o falta según su registro; queda pendiente hasta que Daniela lo apruebe. Si lo
+  derivan, va en "solicitudes" (si no, la lista va vacía).
 
-Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}]}`
+Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}],"solicitudes":[{"agente":"trabajadores:maria o up:noruega","titulo":"...","detalle":"para qué hace falta"}]}`
 }
 
 // Los mensajes de los agentes vuelven al modelo como "Nombre: texto" para que sepa quién dijo qué.
@@ -144,4 +162,32 @@ export function leerRespuestas(texto, idsValidos) {
     .map(r => ({ agente: String(r?.agente ?? ''), texto: String(r?.texto ?? '').trim().slice(0, 1200) }))
     .filter(r => validos.has(r.agente) && r.texto)
     .slice(0, MAX_ASISTENTES)
+}
+
+// Los pedidos a Sistemas que vienen en la respuesta: solo de María o Noruega (y solo si están en la reunión), con
+// título y detalle recortados; como mucho 3 por vez.
+export function leerSolicitudes(texto, idsValidos) {
+  const crudo = String(texto ?? '')
+  const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
+  let datos = null
+  if (desde >= 0 && hasta > desde) { try { datos = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { datos = null } }
+  return limpiarSolicitudes(Array.isArray(datos?.solicitudes) ? datos.solicitudes : [], idsValidos)
+}
+function limpiarSolicitudes(lista, idsValidos) {
+  const validos = new Set(idsValidos)
+  return lista
+    .map(r => ({ agente: String(r?.agente ?? ''), titulo: String(r?.titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, 200), detalle: String(r?.detalle ?? '').trim().slice(0, 2000) }))
+    .filter(r => PUEDEN_DERIVAR.includes(r.agente) && validos.has(r.agente) && r.titulo.length >= 3)
+    .slice(0, 3)
+}
+// En la charla de a uno, el pedido viene en una línea "SOLICITUD: título | detalle": se saca del texto.
+export function extraerSolicitud(texto, id) {
+  const lineas = String(texto ?? '').split('\n')
+  const k = lineas.findIndex(l => /^\s*\**\s*SOLICITUD\s*:/i.test(l))
+  if (k < 0) return { texto: String(texto ?? '').trim(), solicitud: null }
+  const cuerpo = lineas[k].replace(/^\s*\**\s*SOLICITUD\s*:\s*/i, '').replace(/\*+\s*$/, '')
+  const [titulo, ...resto] = cuerpo.split('|')
+  const limpio = lineas.filter((_, i) => i !== k).join('\n').trim()
+  const [solicitud] = limpiarSolicitudes([{ agente: id, titulo, detalle: resto.join('|') }], [id])
+  return { texto: limpio, solicitud: solicitud ?? null }
 }

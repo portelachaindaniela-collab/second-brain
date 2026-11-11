@@ -193,6 +193,8 @@ export function armarOficina(d, ahora) {
   ]
   const alertas = calcularAlertas({ trabajadores: d.trabajadores, corridasPor: d.corridasPor, ahora, salud: d.salud })
   const pendientes = teToca({ alertas, piezas: d.piezas, chequeo: d.chequeo, trabajos: d.pdgTrabajos, cuentas: d.pdgCuentas, hoy: d.hoy })
+  const porAprobar = (d.solicitudes ?? []).filter(x => x.estado === 'pendiente').length
+  if (porAprobar) pendientes.push({ nivel: 'aviso', texto: `Sistemas: ${plural(porAprobar, 'pedido espera', 'pedidos esperan')} tu aprobación`, donde: 'Oficina › Sistemas' })
   for (const a of agentes) if (a.equipo === 'admin' && a.estado === 'error') pendientes.push({ nivel: 'error', texto: `${a.nombre}: ${a.ahora}`, donde: 'Oficina › Administración', agente: a.id })
   // Las alertas de los trabajadores empiezan con su nombre ("Ópera: …"): así se sabe de quién son.
   for (const p of pendientes) {
