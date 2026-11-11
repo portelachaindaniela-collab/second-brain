@@ -6,9 +6,9 @@ import { crearSala, crearOficina, crearEscritorio, crearPuestoMesa, crearDirecci
 import { crearPersonaje, posar, liberar } from '../oficina3d/personaje.js'
 import { crearRoberta, moverRoberta } from '../oficina3d/roberta.js'
 import {
-  lugares, mesaUp, mesaPdg, mesaAdmin, rutinas, camino, largo, puntoEn, momentoRutina, variante, agujas, alturaPiso,
+  lugares, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, rutinas, camino, largo, puntoEn, momentoRutina, variante, agujas, alturaPiso,
   ACCESORIOS, luzDelDia, VELOCIDAD, PISO, asientosReunion, alPasillo, haciaPasillo, caminoReunion, asientosEspera,
-  caminoEspera, caminoTurno, caminoVueltaTurno, DANIELA, VISITA, ROBERTA,
+  caminoEspera, caminoTurno, caminoVueltaTurno, DANIELA, DANIELA_SALA, VISITA, ROBERTA,
 } from '../oficinaPlano.mjs'
 import { obstaculos, grilla, buscarCamino } from '../oficinaCaminar.mjs'
 import { ESTADOS } from '../oficina.mjs'
@@ -21,12 +21,12 @@ import './Oficina3D.css'
 // cabeza (pantalla roja y "!"), libre trabaja y cada tanto sale de descanso, pausado duerme en un puf.
 // Además: la luz sigue la hora de Buenos Aires; al elegir un agente la cámara lo sigue; con doble click Daniela
 // camina adonde quiera; y las reuniones (en la sala, todos juntos, o en su oficina, por turnos) se ven acá.
-const ORDEN = ['trabajadores', 'up', 'pdg', 'admin']
-const ROPA_EQUIPO = { up: '#d9734e', pdg: '#3fa98a', admin: '#8a7fc4' }
-const COLOR_PUESTO = { up: COLORES.durazno, pdg: COLORES.menta, admin: COLORES.lila }
+const ORDEN = ['trabajadores', 'up', 'pdg', 'admin', 'sistemas']
+const ROPA_EQUIPO = { up: '#d9734e', pdg: '#3fa98a', admin: '#8a7fc4', sistemas: '#4d6f8f' }
+const COLOR_PUESTO = { up: COLORES.durazno, pdg: COLORES.menta, admin: COLORES.lila, sistemas: COLORES.grisClaro }
 const CENTRO = new THREE.Vector3(22.5, 0.4, 13.25)
 // Videollamada: la cámara está arriba de la pantalla de la sala (el lado sin sillas) y ve el arco entero de frente.
-const CAMARA_SALA = { pos: new THREE.Vector3(9.1, 4.9, 4.0), target: new THREE.Vector3(3.5, 0.75, 4.0), fov: 56 }
+const CAMARA_SALA = { pos: new THREE.Vector3(9.1, 4.9, 23.0), target: new THREE.Vector3(3.5, 0.75, 23.0), fov: 56 }
 const CAMARA_DESPACHO = { pos: new THREE.Vector3(37.25, 1.92, 1.05), target: new THREE.Vector3(36.5, 1.12, 4.7), fov: 46 }
 const nombreCorto = n => String(n).split(' (')[0]
 // Al costado de la silla de Daniela, del lado libre: por ahí se levanta y se vuelve a sentar.
@@ -89,7 +89,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
 
     // Luces: cielo, sol (se mueve con la hora) y un relleno suave.
     const escena = new THREE.Scene()
-    const cielo = new THREE.HemisphereLight('#ffffff', '#cbb9ee', 1.35)
+    const cielo = new THREE.HemisphereLight('#ffffff', '#d8cfc2', 1.35)
     escena.add(cielo)
     const sol = new THREE.DirectionalLight('#fff3df', 2.3)
     sol.target.position.copy(CENTRO)
@@ -129,7 +129,8 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     const nUp = inicial.filter(a => a.equipo === 'up').length
     const nPdg = inicial.filter(a => a.equipo === 'pdg').length
     const nAdmin = inicial.filter(a => a.equipo === 'admin').length
-    const sala = crearSala({ up: mesaUp(nUp).mesa, pdg: mesaPdg(nPdg).mesa, admin: mesaAdmin(nAdmin).mesa })
+    const nSistemas = inicial.filter(a => a.equipo === 'sistemas').length
+    const sala = crearSala({ up: mesaUp(nUp).mesa, pdg: mesaPdg(nPdg).mesa, admin: mesaAdmin(nAdmin).mesa, sistemas: mesaSistemas(nSistemas).mesa })
     escena.add(sala.grupo)
     const direccion = crearDireccion()
     escena.add(direccion.grupo)
@@ -182,7 +183,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     cartelYo.position.set(0, 0.62, 0)
     yo.cabeza.add(cartelYo)
     const daniela = { sentada: true, ruta: null, d: 0, pos: { x: DANIELA.sentado.x, y: DANIELA.sentado.y }, giro: DANIELA.mira, volverAlLlegar: false, avisoLejos: false, volverVisto: datos.current.volverDaniela }
-    const mapa = grilla(obstaculos(todosLosLugares, nUp, nPdg, nAdmin))
+    const mapa = grilla(obstaculos(todosLosLugares, nUp, nPdg, nAdmin, nSistemas))
     const caminarA = (destino, sentarse = false) => {
       const desde = daniela.sentada ? COSTADO_SILLA : daniela.pos
       const ruta = buscarCamino(mapa, desde, destino)
@@ -190,6 +191,8 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       daniela.ruta = daniela.sentada ? [{ ...daniela.pos }, ...ruta] : [{ ...daniela.pos }, ...ruta.slice(1)]
       daniela.d = 0
       daniela.sentada = false
+      daniela.enSala = false
+      daniela.irASala = false
       daniela.volverAlLlegar = sentarse
       if (sentarse) daniela.ruta.push({ x: DANIELA.sentado.x, y: DANIELA.sentado.y })
     }
@@ -528,6 +531,10 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
 
       // Daniela: camina por su ruta; en una reunión por turnos la esperan sentada en su escritorio.
       if (D.volverDaniela !== daniela.volverVisto) { daniela.volverVisto = D.volverDaniela; volverAlEscritorio() }
+      // Cuando convocás una reunión en la sala, vas caminando a tu lugar (debajo de la cámara); al terminar, volvés.
+      const reunionEnSala = Boolean(R && !R.propia && R.modo === 'sala' && R.estado !== 'volviendo')
+      if (reunionEnSala && daniela.reunionId !== R.id) { daniela.reunionId = R.id; caminarA(DANIELA_SALA); daniela.irASala = true }
+      else if (!reunionEnSala && daniela.reunionId) { daniela.reunionId = null; volverAlEscritorio() }
       if (R?.modo === 'turnos' && R.estado === 'en_curso' && !daniela.sentada) {
         daniela.ruta = null; daniela.sentada = true; daniela.pos = { x: DANIELA.sentado.x, y: DANIELA.sentado.y }; daniela.giro = DANIELA.mira
       }
@@ -542,11 +549,13 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         if (daniela.d >= total) {
           daniela.ruta = null
           if (daniela.volverAlLlegar) { daniela.sentada = true; daniela.giro = DANIELA.mira }
+          else if (daniela.irASala) { daniela.irASala = false; daniela.enSala = true }
         }
       }
-      if (!daniela.ruta && !daniela.sentada) poseYo = 'parado'
-      yo.grupo.position.set(daniela.pos.x, (daniela.sentada ? 0.08 : 0) + alturaPiso(daniela.pos.x, daniela.pos.y), daniela.pos.y)
-      yo.grupo.rotation.y = daniela.sentada ? DANIELA.mira : daniela.giro
+      if (!daniela.ruta && !daniela.sentada) poseYo = daniela.enSala ? 'sentado' : 'parado'
+      const sentadaYo = daniela.sentada || (daniela.enSala && !daniela.ruta)
+      yo.grupo.position.set(daniela.pos.x, (sentadaYo ? 0.08 : 0) + alturaPiso(daniela.pos.x, daniela.pos.y), daniela.pos.y)
+      yo.grupo.rotation.y = daniela.sentada ? DANIELA.mira : daniela.enSala && !daniela.ruta ? DANIELA_SALA.mira : daniela.giro
       posar(yo, { pose: poseYo, estado: 'libre', t: sinMovimiento ? 0 : t, fase: 2.2 })
       pantallaColor(direccion.escritorio.pantalla, 'libre', daniela.sentada, t)
       direccion.escritorio.lampara.emissiveIntensity = daniela.sentada ? 2.2 * luz.noche : 0
@@ -588,7 +597,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       pelota.visible = jugando
       if (jugando) {
         const f = (Math.sin(t * 4.5) + 1) / 2
-        pelota.position.set(8.9 + f * 3.2, 0.85 + Math.abs(Math.sin(t * 9)) * 0.35, 22.8)
+        pelota.position.set(8.9 + f * 3.2, 0.85 + Math.abs(Math.sin(t * 9)) * 0.35, 3.8)
       }
       const { hora, minuto } = agujas(Date.now())
       sala.agujas.hora.rotation.z = -THREE.MathUtils.degToRad(hora)

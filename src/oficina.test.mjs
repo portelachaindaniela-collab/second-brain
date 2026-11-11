@@ -153,3 +153,35 @@ test('Administración: cada tarea programada con su estado según sus corridas',
   assert.ok(Object.values(por).every(a => a.sinCharla && a.equipo === 'admin'))
   assert.equal(agentesAdmin([], ahora).length, 5)
 })
+
+test('Sistemas: Mesa de entrada, Guardián de claves y Operador con datos reales', async () => {
+  const { agentesSistemas, riesgoDe, recomendacion } = await import('./oficina.mjs')
+  const ahora = Date.parse('2026-11-11T15:00:00Z')
+  const solicitudes = [
+    { id: 1, agente: 'up:noruega', titulo: 'Tokens de API de UP', detalle: '', estado: 'pendiente', creada: '2026-11-11T14:00:00Z' },
+    { id: 2, agente: 'trabajadores:maria', titulo: 'Revisar el cron del Publicador', detalle: 'falló dos veces', estado: 'pendiente', creada: '2026-11-11T13:00:00Z' },
+    { id: 3, agente: 'trabajadores:maria', titulo: 'Algo viejo', detalle: '', estado: 'hecha', creada: '2026-11-10T13:00:00Z' },
+  ]
+  assert.equal(riesgoDe(solicitudes[0]), 'alto')
+  assert.equal(riesgoDe(solicitudes[1]), 'normal')
+  assert.match(recomendacion(solicitudes[0]), /rechazar/)
+  const conexiones = [
+    { origen: 'UP · linkedin', nombre: 'D', expira_at: '2026-11-15T00:00:00Z', renovable: false },
+    { origen: 'google', nombre: 'd@x', expira_at: '2026-11-11T14:00:00Z', renovable: true },
+  ]
+  const operador = [
+    { jobname: 'up-publicador', activo: true, ultima: '2026-11-11T14:45:00Z', estado: 'failed', corridas_24h: 96, fallas_24h: 3 },
+    { jobname: 'google-sync', activo: true, ultima: '2026-11-11T14:45:00Z', estado: 'succeeded', corridas_24h: 96, fallas_24h: 0 },
+  ]
+  const [mesa, guardian, op] = agentesSistemas({ solicitudes, conexiones, operador }, ahora)
+  assert.equal(mesa.estado, 'trabajando')
+  assert.match(mesa.ahora, /2 pedidos esperan.*1 riesgoso/)
+  assert.equal(guardian.estado, 'libre')
+  assert.match(guardian.ahora, /UP · linkedin \(en 3 días\)/)
+  assert.equal(guardian.porVencer.length, 1, 'Google se renueva sola: no cuenta')
+  assert.equal(op.estado, 'error')
+  assert.match(op.ahora, /up-publicador/)
+  assert.ok([mesa, guardian, op].every(a => a.equipo === 'sistemas' && a.sinCharla))
+  const vencida = agentesSistemas({ conexiones: [{ origen: 'UP · x', expira_at: '2026-11-01T00:00:00Z', renovable: false }] }, ahora)[1]
+  assert.equal(vencida.estado, 'error')
+})

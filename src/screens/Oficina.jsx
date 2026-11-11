@@ -2,7 +2,7 @@ import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, use
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, resumenReunion, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -46,7 +46,7 @@ async function cargarOficina() {
     if (error) { errores.push(`${nombre}: ${error.message}`); return vacio }
     return data ?? vacio
   }
-  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas] = await Promise.all([
+  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, conexiones, operador] = await Promise.all([
     leer('trabajadores', supabase.from('trabajadores').select('*').order('id'), []),
     leer('salud del sistema', supabase.rpc('salud_sistema'), null),
     leer('corridas de UP', supabase.from('up_corridas').select('estado,error,pasos,iniciado_at').order('iniciado_at', { ascending: false }).limit(15), []),
@@ -56,8 +56,10 @@ async function cargarOficina() {
     leer('trabajos de PDG', supabase.from('pdg_trabajos').select('agente,estado,pedido,created_at,pdg_cuentas(nombre)').order('created_at', { ascending: false }).limit(80), []),
     leer('cuentas de PDG', supabase.from('pdg_cuentas').select('nombre,etapa,proxima_fecha').not('proxima_fecha', 'is', null), []),
     leer('Administración', supabase.rpc('oficina_administracion'), []),
-    leer('Sistemas', supabase.from('oficina_solicitudes').select('id,agente,titulo,detalle,estado,nota,creada,decidida').order('creada', { ascending: false }).limit(40), []),
+    leer('Sistemas', supabase.from('oficina_solicitudes').select('id,agente,titulo,detalle,estado,nota,creada,decidida,accion,origen').order('creada', { ascending: false }).limit(40), []),
     leer('actas', supabase.from('oficina_actas').select('id,modo,inicio,fin,asistentes,mensajes,resumen').order('fin', { ascending: false }).limit(10), []),
+    leer('conexiones', supabase.rpc('oficina_conexiones'), []),
+    leer('tareas programadas', supabase.rpc('oficina_operador'), []),
   ])
   const corridasPor = {}
   await Promise.all(trabajadores.map(async t => {
@@ -66,7 +68,7 @@ async function cargarOficina() {
   return {
     trabajadores, corridasPor, salud, upCorridas, chequeo, hoy, errores,
     piezas: piezas.map(p => ({ fecha: p.fecha, estado: p.estado, tiene_texto: Boolean(p.texto) })),
-    pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin, solicitudes, actas,
+    pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin, solicitudes, actas, conexiones, operador,
   }
 }
 
@@ -98,13 +100,21 @@ export default function Oficina() {
   return <OficinaVista cargando={!datos} agentes={oficina?.agentes ?? []} pendientes={oficina?.pendientes ?? []}
     errores={[error, ...(datos?.errores ?? [])].filter(Boolean)} ahora={ahora} hablar={conAviso(hablarConAgente, recargar)}
     hablarReunion={conAviso(hablarEnReunion, recargar)} actualizar={recargar}
-    solicitudes={datos?.solicitudes ?? []} actas={datos?.actas ?? []} decidir={async (id, estado, nota) => { await decidirSolicitud(id, estado, nota); await recargar() }}
+    solicitudes={datos?.solicitudes ?? []} actas={datos?.actas ?? []} decidir={async (id, estado, nota, accion) => { await decidirSolicitud(id, estado, nota, accion); await recargar() }}
     guardarActa={async acta => { await guardarActa(acta); await recargar() }} />
 }
 
 // Reunión: una pregunta de Daniela y responden los que tengan algo que decir ({ agente, texto }).
 // Sistemas: Daniela aprueba, rechaza o da por hecho un pedido (con una nota opcional).
-async function decidirSolicitud(id, estado, nota) {
+// Si el pedido trae una acción (por ejemplo, el de Noruega para frenar una pieza), aprobarlo la ejecuta en el servidor.
+async function decidirSolicitud(id, estado, nota, accion) {
+  if (estado === 'aprobada' && accion) {
+    const { data, error } = await supabase.functions.invoke('oficina-sistemas', { body: { solicitud: id } })
+    let respuesta = data
+    if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
+    if (error || !respuesta?.ok) throw new Error(respuesta?.error || 'No se pudo ejecutar el pedido.')
+    return
+  }
   const { error } = await supabase.from('oficina_solicitudes').update({ estado, nota: nota || null, decidida: new Date().toISOString() }).eq('id', id)
   if (error) throw new Error(error.message)
 }
@@ -124,8 +134,8 @@ function conAviso(hablarFn, recargar) {
   }
 }
 
-// Los de Administración son tareas programadas: escuchan pero no hablan (no tienen IA).
-const conversan = id => !String(id).startsWith('admin:')
+// Los de Administración y Sistemas no tienen IA: escuchan pero no hablan.
+const conversan = id => !/^(admin|sistemas):/.test(String(id))
 async function hablarEnReunion(asistentes, mensajes) {
   const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { reunion: true, asistentes: asistentes.filter(conversan), mensajes } })
   let respuesta = data
@@ -321,7 +331,7 @@ function Sistemas({ solicitudes, agentes, decidir, ahora }) {
   const lista = verTodas ? solicitudes : pendientes
   const accion = async (x, estado) => {
     setOcupado(x.id); setError('')
-    try { await decidir(x.id, estado, x.nota) } catch (e) { setError(`No se pudo guardar: ${e.message}`) }
+    try { await decidir(x.id, estado, x.nota, x.accion) } catch (e) { setError(`No se pudo guardar: ${e.message}`) }
     setOcupado(null)
   }
   return <>
@@ -334,9 +344,10 @@ function Sistemas({ solicitudes, agentes, decidir, ahora }) {
       </div>
       {x.detalle && <p className="oficina-sistemas-detalle">{x.detalle}</p>}
       {x.nota && <p className="oficina-sistemas-nota">{x.nota}</p>}
+      {x.estado === 'pendiente' && <p className={`oficina-sistemas-reco${riesgoDe(x) === 'alto' ? ' riesgo-alto' : ''}`}><strong>Mesa de entrada:</strong> {recomendacion(x)}</p>}
       <div className="oficina-sistemas-acciones">
         {x.estado === 'pendiente' && <>
-          <button type="button" className="btn btn-sm btn-primary" disabled={ocupado === x.id} onClick={() => accion(x, 'aprobada')}>Aprobar</button>
+          <button type="button" className="btn btn-sm btn-primary" disabled={ocupado === x.id} onClick={() => accion(x, 'aprobada')}>{x.accion ? 'Aprobar y hacerlo' : 'Aprobar'}</button>
           <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'rechazada')}>Rechazar</button>
         </>}
         {x.estado === 'aprobada' && <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'hecha')}>Marcar hecho</button>}

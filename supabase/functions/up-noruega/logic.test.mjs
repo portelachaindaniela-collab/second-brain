@@ -75,3 +75,15 @@ test('borradores con varias publicaciones el mismo día', () => {
   assert.match(r.detalle, /X de «Dos»/)
   assert.equal(chequearBorradores({ dias: [a, { ...b, salteado: true }], piezas, ahora: T('2026-10-06T12:00:00Z') }).estado, 'ok')
 })
+
+test('pedidoDisenadorTrabado: con carruseles aprobados sin placas, pide frenarlos y cancelar la Action', async () => {
+  const { pedidoDisenadorTrabado } = await import('./logic.mjs')
+  const ahora = Date.parse('2026-10-06T12:00:00Z')
+  const viejo = { id: 'a', fecha: '2026-10-06', texto: 'Placa 1', assets_texto: null, estado: 'aprobado', updated_at: '2026-10-06T11:00:00Z' }
+  const p = pedidoDisenadorTrabado({ carruseles: [viejo, { ...viejo, id: 'b', estado: 'pendiente' }], ahora })
+  assert.equal(p.agente, 'up:noruega')
+  assert.deepEqual(p.accion, { tipo: 'frenar_pieza', piezas: ['a'], cancelar_disenador: true })
+  assert.match(p.titulo, /Frenar 1 carrusel aprobado/)
+  assert.equal(pedidoDisenadorTrabado({ carruseles: [{ ...viejo, updated_at: '2026-10-06T11:40:00Z' }], ahora }), null)
+  assert.equal(pedidoDisenadorTrabado({ carruseles: [{ ...viejo, assets_texto: 'Placa 1' }], ahora }), null)
+})
