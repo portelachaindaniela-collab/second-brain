@@ -1,74 +1,17 @@
-/* Oficina: salas isométricas con los agentes en sus escritorios.
-   Colores derivados de los tokens del tema: cada sala tiene su tinte (piso y paredes) y el estado se lee en la burbuja,
-   nunca en la ropa (la ropa de un trabajador es su color de identidad). */
+/* Oficina: todo lo que rodea al dibujo (el piso con los agentes está en OficinaPlano.css).
+   El estado se lee en la burbuja, nunca en la ropa (la ropa de un trabajador es su color de identidad). */
 .oficina {
-  --oficina-tinte-trabajadores: var(--id-violeta);
-  --oficina-tinte-up: var(--accent);
-  --oficina-tinte-pdg: var(--teal-600);
-  --oficina-ropa-up: color-mix(in srgb, var(--accent) 70%, var(--gray-500));
-  --oficina-ropa-pdg: color-mix(in srgb, var(--teal-600) 70%, var(--gray-500));
+  --oficina-ropa-up: #f7b98b; /* los mismos de la ropa en el dibujo */
+  --oficina-ropa-pdg: #8fd9bd;
   --oficina-piel: #e9c3a0;
   --oficina-pelo: #3b2a22;
-  --oficina-madera: color-mix(in srgb, var(--id-arena) 55%, var(--surface));
   --oficina-trabajando: var(--green-600);
   --oficina-error: var(--red-600);
   --oficina-pausado: var(--gray-500);
 }
 
-.oficina-salas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--esp-16) var(--esp-24); }
-.oficina-sala.sala-trabajadores { grid-column: 1 / -1; }
-.oficina-sala.sala-trabajadores svg { max-width: 760px; margin: 0 auto; }
-.oficina-sala { margin: 0; min-width: 0; }
-.oficina-sala figcaption { font-size: var(--letra-13); margin-bottom: var(--esp-4); }
-.oficina-sala svg { display: block; width: 100%; height: auto; overflow: visible; }
-
-.oficina-sala { --tinte: var(--oficina-tinte-trabajadores); }
-.oficina-sala.sala-up { --tinte: var(--oficina-tinte-up); }
-.oficina-sala.sala-pdg { --tinte: var(--oficina-tinte-pdg); }
-.sala-piso { fill: color-mix(in srgb, var(--tinte) 16%, var(--surface-raised)); }
-.sala-junta { stroke: color-mix(in srgb, var(--tinte) 10%, var(--gray-300)); stroke-width: .6; opacity: .55; }
-.sala-pared-fondo { fill: color-mix(in srgb, var(--tinte) 30%, var(--surface)); }
-.sala-pared-lado { fill: color-mix(in srgb, var(--tinte) 22%, var(--surface-inset)); }
-.sala-ventana { fill: color-mix(in srgb, var(--id-azul) 30%, var(--surface-inset)); stroke: color-mix(in srgb, var(--tinte) 40%, var(--gray-300)); stroke-width: 1.5; }
-
-.of-escritorio .of-cara-tapa { fill: var(--oficina-madera); }
-.of-escritorio .of-cara-frente { fill: color-mix(in srgb, var(--oficina-madera) 70%, var(--ink-900)); }
-.of-escritorio .of-cara-costado { fill: color-mix(in srgb, var(--oficina-madera) 55%, var(--ink-900)); }
-.of-silla .of-cara-tapa { fill: var(--gray-300); }
-.of-silla .of-cara-frente, .of-silla .of-cara-costado { fill: var(--gray-200); }
-.of-monitor .of-cara-tapa, .of-monitor .of-cara-costado { fill: var(--ink-700); }
-.of-monitor .of-cara-frente { fill: var(--ink-800); }
-.of-monitor-pie .of-cara-tapa, .of-monitor-pie .of-cara-frente, .of-monitor-pie .of-cara-costado { fill: var(--ink-700); }
 .oficina-piel { fill: var(--oficina-piel); }
 .oficina-pelo { fill: var(--oficina-pelo); }
-
-/* Estados: el monitor encendido (trabajando), la persona apagada (nuevo) y la burbuja. */
-.puesto.estado-trabajando .of-monitor .of-cara-frente { fill: color-mix(in srgb, var(--oficina-trabajando) 45%, var(--ink-800)); }
-.puesto.estado-nuevo .of-persona { opacity: .5; }
-.puesto-alfombra { fill: transparent; }
-.puesto { cursor: pointer; outline: none; }
-.puesto:hover .puesto-alfombra, .puesto:focus-visible .puesto-alfombra { fill: color-mix(in srgb, var(--tinte) 25%, transparent); }
-.puesto.is-elegido .puesto-alfombra { fill: color-mix(in srgb, var(--accent) 22%, transparent); stroke: var(--accent); stroke-width: 1.5; }
-.puesto:focus-visible .puesto-alfombra { stroke: var(--accent); stroke-width: 2; }
-.sala-rotulos { pointer-events: none; }
-.rotulo-fondo { fill: color-mix(in srgb, var(--surface-inset) 85%, transparent); }
-.puesto-nombre { font-size: 10px; fill: var(--gray-900); }
-.rotulo.estado-error .puesto-nombre { fill: var(--oficina-error); }
-.rotulo.estado-pausado .puesto-nombre, .rotulo.estado-nuevo .puesto-nombre { fill: var(--gray-500); }
-
-.burbuja rect, .burbuja path { fill: var(--surface); stroke-width: 1.5; }
-.burbuja text { font-size: 12px; font-weight: 700; }
-.burbuja.estado-trabajando rect, .burbuja.estado-trabajando path { stroke: var(--oficina-trabajando); }
-.burbuja.estado-trabajando .burbuja-punto { fill: var(--oficina-trabajando); }
-.burbuja.estado-error rect, .burbuja.estado-error path { fill: var(--oficina-error); stroke: var(--oficina-error); }
-.burbuja.estado-error text { fill: var(--ink-900); }
-.burbuja.estado-pausado rect, .burbuja.estado-pausado path { stroke: var(--oficina-pausado); }
-.burbuja.estado-pausado text { fill: var(--oficina-pausado); }
-.burbuja-punto { animation: oficina-tecleo 1.2s infinite ease-in-out; }
-.burbuja-punto.punto-1 { animation-delay: .2s; }
-.burbuja-punto.punto-2 { animation-delay: .4s; }
-@keyframes oficina-tecleo { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .burbuja-punto { animation: none; } }
 
 .oficina-leyenda { display: flex; flex-wrap: wrap; gap: var(--esp-8) var(--esp-16); list-style: none; margin: var(--esp-12) 0 0; padding: 0; font-size: var(--letra-12); color: var(--gray-700); }
 .oficina-leyenda li { display: flex; align-items: center; gap: var(--esp-4); }
@@ -137,6 +80,5 @@
 .oficina-charla-form textarea { flex: 1; resize: vertical; min-height: 40px; }
 
 @media (max-width: 780px) {
-  .oficina-salas { grid-template-columns: minmax(0, 1fr); }
   .oficina-panel { top: auto; left: 0; width: 100vw; height: 82vh; border-left: 0; border-top: 1px solid var(--gray-300); border-radius: var(--radius) var(--radius) 0 0; }
 }

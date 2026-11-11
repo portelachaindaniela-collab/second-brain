@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agenteTrabajador, agentesUp, agentesPdg, teToca, contarEstados, planoSala, iso, hoyAR, partirId, PLANO } from './oficina.mjs'
+import { agenteTrabajador, agentesUp, agentesPdg, teToca, contarEstados, hoyAR, partirId } from './oficina.mjs'
 
 const ahora = Date.parse('2026-11-11T15:00:00Z')
 const hace = min => new Date(ahora - min * 60_000).toISOString()
@@ -94,16 +94,6 @@ test('te toca: junta alertas, Noruega, UP y PDG, con los errores primero', () =>
 
 test('contar estados', () => {
   assert.deepEqual(contarEstados([{ estado: 'libre' }, { estado: 'error' }, { estado: 'libre' }]), { total: 3, trabajando: 0, libre: 2, error: 1, pausado: 0, nuevo: 0 })
-})
-
-test('plano de sala: 3 puestos por fila y la proyección isométrica', () => {
-  const s = planoSala(7)
-  assert.equal(s.puestos.length, 7)
-  assert.deepEqual(s.puestos[3], { x: s.puestos[0].x, y: s.puestos[0].y + PLANO.puesto })
-  assert.ok(s.ancho < s.fondo + 0.01 || s.ancho > 0)
-  assert.deepEqual(iso(0, 0), { x: 0, y: 0 })
-  assert.equal(iso(1, 1).x, 0)
-  assert.equal(iso(0, 0, 1, 10).y, -10)
 })
 
 test('hoy en Buenos Aires y los ids de agente', () => {
