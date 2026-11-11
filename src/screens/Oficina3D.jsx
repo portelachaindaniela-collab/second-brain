@@ -161,9 +161,10 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         const p = crearPersonaje({ ropa: colorRopa(a), v: variante(a.id), accesorio: ACCESORIOS[a.id] ?? null })
         escena.add(mueble.grupo, p.grupo)
         for (const o of [mueble.grupo, p.grupo]) { o.traverse(m => { m.userData.agenteId = a.id }); clicables.push(o) }
-        // El nombre sobre el vidrio de su oficina, a la altura de su escritorio (o detrás de su silla en el tablón).
+        // El nombre sobre el vidrio de su oficina, a la altura de su escritorio (el de enfrente, un poco más arriba para que
+        // no se pisen), o detrás de su silla en el tablón.
         const cartel = etiqueta(`o3-cartel${lugar.jefa ? ' o3-jefa' : ''}`, lugar.jefa ? `★ ${nombreCorto(a.nombre)}` : nombreCorto(a.nombre), () => datos.current.abrir(a.id))
-        if (lugar.tipo === 'oficina') cartel.position.set(lugar.jefa ? lugar.puerta.x : lugar.escritorio.x, 2.25 + alturaPiso(lugar.puerta.x, lugar.oficina.y1 - 0.1), lugar.oficina.y1)
+        if (lugar.tipo === 'oficina') cartel.position.set(lugar.jefa ? lugar.puerta.x : lugar.escritorio.x, 2.25 + (lugar.mira === Math.PI ? 0.34 : 0) + alturaPiso(lugar.puerta.x, lugar.oficina.y1 - 0.1), lugar.oficina.y1)
         else cartel.position.set(lugar.sentado.x - Math.sin(lugar.mira) * 0.6, 0.05, lugar.sentado.y - Math.cos(lugar.mira) * 0.6)
         escena.add(cartel)
         const burbuja = etiqueta('o3-burbuja', null, () => datos.current.abrir(a.id))

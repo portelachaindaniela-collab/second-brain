@@ -86,13 +86,19 @@ export function oficinasTrabajadores(claves) {
     x = x1
     const puerta = { x: x1 - 0.75, y: y1 }
     const oficina = { id: g.id, nombre: g.nombre, jefa: false, x0, x1, y0, y1, puerta, puestos: g.miembros.length }
-    const paso = (w - 1.6) / g.miembros.length
+    // Los escritorios van enfrentados de a pares (uno mira a la puerta y el otro a la pared del fondo); si son impares,
+    // el último queda solo. Delante de los escritorios queda el paso hasta la puerta.
+    const columnas = Math.ceil(g.miembros.length / 2)
+    const paso = (w - 1.6) / columnas
+    const pasoFrente = y1 - 0.6
     g.miembros.forEach((clave, j) => {
-      const escritorio = { x: x0 + 0.2 + paso * (j + 0.5), y: y0 + 2.3 }
-      const sentado = { x: escritorio.x, y: y0 + 1.52 }
+      const enfrentado = j % 2 === 1
+      const cx = x0 + 0.2 + paso * (Math.floor(j / 2) + 0.5)
+      const escritorio = { x: cx, y: enfrentado ? y0 + 2.39 : y0 + 1.55 }
+      const sentado = { x: cx, y: enfrentado ? y0 + 3.17 : y0 + 0.77 }
       // Sale por el costado de su escritorio, pasa por delante de los escritorios y sale por la puerta al pasillo.
-      const salida = ancho([sentado, { x: escritorio.x + paso / 2, y: sentado.y }, { x: escritorio.x + paso / 2, y: y1 - 0.9 }, { x: puerta.x, y: y1 - 0.9 }, puerta, { x: puerta.x, y: PASILLO }])
-      porClave[clave] = { tipo: 'oficina', oficina, jefa: false, x0, x1, y0, y1, escritorio, sentado, mira: 0, puerta, salida }
+      const salida = ancho([sentado, { x: cx + paso / 2, y: sentado.y }, { x: cx + paso / 2, y: pasoFrente }, { x: puerta.x, y: pasoFrente }, puerta, { x: puerta.x, y: PASILLO }])
+      porClave[clave] = { tipo: 'oficina', oficina, jefa: false, x0, x1, y0, y1, escritorio, sentado, mira: enfrentado ? Math.PI : 0, puerta, salida }
     })
   }
   if (conJefa) porClave[JEFA] = oficinaMaria()

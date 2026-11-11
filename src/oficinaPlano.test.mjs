@@ -51,7 +51,15 @@ test('trabajadores: los que hacen cosas parecidas comparten oficina, sin pisarse
   for (const o of ofs) {
     const suyos = REALES.filter(c => l[c].oficina.id === o.id).map(c => l[c]).sort((a, b) => a.escritorio.x - b.escritorio.x)
     for (const s of suyos) assert.ok(s.escritorio.x - 0.82 > o.x0 && s.escritorio.x + 0.82 < o.puerta.x - 0.5, o.id)
-    for (let i = 1; i < suyos.length; i++) assert.ok(suyos[i].escritorio.x - suyos[i - 1].escritorio.x > 2.1)
+    // Sin pisarse: o están en columnas distintas, o enfrentados (misma columna, uno mirando al otro).
+    for (let i = 0; i < suyos.length; i++) for (let j = i + 1; j < suyos.length; j++) {
+      const a = suyos[i], b = suyos[j]
+      const enfrentados = Math.abs(a.escritorio.x - b.escritorio.x) < 1e-9 && Math.abs(a.escritorio.y - b.escritorio.y) > 0.83 && Math.abs(Math.abs(a.mira - b.mira) - Math.PI) < 1e-9
+      assert.ok(Math.abs(a.escritorio.x - b.escritorio.x) > 2.1 || enfrentados, o.id)
+    }
+    // En las compartidas hay al menos un par enfrentado; las sillas quedan dentro de la oficina.
+    if (suyos.length > 1) assert.ok(suyos.some(x => x.mira === Math.PI) && suyos.some(x => x.mira === 0), o.id)
+    for (const x of suyos) assert.ok(x.sentado.y - 0.3 > o.y0 && x.sentado.y + 0.3 < o.y1 - 0.4, o.id)
   }
   const nuevo = oficinasTrabajadores(['otro', 'canillita'])
   assert.notEqual(nuevo[0].oficina.id, nuevo[1].oficina.id)
