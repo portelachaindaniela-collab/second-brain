@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, planoSala, iso, puntos, hoyAR, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import OficinaPlano, { LeyendaPlano } from './OficinaPlano.jsx'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import './Oficina.css'
 
@@ -11,7 +12,6 @@ import './Oficina.css'
 // hablarle. Todo se lee de las tablas que ya existen: esta pantalla no escribe nada.
 const DIA_MS = 24 * 3600_000
 const ULTIMAS = 8
-const ORDEN_EQUIPOS = ['trabajadores', 'up', 'pdg']
 
 // ---------- Datos ----------
 async function corridasDe(clave, ahora) {
@@ -95,13 +95,11 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const [charlas, setCharlas] = useState({})
   const elegido = agentes.find(a => a.id === elegidoId) || null
   const cuenta = contarEstados(agentes)
-  const porEquipo = ORDEN_EQUIPOS.map(e => ({ equipo: e, agentes: agentes.filter(a => a.equipo === e) })).filter(s => s.agentes.length)
   const abrir = (id, p = 'ahora') => { setElegidoId(id); setPestana(p) }
-  const angosta = useAngosta()
 
   return <div className="oficina">
     <CabeceraPantalla sobretitulo="Agentes" titulo="Oficina" cargando={cargando}
-      subtitulo={`${agentes.length} agentes en ${porEquipo.length} salas: Trabajadores, UP y PDG.`}
+      subtitulo={`${agentes.length} agentes: Trabajadores, UP y PDG comercial. Tocá uno para ver qué hace o hablarle.`}
       cifras={[
         { valor: cuenta.total, etiqueta: 'agentes' },
         { valor: cuenta.trabajando, etiqueta: 'trabajando ahora' },
@@ -110,13 +108,10 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
       ]} />
     {errores.map(e => <p key={e} role="alert" className="feedback-error">{e}</p>)}
     <Bloques disposicion="principal">
-      <Bloque titulo="Las salas" ancho="completo">
+      <Bloque titulo="La oficina" ancho="completo">
         {cargando ? <p className="empty-state">Abriendo la oficina…</p> : <>
-          <div className="oficina-salas">
-            {porEquipo.map(s => <Sala key={s.equipo} equipo={s.equipo} agentes={s.agentes} elegidoId={elegidoId} abrir={abrir}
-              porFila={s.equipo === 'trabajadores' && !angosta ? 5 : 3} />)}
-          </div>
-          <Leyenda />
+          <OficinaPlano agentes={agentes} elegidoId={elegidoId} abrir={abrir} ahora={ahora} />
+          <LeyendaPlano />
           <nav className="oficina-plantel" aria-label="Todos los agentes">
             {agentes.map(a => <button key={a.id} type="button" className={`oficina-ficha estado-${a.estado}${a.id === elegidoId ? ' is-elegido' : ''}`} onClick={() => abrir(a.id)}
               aria-label={`${a.nombre}: ${ESTADOS[a.estado]}`}>
@@ -145,20 +140,6 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
 
 const nombreCorto = n => String(n).split(' (')[0]
 
-// Pantalla angosta (celular): las salas van de 3 puestos por fila para que no queden diminutas.
-const CONSULTA_ANGOSTA = '(max-width: 780px)'
-function useAngosta() {
-  const [angosta, setAngosta] = useState(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.(CONSULTA_ANGOSTA).matches))
-  useEffect(() => {
-    const mq = window.matchMedia?.(CONSULTA_ANGOSTA)
-    if (!mq) return
-    const cambio = () => setAngosta(mq.matches)
-    mq.addEventListener('change', cambio)
-    return () => mq.removeEventListener('change', cambio)
-  }, [])
-  return angosta
-}
-
 function ActividadAhora({ agentes, abrir }) {
   const activos = agentes.filter(a => a.estado === 'trabajando' || a.estado === 'error')
   if (!activos.length) return <p className="tenue">Nadie está trabajando en este momento; todos esperan su próximo turno.</p>
@@ -168,15 +149,6 @@ function ActividadAhora({ agentes, abrir }) {
       <span><strong>{a.nombre}</strong><span className={`oficina-estado estado-${a.estado}`}>{ESTADOS[a.estado]}</span><span className="tenue">{a.ahora}</span></span>
     </button>
   </li>)}</ul>
-}
-
-function Leyenda() {
-  return <ul className="oficina-leyenda" aria-label="Qué significa cada burbuja">
-    <li><span className="burbuja-muestra estado-trabajando">…</span>trabajando</li>
-    <li><span className="burbuja-muestra estado-error">!</span>con un problema</li>
-    <li><span className="burbuja-muestra estado-pausado">z</span>pausado</li>
-    <li><span className="burbuja-muestra estado-libre" />libre, espera su turno</li>
-  </ul>
 }
 
 // Color de la ropa: el de identidad para los trabajadores (el mismo de sus gráficos); el de su sala para los demás.
@@ -190,106 +162,6 @@ function Avatar({ agente }) {
     <circle cx="12" cy="9" r="5.2" className="oficina-piel" />
     <path d="M6.8 8.4 C7 3.6 17 3.6 17.2 8.4 C15 6.6 9 6.6 6.8 8.4 Z" className="oficina-pelo" />
   </svg>
-}
-
-// ---------- Sala isométrica ----------
-const PARED = 1.5
-const ESCRITORIO = { ancho: 1.5, fondo: 0.75, alto: 0.72 }
-
-// Caja isométrica: tapa, frente (lado y máximo) y costado (lado x máximo). clase: prefijo de los tres colores.
-function Caja({ x0, y0, x1, y1, z0 = 0, z1, clase }) {
-  return <g className={clase}>
-    <polygon className="of-cara-frente" points={puntos([iso(x0, y1, z0), iso(x1, y1, z0), iso(x1, y1, z1), iso(x0, y1, z1)])} />
-    <polygon className="of-cara-costado" points={puntos([iso(x1, y0, z0), iso(x1, y1, z0), iso(x1, y1, z1), iso(x1, y0, z1)])} />
-    <polygon className="of-cara-tapa" points={puntos([iso(x0, y0, z1), iso(x1, y0, z1), iso(x1, y1, z1), iso(x0, y1, z1)])} />
-  </g>
-}
-
-function Sala({ equipo, agentes, elegidoId, abrir, porFila }) {
-  const plano = planoSala(agentes.length, porFila)
-  const { ancho: W, fondo: D } = plano
-  const esquinas = [iso(0, 0, PARED), iso(W, 0, PARED), iso(W, D), iso(0, D), iso(0, 0)]
-  const minX = Math.min(...esquinas.map(p => p.x)) - 8
-  const maxX = Math.max(...esquinas.map(p => p.x)) + 8
-  const minY = Math.min(...esquinas.map(p => p.y)) - 34
-  const maxY = Math.max(...esquinas.map(p => p.y)) + 10
-  const trabajando = agentes.filter(a => a.estado === 'trabajando').length
-  const ubicados = agentes.map((a, i) => ({ a, ...plano.puestos[i] })).sort((p, q) => p.x + p.y - (q.x + q.y))
-  return <figure className={`oficina-sala sala-${equipo}`}>
-    <figcaption><strong>{EQUIPOS[equipo].nombre}</strong> <span className="tenue">· {agentes.length} agentes{trabajando ? ` · ${trabajando} trabajando` : ''}</span></figcaption>
-    <svg viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} role="group" aria-label={`Sala ${EQUIPOS[equipo].nombre}: ${EQUIPOS[equipo].descripcion}`}>
-      <polygon className="sala-pared-fondo" points={puntos([iso(0, 0), iso(W, 0), iso(W, 0, PARED), iso(0, 0, PARED)])} />
-      <polygon className="sala-pared-lado" points={puntos([iso(0, 0), iso(0, D), iso(0, D, PARED), iso(0, 0, PARED)])} />
-      <polygon className="sala-piso" points={puntos([iso(0, 0), iso(W, 0), iso(W, D), iso(0, D)])} />
-      {Array.from({ length: Math.floor(W) }, (_, i) => <line key={`x${i}`} className="sala-junta" x1={iso(i + 1, 0).x} y1={iso(i + 1, 0).y} x2={iso(i + 1, D).x} y2={iso(i + 1, D).y} />)}
-      {Array.from({ length: Math.floor(D) }, (_, i) => <line key={`y${i}`} className="sala-junta" x1={iso(0, i + 1).x} y1={iso(0, i + 1).y} x2={iso(W, i + 1).x} y2={iso(W, i + 1).y} />)}
-      <Ventana W={W} />
-      {/* De atrás hacia adelante (x + y), para que lo de adelante tape a lo de atrás. */}
-      {ubicados.map(({ a, x, y }) => <Puesto key={a.id} agente={a} x={x} y={y} elegido={a.id === elegidoId} abrir={abrir} />)}
-      {/* Nombres y burbujas encima de todo: ningún escritorio los tapa. */}
-      <g className="sala-rotulos" aria-hidden="true">
-        {ubicados.map(({ a, x, y }) => <Rotulo key={a.id} agente={a} x={x} y={y} />)}
-      </g>
-    </svg>
-  </figure>
-}
-
-// Una ventana en la pared del fondo: solo para que la sala se lea como sala.
-function Ventana({ W }) {
-  const x0 = W / 2 - 0.9, x1 = W / 2 + 0.9
-  return <polygon className="sala-ventana" points={puntos([iso(x0, 0, 0.55), iso(x1, 0, 0.55), iso(x1, 0, 1.25), iso(x0, 0, 1.25)])} />
-}
-
-function Puesto({ agente: a, x, y, elegido, abrir }) {
-  const e = ESCRITORIO
-  const d = { x0: x - e.ancho / 2, x1: x + e.ancho / 2, y0: y - e.fondo / 2, y1: y + e.fondo / 2 }
-  const cabeza = iso(x, y - 0.75, 1.45)
-  const cuerpo = iso(x, y - 0.75, 0.7)
-  const presente = a.estado !== 'pausado'
-  const etiqueta = `${a.nombre}: ${ESTADOS[a.estado]}. ${a.ahora}`
-  const teclear = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(a.id) } }
-  return <g className={`puesto estado-${a.estado}${elegido ? ' is-elegido' : ''}`} role="button" tabIndex={0} aria-label={etiqueta} onClick={() => abrir(a.id)} onKeyDown={teclear}>
-    <title>{etiqueta}</title>
-    <ellipse className="puesto-alfombra" cx={iso(x, y).x} cy={iso(x, y).y} rx="44" ry="25" />
-    {/* La silla siempre está; la persona, solo si no está pausada. */}
-    <Caja clase="of-silla" x0={x - 0.32} x1={x + 0.32} y0={y - 1.05} y1={y - 0.5} z1={0.42} />
-    {presente && <g className="of-persona">
-      <path d={`M${cuerpo.x - 11} ${cuerpo.y + 6} C${cuerpo.x - 11} ${cuerpo.y - 14} ${cuerpo.x + 11} ${cuerpo.y - 14} ${cuerpo.x + 11} ${cuerpo.y + 6} Z`} style={{ fill: colorRopa(a) }} />
-      <circle cx={cabeza.x} cy={cabeza.y} r="8.5" className="oficina-piel" />
-      <path d={`M${cabeza.x - 8.7} ${cabeza.y - 1} C${cabeza.x - 8} ${cabeza.y - 12} ${cabeza.x + 8} ${cabeza.y - 12} ${cabeza.x + 8.7} ${cabeza.y - 1} C${cabeza.x + 5} ${cabeza.y - 5} ${cabeza.x - 5} ${cabeza.y - 5} ${cabeza.x - 8.7} ${cabeza.y - 1} Z`} className="oficina-pelo" />
-    </g>}
-    <Caja clase="of-escritorio" x0={d.x0} x1={d.x1} y0={d.y0} y1={d.y1} z1={e.alto} />
-    {/* Monitor de espaldas a nosotros: se enciende cuando el agente trabaja. */}
-    <Caja clase="of-monitor" x0={x - 0.42} x1={x + 0.42} y0={y - 0.12} y1={y - 0.04} z0={e.alto + 0.06} z1={e.alto + 0.62} />
-    <Caja clase="of-monitor-pie" x0={x - 0.08} x1={x + 0.08} y0={y - 0.1} y1={y - 0.04} z0={e.alto} z1={e.alto + 0.08} />
-  </g>
-}
-
-// El nombre debajo del escritorio y, si hay algo que decir, la burbuja sobre la cabeza.
-function Rotulo({ agente: a, x, y }) {
-  const cabeza = iso(x, y - 0.75, 1.45)
-  const pie = iso(x + 0.45, y + 0.85)
-  const nombre = nombreCorto(a.nombre)
-  const texto = nombre.length > 18 ? `${nombre.slice(0, 17)}…` : nombre
-  const ancho = texto.length * 5.6 + 12
-  return <g className={`rotulo estado-${a.estado}`}>
-    <rect className="rotulo-fondo" x={pie.x - ancho / 2} y={pie.y - 9} width={ancho} height="14" rx="7" />
-    <text className="puesto-nombre" x={pie.x} y={pie.y + 1.5} textAnchor="middle">{texto}</text>
-    {BURBUJA[a.estado] !== undefined && <Burbuja estado={a.estado} x={cabeza.x + 13} y={cabeza.y - 22} />}
-  </g>
-}
-
-// Solo estos estados llevan burbuja: libre y nuevo no dicen nada (el nuevo se ve apagado).
-const BURBUJA = { trabajando: null, error: '!', pausado: 'z' }
-function Burbuja({ estado, x, y }) {
-  const signo = BURBUJA[estado]
-  return <g className={`burbuja estado-${estado}`} transform={`translate(${x} ${y})`}>
-    <rect x="-13" y="-10" width="26" height="18" rx="9" />
-    <path d="M-6 7 L-9 13 L-1 8 Z" />
-    {estado === 'trabajando'
-      ? [-6, 0, 6].map((dx, i) => <circle key={dx} cx={dx} cy="-1" r="2" className={`burbuja-punto punto-${i}`} />)
-      : <text x="0" y="3.5" textAnchor="middle">{signo}</text>}
-  </g>
 }
 
 // ---------- Panel del agente ----------

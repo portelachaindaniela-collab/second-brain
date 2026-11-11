@@ -157,29 +157,6 @@ export function contarEstados(agentes) {
   return r
 }
 
-// ---------- Plano isométrico ----------
-// Cada sala es una grilla de puestos (3 por fila). Las medidas van en baldosas; iso() las pasa a la pantalla.
-export const PLANO = { porFila: 3, puesto: 3, margen: 1, baldosa: 34 }
-
-export function planoSala(cantidad, porFila = PLANO.porFila) {
-  const cols = Math.min(Math.max(cantidad, 1), porFila)
-  const filas = Math.max(1, Math.ceil(cantidad / porFila))
-  const ancho = cols * PLANO.puesto + PLANO.margen * 2
-  const fondo = filas * PLANO.puesto + PLANO.margen * 2
-  const puestos = Array.from({ length: cantidad }, (_, i) => ({
-    x: PLANO.margen + (i % porFila) * PLANO.puesto + PLANO.puesto / 2,
-    y: PLANO.margen + Math.floor(i / porFila) * PLANO.puesto + PLANO.puesto / 2,
-  }))
-  return { ancho, fondo, puestos }
-}
-
-// Proyección isométrica clásica (30°): x hacia abajo a la derecha, y hacia abajo a la izquierda, z hacia arriba.
-const COS = Math.cos(Math.PI / 6)
-export function iso(x, y, z = 0, b = PLANO.baldosa) {
-  return { x: Math.round((x - y) * COS * b * 100) / 100, y: Math.round(((x + y) / 2 - z) * b * 100) / 100 }
-}
-export const puntos = lista => lista.map(p => `${p.x},${p.y}`).join(' ')
-
 // Hoy en Buenos Aires, 'AAAA-MM-DD'.
 export function hoyAR(ahora = Date.now()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ahora))

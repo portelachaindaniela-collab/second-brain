@@ -1,0 +1,210 @@
+/* El piso de la Oficina: paleta pastel propia (la escena es una "ventana" luminosa dentro de la app oscura).
+   Los colores de estado son los mismos de siempre: verde trabajando, rojo con un problema. */
+.oficina-plano {
+  --op-fondo: #5b4f7d;
+  --op-tinta: #3b2f4f;
+  --op-piso: #f5ecdd;
+  --op-tabla: #e7d9c2;
+  --op-pared-fondo: #ddd1f2;
+  --op-pared-izquierda: #c9b8ea;
+  --op-zocalo: #b49fdc;
+  --op-lila: #b9a2e8;
+  --op-lila-claro: #e8dffa;
+  --op-rosa: #f6a5c0;
+  --op-rosa-claro: #fcdce6;
+  --op-menta: #8fd9bd;
+  --op-menta-claro: #d6f3e8;
+  --op-durazno: #f7b98b;
+  --op-durazno-claro: #fde5d2;
+  --op-amarillo: #f6dd8b;
+  --op-amarillo-claro: #fbf1cc;
+  --op-blanco: #fffaf3;
+  --op-madera: #ecd0a6;
+  --op-madera-oscura: #d1aa78;
+  --op-gris: #8f86a8;
+  --op-hoja: #74c27a;
+  --op-hoja-b: #5aa864;
+  --op-pantalon: #5a5277;
+  --op-trabajando: #3fb878;
+  --op-error: #e85d6a;
+  --op-rubor: #f59ab0;
+  background: radial-gradient(120% 90% at 50% 0%, #6d6094 0%, var(--op-fondo) 70%);
+  border-radius: var(--radius);
+  padding: var(--esp-8);
+  overflow-x: auto;
+}
+.oficina-plano svg { display: block; width: 100%; min-width: 720px; height: auto; }
+
+/* Caras de las cajas: tapa clara, frente medio, costado oscuro. */
+.oficina-plano .op-tapa { fill: var(--c, var(--op-blanco)); }
+.oficina-plano .op-frente { fill: color-mix(in srgb, var(--c, var(--op-blanco)) 85%, var(--op-tinta)); }
+.oficina-plano .op-costado { fill: color-mix(in srgb, var(--c, var(--op-blanco)) 72%, var(--op-tinta)); }
+.op-mesa { --c: var(--op-madera); }
+.op-silla { --c: var(--op-lila); }
+.op-silla-reunion { --c: var(--op-menta); }
+.op-notebook { --c: #d9d6e4; }
+.op-tapa-notebook { fill: #cfcadf; stroke: #b5aecb; stroke-width: .6; }
+.op-puesto.estado-trabajando .op-tapa-notebook { fill: #d7f5e5; stroke: var(--op-trabajando); stroke-width: 1.2; }
+.op-puesto.estado-error .op-tapa-notebook { fill: #fde0e3; stroke: var(--op-error); stroke-width: 1.2; }
+.op-taza-escritorio { --c: var(--op-rosa); }
+.op-maceta { --c: #e9a37e; }
+.op-hoja { fill: var(--op-hoja); }
+.op-hoja-b { fill: var(--op-hoja-b); }
+.op-biblioteca { --c: var(--op-madera); }
+.op-tabique { --c: var(--op-lila); }
+.op-dispenser { --c: var(--op-blanco); }
+.op-bidon { --c: #bfe3ff; opacity: .9; }
+.op-heladera { --c: var(--op-rosa-claro); }
+.op-manija { stroke: var(--op-gris); stroke-width: 2; stroke-linecap: round; }
+.op-mesada { --c: var(--op-rosa); }
+.op-mesada .op-tapa { fill: var(--op-blanco); }
+.op-microondas { --c: #ece7f6; }
+.op-cafetera { --c: #6d6383; }
+.op-luz-cafetera { fill: #ff7a7a; animation: op-titila 2s infinite; }
+.op-isla { --c: var(--op-lila-claro); }
+.op-isla .op-tapa { fill: var(--op-blanco); }
+.op-fruta { fill: #ffb347; }
+.op-fruta-b { fill: #ff7f7f; }
+.op-banqueta { --c: var(--op-amarillo); }
+.op-sillon { --c: var(--op-rosa); }
+.op-sillon-asiento { --c: var(--op-rosa-claro); }
+.op-almohadon { --c: var(--op-amarillo); }
+.op-pata { --c: var(--op-gris); }
+.op-ping { --c: var(--op-lila); }
+.op-ping .op-tapa { fill: #9f86df; stroke: var(--op-blanco); stroke-width: 1; }
+.op-red { fill: rgba(255, 255, 255, .75); stroke: var(--op-blanco); stroke-width: .8; }
+.op-puf { fill: var(--op-amarillo); stroke: color-mix(in srgb, var(--op-amarillo) 70%, var(--op-tinta)); stroke-width: 1; }
+.op-puf-b { fill: var(--op-menta); stroke: color-mix(in srgb, var(--op-menta) 70%, var(--op-tinta)); }
+.op-mesa-reunion { --c: var(--op-blanco); }
+.op-cuaderno { --c: var(--op-durazno); }
+
+.op-pared-fondo { fill: var(--op-pared-fondo); }
+.op-pared-izquierda { fill: var(--op-pared-izquierda); }
+.op-zocalo { fill: var(--op-zocalo); }
+.op-zocalo-lado { fill: color-mix(in srgb, var(--op-zocalo) 85%, var(--op-tinta)); }
+.op-piso { fill: var(--op-piso); }
+.op-tabla { stroke: var(--op-tabla); stroke-width: 1; }
+.op-alfombra { opacity: .9; }
+.alfombra-trabajadores { fill: var(--op-lila-claro); }
+.alfombra-up { fill: var(--op-durazno-claro); }
+.alfombra-pdg { fill: var(--op-menta-claro); }
+.alfombra-cocina { fill: var(--op-rosa-claro); }
+.alfombra-living { fill: var(--op-amarillo-claro); }
+.op-cielo { fill: url(#op-cielo); }
+.op-nube { fill: #fff; opacity: .9; }
+.op-marco { stroke: var(--op-blanco); stroke-width: 2; }
+.op-marco-borde { fill: none; stroke: var(--op-blanco); stroke-width: 2.5; }
+.op-letrero { fill: var(--op-lila); }
+.op-letrero.letrero-up { fill: var(--op-durazno); }
+.op-letrero-texto { fill: var(--op-blanco); font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+.op-pizarra { fill: #fff; stroke: var(--op-zocalo); stroke-width: 1.5; }
+.op-pizarra-texto { fill: var(--op-tinta); font-size: 9px; font-weight: 700; }
+.op-pizarra-linea { fill: none; stroke: var(--op-trabajando); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.op-reloj { fill: #fff; stroke: var(--op-lila); stroke-width: 2.5; }
+.op-aguja-hora, .op-aguja-minuto { stroke: var(--op-tinta); stroke-linecap: round; }
+.op-aguja-hora { stroke-width: 2.2; }
+.op-aguja-minuto { stroke-width: 1.4; }
+.op-aguja-segundo { stroke: var(--op-error); stroke-width: .8; transform-box: view-box; transform-origin: 0 0; animation: op-gira 60s steps(60) infinite; }
+.op-reloj-centro { fill: var(--op-tinta); }
+.op-piso-texto { fill: color-mix(in srgb, var(--op-tinta) 55%, transparent); font-size: 15px; font-weight: 800; letter-spacing: .04em; }
+.op-vidrio { fill: rgba(190, 236, 246, .28); stroke: #a7dcea; stroke-width: 1.2; }
+.op-vidrio-borde { fill: #a7dcea; }
+
+/* El dibujito. */
+.op-sombra { fill: rgba(59, 47, 79, .18); }
+.op-pantalon { fill: var(--op-pantalon); }
+.op-remera { stroke: rgba(59, 47, 79, .18); stroke-width: .8; }
+.op-rubor { fill: var(--op-rubor); opacity: .6; }
+.op-ojos ellipse { fill: var(--op-tinta); }
+.op-brillo { fill: #fff; }
+.op-trazo { fill: none; stroke: var(--op-tinta); stroke-width: 1.3; stroke-linecap: round; }
+.op-boca-o { fill: none; stroke: var(--op-tinta); stroke-width: 1; }
+.op-gota { fill: #8fd3ff; animation: op-gota 1.6s ease-in infinite; }
+.op-taza-cuerpo { fill: var(--op-blanco); stroke: var(--op-rosa); stroke-width: 1; }
+.op-taza-asa { fill: none; stroke: var(--op-rosa); stroke-width: 1.2; }
+.op-vapor { fill: none; stroke: rgba(255, 255, 255, .9); stroke-width: 1.1; stroke-linecap: round; animation: op-vapor 2.4s ease-in-out infinite; }
+.op-paleta-mango { fill: var(--op-madera-oscura); }
+.op-paleta-goma { fill: var(--op-error); }
+.op-paleta { transform-box: view-box; transform-origin: 8px -15px; animation: op-raqueta .9s ease-in-out infinite alternate; }
+
+/* Vida: parpadeo, respiración y tecleo. */
+.op-ojos { transform-box: fill-box; transform-origin: center; animation: op-parpadeo 4.2s infinite; }
+.op-torso, .op-cabeza { animation: op-respira 3.2s ease-in-out infinite; }
+.op-puesto.estado-trabajando .op-mano-a { animation: op-tecla .35s ease-in-out infinite alternate; }
+.op-puesto.estado-trabajando .op-mano-b { animation: op-tecla .35s ease-in-out .17s infinite alternate; }
+.op-puesto.estado-error .op-sentado-fijo .op-chibi { animation: op-tiembla .5s ease-in-out infinite; }
+.op-codigo { font-size: 9px; font-weight: 700; fill: var(--op-trabajando); opacity: 0; animation: op-sube 2.4s ease-out infinite; }
+.op-codigo-1 { animation-delay: 1.2s; }
+
+/* Burbujas y carteles. */
+.op-burbuja rect, .op-burbuja path { fill: #fff; stroke-width: 1.5; }
+.op-burbuja text { font-size: 12px; font-weight: 800; fill: #fff; }
+.op-burbuja.estado-trabajando rect, .op-burbuja.estado-trabajando path { stroke: var(--op-trabajando); }
+.op-punto { fill: var(--op-trabajando); animation: op-punto 1.2s infinite ease-in-out; }
+.op-punto-1 { animation-delay: .2s; }
+.op-punto-2 { animation-delay: .4s; }
+.op-burbuja.estado-error rect, .op-burbuja.estado-error path { fill: var(--op-error); stroke: var(--op-error); }
+.op-burbuja.estado-error { animation: op-late 1s ease-in-out infinite; transform-box: fill-box; }
+.op-cartel rect { fill: rgba(255, 250, 243, .92); stroke: rgba(59, 47, 79, .15); }
+.op-cartel text { fill: var(--op-tinta); font-size: 9.5px; font-weight: 600; }
+.op-cartel.estado-error text { fill: var(--op-error); }
+.op-cartel.estado-pausado text, .op-cartel.estado-nuevo text { fill: var(--op-gris); }
+.op-rotulos { pointer-events: none; }
+.op-zeta { fill: var(--op-blanco); font-size: 11px; font-weight: 800; opacity: 0; animation: op-zeta 3s ease-out infinite; }
+.op-zeta-1 { animation-delay: 1s; }
+.op-zeta-2 { animation-delay: 2s; }
+.op-dormido .op-cabeza, .op-dormido .op-torso { animation-duration: 5s; }
+
+/* Clic y foco. */
+.op-puesto, .op-paseante, .op-dormido { cursor: pointer; outline: none; }
+.op-aro { fill: transparent; }
+.op-puesto:hover .op-aro, .op-puesto:focus-visible .op-aro { fill: rgba(255, 255, 255, .55); }
+.op-puesto.is-elegido .op-aro { fill: rgba(240, 166, 60, .35); stroke: var(--accent); stroke-width: 2; }
+.op-puesto:focus-visible .op-aro { stroke: var(--accent); stroke-width: 2.5; }
+
+/* La rutina del descanso (ciclo de 48 s, ver oficinaPlano.mjs): 0–55 % en su lugar, 55–61 % camina hasta el
+   descanso, 61–84 % descansa, 84–90 % vuelve. El sentado y el paseante son dos dibujos sincronizados. */
+.op-sentado-rutina { animation: op-sentado var(--ciclo) linear var(--retraso) infinite; }
+.op-paseante { opacity: 0; animation: op-paseo var(--ciclo) linear var(--retraso) infinite; }
+.op-paseante .op-piernas-caminar { animation: op-modo-caminar var(--ciclo) linear var(--retraso) infinite; }
+.op-paseante .op-piernas-pose { animation: op-modo-pose var(--ciclo) linear var(--retraso) infinite; }
+.op-pierna-a, .op-pierna-b { transform-box: fill-box; transform-origin: 50% 0; }
+.op-pierna-a { animation: op-paso .45s ease-in-out infinite alternate; }
+.op-pierna-b { animation: op-paso .45s ease-in-out infinite alternate-reverse; }
+.op-pelota { fill: #fff; stroke: #e7b46b; stroke-width: .8; opacity: 0;
+  animation: op-pelota-ve var(--ciclo) linear var(--retraso) infinite, op-pelota 1.1s ease-in-out infinite alternate; }
+
+@keyframes op-sentado { 0%, 54.9% { opacity: 1; } 55%, 89.9% { opacity: 0; } 90%, 100% { opacity: 1; } }
+@keyframes op-paseo {
+  0%, 54.9% { opacity: 0; transform: translate(var(--ax), var(--ay)); }
+  55% { opacity: 1; transform: translate(var(--ax), var(--ay)); }
+  61% { opacity: 1; transform: translate(var(--bx), var(--by)); }
+  84% { opacity: 1; transform: translate(var(--bx), var(--by)); }
+  89.9% { opacity: 1; transform: translate(var(--ax), var(--ay)); }
+  90%, 100% { opacity: 0; transform: translate(var(--ax), var(--ay)); }
+}
+@keyframes op-modo-caminar { 0%, 60.9% { opacity: 1; } 61%, 83.9% { opacity: 0; } 84%, 100% { opacity: 1; } }
+@keyframes op-modo-pose { 0%, 60.9% { opacity: 0; } 61%, 83.9% { opacity: 1; } 84%, 100% { opacity: 0; } }
+@keyframes op-pelota-ve { 0%, 62% { opacity: 0; } 63%, 83% { opacity: 1; } 84%, 100% { opacity: 0; } }
+@keyframes op-pelota { from { transform: translate(var(--px0), var(--py)); } 50% { transform: translate(calc((var(--px0) + var(--px1)) / 2), calc(var(--py) - 14px)); } to { transform: translate(var(--px1), var(--py)); } }
+@keyframes op-paso { from { transform: rotate(-22deg); } to { transform: rotate(22deg); } }
+@keyframes op-parpadeo { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+@keyframes op-respira { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.8px); } }
+@keyframes op-tecla { from { transform: translateY(0); } to { transform: translateY(-2.2px); } }
+@keyframes op-tiembla { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-1px); } 75% { transform: translateX(1px); } }
+@keyframes op-sube { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
+@keyframes op-punto { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+@keyframes op-late { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@keyframes op-gota { 0% { opacity: 0; transform: translateY(0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(8px); } }
+@keyframes op-vapor { 0% { opacity: 0; transform: translateY(2px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(-4px); } }
+@keyframes op-raqueta { from { transform: rotate(-35deg); } to { transform: rotate(25deg); } }
+@keyframes op-zeta { 0% { opacity: 0; transform: translate(0, 0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(6px, -14px); } }
+@keyframes op-titila { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes op-gira { to { transform: rotate(360deg); } }
+
+/* Sin movimiento: todos en su lugar, quietos. */
+@media (prefers-reduced-motion: reduce) {
+  .oficina-plano *, .oficina-plano *::before { animation: none !important; }
+  .op-paseante, .op-pelota, .op-codigo, .op-zeta { display: none; }
+  .op-sentado-rutina { opacity: 1; }
+}
