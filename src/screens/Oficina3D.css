@@ -1,0 +1,37 @@
+/* La Oficina en 3D: el lienzo y las etiquetas (nombres, burbujas y "z z z") que van encima como HTML. */
+.oficina-3d {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 0%, #75689c 0%, #5b4f7d 70%);
+  cursor: grab;
+}
+.oficina-3d canvas { display: block; }
+.oficina-3d canvas:active { cursor: grabbing; }
+.o3-textos { position: absolute; inset: 0; pointer-events: none; }
+
+.o3-cartel {
+  pointer-events: auto; cursor: pointer; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis;
+  padding: 1px 7px; border-radius: 999px; font: 600 9.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #3b2f4f; background: rgba(255, 250, 243, .9); box-shadow: 0 1px 3px rgba(59, 47, 79, .25);
+}
+.o3-cartel:hover { background: #fff; }
+.o3-cartel.estado-error { color: #c8323f; }
+.o3-cartel.estado-pausado, .o3-cartel.estado-nuevo { color: #8f86a8; }
+.o3-cartel.is-elegido { outline: 2px solid var(--accent); }
+.o3-cartel.o3-jefa { color: #f6dd8b; background: #6e432a; font-weight: 700; }
+.o3-lejos .o3-cartel:not(.is-elegido) { display: none; }
+
+.o3-burbuja {
+  pointer-events: auto; cursor: pointer; display: grid; place-items: center; min-width: 26px; height: 18px; padding: 0 5px;
+  border-radius: 9px; font: 800 12px/1 system-ui, sans-serif; background: #fff; border: 2px solid #3fb878; color: #3fb878;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .18);
+}
+.o3-burbuja.estado-trabajando::after { content: '•••'; letter-spacing: 1px; animation: o3-puntos 1.2s infinite; }
+.o3-burbuja.estado-error { background: #e85d6a; border-color: #e85d6a; color: #fff; animation: o3-late 1s ease-in-out infinite; }
+.o3-zetas { font: 800 13px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .35); animation: o3-zetas 2.6s ease-in-out infinite; }
+
+@keyframes o3-puntos { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+@keyframes o3-late { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+@keyframes o3-zetas { 0% { opacity: 0; transform: translateY(4px); } 50% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
+@media (prefers-reduced-motion: reduce) { .o3-burbuja, .o3-burbuja::after, .o3-zetas { animation: none !important; } }

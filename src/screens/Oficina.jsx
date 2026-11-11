@@ -1,11 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
 import { armarOficina, contarEstados, hoyAR, EQUIPOS, ESTADOS } from '../oficina.mjs'
-import OficinaPlano, { LeyendaPlano } from './OficinaPlano.jsx'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import './Oficina.css'
+
+// La oficina en 3D se carga recién al abrir la pantalla (three.js es pesado). Si el equipo no puede mostrar 3D o la
+// escena falla, queda un aviso: los agentes igual están en la lista de abajo.
+const Oficina3D = lazy(() => import('./Oficina3D.jsx'))
+function hayWebGL() {
+  try {
+    const c = document.createElement('canvas')
+    return Boolean(c.getContext('webgl2') || c.getContext('webgl'))
+  } catch { return false }
+}
+class SiFalla extends Component {
+  constructor(props) { super(props); this.state = { fallo: false } }
+  static getDerivedStateFromError() { return { fallo: true } }
+  render() { return this.state.fallo ? this.props.respaldo : this.props.children }
+}
 
 // La Oficina: todos los agentes (Trabajadores, UP y PDG) en sus salas. Cada uno en su escritorio; la burbuja dice
 // cómo está (trabajando, con un problema, pausado). Tocás uno y ves qué hace, sus tareas, sus herramientas, y podés
@@ -96,6 +110,8 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const elegido = agentes.find(a => a.id === elegidoId) || null
   const cuenta = contarEstados(agentes)
   const abrir = (id, p = 'ahora') => { setElegidoId(id); setPestana(p) }
+  const [tres] = useState(hayWebGL)
+  const sin3D = <p className="oficina-sin-3d">Este equipo no puede mostrar la oficina en 3D. Los agentes están en la lista de abajo.</p>
 
   return <div className="oficina">
     <CabeceraPantalla sobretitulo="Agentes" titulo="Oficina" cargando={cargando}
@@ -110,8 +126,11 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     <Bloques disposicion="principal">
       <Bloque titulo="La oficina" ancho="completo">
         {cargando ? <p className="empty-state">Abriendo la oficina…</p> : <>
-          <OficinaPlano agentes={agentes} elegidoId={elegidoId} abrir={abrir} ahora={ahora} />
-          <LeyendaPlano />
+          {tres
+            ? <SiFalla respaldo={sin3D}><Suspense fallback={<p className="oficina-sin-3d">Abriendo la oficina…</p>}><Oficina3D agentes={agentes} elegidoId={elegidoId} abrir={abrir} /></Suspense></SiFalla>
+            : sin3D}
+          {tres && <p className="oficina-ayuda">Arrastrá para girar · rueda o dos dedos para acercar · tocá un agente para ver qué hace.</p>}
+          <Leyenda />
           <nav className="oficina-plantel" aria-label="Todos los agentes">
             {agentes.map(a => <button key={a.id} type="button" className={`oficina-ficha estado-${a.estado}${a.id === elegidoId ? ' is-elegido' : ''}`} onClick={() => abrir(a.id)}
               aria-label={`${a.nombre}: ${ESTADOS[a.estado]}`}>
@@ -139,6 +158,15 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
 }
 
 const nombreCorto = n => String(n).split(' (')[0]
+
+function Leyenda() {
+  return <ul className="oficina-leyenda" aria-label="Qué significa lo que se ve">
+    <li><span className="burbuja-muestra estado-trabajando">…</span>tecleando, pantalla en verde: trabajando</li>
+    <li><span className="burbuja-muestra estado-error">!</span>agarrándose la cabeza, pantalla en rojo: con un problema</li>
+    <li><span className="burbuja-muestra">☕</span>en la cafetería, el comedor, el ocio o el ping pong: libre, en su descanso</li>
+    <li><span className="burbuja-muestra">z</span>durmiendo en un puf: pausado</li>
+  </ul>
+}
 
 function ActividadAhora({ agentes, abrir }) {
   const activos = agentes.filter(a => a.estado === 'trabajando' || a.estado === 'error')
