@@ -12,13 +12,15 @@ export const ESPERA_TURNOS = asientosEspera().length
 
 // ---------- Convocar ----------
 export function ConvocarReunion({ agentes, alConvocar, cerrar }) {
-  // Administración (tareas programadas, no conversan) viene solo si la marcás.
-  const [areas, setAreas] = useState(() => new Set(AREAS.filter(e => e !== 'admin')))
+  // Se elige agente por agente, en una lista desplegable por área. De entrada vienen todos los que no están pausados,
+  // menos Administración (tareas programadas, no conversan), que viene solo si la marcás.
+  const disponibles = agentes.filter(a => a.estado !== 'pausado')
+  const [elegidos, setElegidos] = useState(() => new Set(disponibles.filter(a => a.equipo !== 'admin').map(a => a.id)))
   const [modo, setModo] = useState('sala')
-  const vienen = agentes.filter(a => areas.has(a.equipo) && a.estado !== 'pausado')
-  const pausados = agentes.filter(a => areas.has(a.equipo) && a.estado === 'pausado')
+  const vienen = disponibles.filter(a => elegidos.has(a.id))
   const tope = modo === 'turnos' ? ESPERA_TURNOS : MAX_ASISTENTES
-  const alternar = e => setAreas(s => { const n = new Set(s); if (n.has(e)) n.delete(e); else n.add(e); return n })
+  const alternar = id => setElegidos(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const alternarArea = (ids, todos) => setElegidos(s => { const n = new Set(s); for (const id of ids) { if (todos) n.delete(id); else n.add(id) } return n })
   useEffect(() => {
     const alTeclear = ev => { if (ev.key === 'Escape') cerrar() }
     window.addEventListener('keydown', alTeclear)
@@ -32,14 +34,28 @@ export function ConvocarReunion({ agentes, alConvocar, cerrar }) {
       </div>
       <div className="modal-body">
         <fieldset className="reunion-grupo">
-          <legend>¿Qué áreas citás?</legend>
+          <legend>¿A quiénes llamás? Abrí cada área para elegir agente por agente.</legend>
           {AREAS.map(e => {
             const del = agentes.filter(a => a.equipo === e)
-            const activos = del.filter(a => a.estado !== 'pausado').length
-            return <label key={e} className="reunion-opcion">
-              <input type="checkbox" checked={areas.has(e)} onChange={() => alternar(e)} />
-              <span><strong>{EQUIPOS[e].nombre}</strong> <span className="tenue">· {activos} {activos === 1 ? 'viene' : 'vienen'}{del.length > activos ? ` (${del.length - activos} pausado)` : ''}</span></span>
-            </label>
+            if (!del.length) return null
+            const activos = del.filter(a => a.estado !== 'pausado').map(a => a.id)
+            const marcados = activos.filter(id => elegidos.has(id)).length
+            const todos = activos.length > 0 && marcados === activos.length
+            return <details key={e} className="reunion-area">
+              <summary>
+                <input type="checkbox" aria-label={`Todo ${EQUIPOS[e].nombre}`} checked={todos} disabled={!activos.length}
+                  ref={el => { if (el) el.indeterminate = marcados > 0 && !todos }}
+                  onClick={ev => ev.stopPropagation()} onChange={() => alternarArea(activos, todos)} />
+                <strong>{EQUIPOS[e].nombre}</strong>
+                <span className="tenue">{marcados} de {del.length}</span>
+              </summary>
+              <ul>{del.map(a => <li key={a.id}>
+                <label className="reunion-opcion">
+                  <input type="checkbox" checked={elegidos.has(a.id)} disabled={a.estado === 'pausado'} onChange={() => alternar(a.id)} />
+                  <span>{nombreCorto(a.nombre)}{a.estado === 'pausado' && <span className="tenue"> · pausado, no puede venir</span>}</span>
+                </label>
+              </li>)}</ul>
+            </details>
           })}
         </fieldset>
         <fieldset className="reunion-grupo">
@@ -54,7 +70,6 @@ export function ConvocarReunion({ agentes, alConvocar, cerrar }) {
           </label>
         </fieldset>
         <p className="tenue">Tienen {PLAZO_REUNION_S / 60} minutos para llegar. Cuando están todos, vienen con su información más actualizada.
-          {pausados.length ? ` No vienen los pausados: ${pausados.map(a => nombreCorto(a.nombre)).join(', ')}.` : ''}
           {vienen.length > tope ? ` Entran ${tope}: el resto queda para otra reunión.` : ''}</p>
       </div>
       <div className="modal-foot">
