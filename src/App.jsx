@@ -9,6 +9,7 @@ import Metricas from './screens/Metricas.jsx'
 import BusquedasGoogle from './screens/BusquedasGoogle.jsx'
 import Cursos from './screens/Cursos.jsx'
 import Trabajadores from './screens/Trabajadores.jsx'
+import Oficina from './screens/Oficina.jsx'
 import Eventos from './screens/Eventos.jsx'
 import MiNicho from './screens/MiNicho.jsx'
 import Postulaciones from './screens/Postulaciones.jsx'
@@ -235,6 +236,7 @@ export default function App() {
           <li><button className={`nav-item${pantalla === 'mailcal' ? ' active' : ''}`} onClick={() => setPantalla('mailcal')}>Mail y Calendario</button></li>
           <li><button className="nav-item" onClick={() => setPantalla('escribir')}>Escribir</button></li>
           <li><button className={`nav-item${pantalla === 'trabajadores' ? ' active' : ''}`} onClick={() => setPantalla('trabajadores')}>Trabajadores</button></li>
+          <li><button className={`nav-item${pantalla === 'oficina' ? ' active' : ''}`} onClick={() => setPantalla('oficina')}>Oficina</button></li>
           <li><button className={`nav-item${pantalla === 'eventos' ? ' active' : ''}`} onClick={() => setPantalla('eventos')}>Eventos</button></li>
           <li><button className={`nav-item${pantalla === 'postulaciones' ? ' active' : ''}`} onClick={() => setPantalla('postulaciones')}>Postulaciones</button></li>
           <li><button className={`nav-item${pantalla === 'nicho' ? ' active' : ''}`} onClick={() => setPantalla('nicho')}>Mi nicho</button></li>
@@ -302,6 +304,7 @@ export default function App() {
             {pantalla === 'flujo' && 'Flujo'}
             {pantalla === 'mailcal' && 'Mail y Calendario'}
             {pantalla === 'trabajadores' && 'Trabajadores'}
+            {pantalla === 'oficina' && 'Oficina'}
             {pantalla === 'eventos' && 'Eventos'}
             {pantalla === 'postulaciones' && 'Postulaciones'}
             {pantalla === 'nicho' && 'Mi nicho'}
@@ -323,6 +326,7 @@ export default function App() {
             sincronizar={() => sincronizarGoogle('app_manual')} sincronizando={sincronizando} errorSync={errorSync} /></div>}
           {pantallasVisitadas.has('flujo') && <div hidden={pantalla !== 'flujo'}><Flujo key={revisionBot} proyectos={proyectos} pantallasWeb={pantallasWeb} abrirPantalla={abrirPantalla} abrirHtml={() => htmlInput.current?.click()} /></div>}
           {pantallasVisitadas.has('trabajadores') && <div hidden={pantalla !== 'trabajadores'}><Trabajadores /></div>}
+          {pantallasVisitadas.has('oficina') && <div hidden={pantalla !== 'oficina'}><Oficina key={session.user.id} /></div>}
           {pantallasVisitadas.has('eventos') && <div hidden={pantalla !== 'eventos'}><Eventos /></div>}
           {pantallasVisitadas.has('postulaciones') && <div hidden={pantalla !== 'postulaciones'}><Postulaciones /></div>}
           {pantallasVisitadas.has('nicho') && <div hidden={pantalla !== 'nicho'}><MiNicho /></div>}

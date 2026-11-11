@@ -1,0 +1,142 @@
+/* Oficina: salas isométricas con los agentes en sus escritorios.
+   Colores derivados de los tokens del tema: cada sala tiene su tinte (piso y paredes) y el estado se lee en la burbuja,
+   nunca en la ropa (la ropa de un trabajador es su color de identidad). */
+.oficina {
+  --oficina-tinte-trabajadores: var(--id-violeta);
+  --oficina-tinte-up: var(--accent);
+  --oficina-tinte-pdg: var(--teal-600);
+  --oficina-ropa-up: color-mix(in srgb, var(--accent) 70%, var(--gray-500));
+  --oficina-ropa-pdg: color-mix(in srgb, var(--teal-600) 70%, var(--gray-500));
+  --oficina-piel: #e9c3a0;
+  --oficina-pelo: #3b2a22;
+  --oficina-madera: color-mix(in srgb, var(--id-arena) 55%, var(--surface));
+  --oficina-trabajando: var(--green-600);
+  --oficina-error: var(--red-600);
+  --oficina-pausado: var(--gray-500);
+}
+
+.oficina-salas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--esp-16) var(--esp-24); }
+.oficina-sala.sala-trabajadores { grid-column: 1 / -1; }
+.oficina-sala.sala-trabajadores svg { max-width: 760px; margin: 0 auto; }
+.oficina-sala { margin: 0; min-width: 0; }
+.oficina-sala figcaption { font-size: var(--letra-13); margin-bottom: var(--esp-4); }
+.oficina-sala svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+.oficina-sala { --tinte: var(--oficina-tinte-trabajadores); }
+.oficina-sala.sala-up { --tinte: var(--oficina-tinte-up); }
+.oficina-sala.sala-pdg { --tinte: var(--oficina-tinte-pdg); }
+.sala-piso { fill: color-mix(in srgb, var(--tinte) 16%, var(--surface-raised)); }
+.sala-junta { stroke: color-mix(in srgb, var(--tinte) 10%, var(--gray-300)); stroke-width: .6; opacity: .55; }
+.sala-pared-fondo { fill: color-mix(in srgb, var(--tinte) 30%, var(--surface)); }
+.sala-pared-lado { fill: color-mix(in srgb, var(--tinte) 22%, var(--surface-inset)); }
+.sala-ventana { fill: color-mix(in srgb, var(--id-azul) 30%, var(--surface-inset)); stroke: color-mix(in srgb, var(--tinte) 40%, var(--gray-300)); stroke-width: 1.5; }
+
+.of-escritorio .of-cara-tapa { fill: var(--oficina-madera); }
+.of-escritorio .of-cara-frente { fill: color-mix(in srgb, var(--oficina-madera) 70%, var(--ink-900)); }
+.of-escritorio .of-cara-costado { fill: color-mix(in srgb, var(--oficina-madera) 55%, var(--ink-900)); }
+.of-silla .of-cara-tapa { fill: var(--gray-300); }
+.of-silla .of-cara-frente, .of-silla .of-cara-costado { fill: var(--gray-200); }
+.of-monitor .of-cara-tapa, .of-monitor .of-cara-costado { fill: var(--ink-700); }
+.of-monitor .of-cara-frente { fill: var(--ink-800); }
+.of-monitor-pie .of-cara-tapa, .of-monitor-pie .of-cara-frente, .of-monitor-pie .of-cara-costado { fill: var(--ink-700); }
+.oficina-piel { fill: var(--oficina-piel); }
+.oficina-pelo { fill: var(--oficina-pelo); }
+
+/* Estados: el monitor encendido (trabajando), la persona apagada (nuevo) y la burbuja. */
+.puesto.estado-trabajando .of-monitor .of-cara-frente { fill: color-mix(in srgb, var(--oficina-trabajando) 45%, var(--ink-800)); }
+.puesto.estado-nuevo .of-persona { opacity: .5; }
+.puesto-alfombra { fill: transparent; }
+.puesto { cursor: pointer; outline: none; }
+.puesto:hover .puesto-alfombra, .puesto:focus-visible .puesto-alfombra { fill: color-mix(in srgb, var(--tinte) 25%, transparent); }
+.puesto.is-elegido .puesto-alfombra { fill: color-mix(in srgb, var(--accent) 22%, transparent); stroke: var(--accent); stroke-width: 1.5; }
+.puesto:focus-visible .puesto-alfombra { stroke: var(--accent); stroke-width: 2; }
+.sala-rotulos { pointer-events: none; }
+.rotulo-fondo { fill: color-mix(in srgb, var(--surface-inset) 85%, transparent); }
+.puesto-nombre { font-size: 10px; fill: var(--gray-900); }
+.rotulo.estado-error .puesto-nombre { fill: var(--oficina-error); }
+.rotulo.estado-pausado .puesto-nombre, .rotulo.estado-nuevo .puesto-nombre { fill: var(--gray-500); }
+
+.burbuja rect, .burbuja path { fill: var(--surface); stroke-width: 1.5; }
+.burbuja text { font-size: 12px; font-weight: 700; }
+.burbuja.estado-trabajando rect, .burbuja.estado-trabajando path { stroke: var(--oficina-trabajando); }
+.burbuja.estado-trabajando .burbuja-punto { fill: var(--oficina-trabajando); }
+.burbuja.estado-error rect, .burbuja.estado-error path { fill: var(--oficina-error); stroke: var(--oficina-error); }
+.burbuja.estado-error text { fill: var(--ink-900); }
+.burbuja.estado-pausado rect, .burbuja.estado-pausado path { stroke: var(--oficina-pausado); }
+.burbuja.estado-pausado text { fill: var(--oficina-pausado); }
+.burbuja-punto { animation: oficina-tecleo 1.2s infinite ease-in-out; }
+.burbuja-punto.punto-1 { animation-delay: .2s; }
+.burbuja-punto.punto-2 { animation-delay: .4s; }
+@keyframes oficina-tecleo { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .burbuja-punto { animation: none; } }
+
+.oficina-leyenda { display: flex; flex-wrap: wrap; gap: var(--esp-8) var(--esp-16); list-style: none; margin: var(--esp-12) 0 0; padding: 0; font-size: var(--letra-12); color: var(--gray-700); }
+.oficina-leyenda li { display: flex; align-items: center; gap: var(--esp-4); }
+.burbuja-muestra { display: inline-grid; place-items: center; min-width: 22px; height: 16px; border-radius: 8px; border: 1.5px solid var(--gray-300); font-size: var(--letra-11); font-weight: 700; background: var(--surface); }
+.burbuja-muestra.estado-trabajando { border-color: var(--oficina-trabajando); color: var(--oficina-trabajando); }
+.burbuja-muestra.estado-error { border-color: var(--oficina-error); background: var(--oficina-error); color: var(--ink-900); }
+.burbuja-muestra.estado-pausado { border-color: var(--oficina-pausado); color: var(--oficina-pausado); }
+.burbuja-muestra.estado-libre { border-style: dashed; }
+
+/* El plantel: todos los agentes en una fila, como acceso rápido (y lo que se usa con teclado o lector de pantalla). */
+.oficina-plantel { display: flex; flex-wrap: wrap; gap: var(--esp-4); margin-top: var(--esp-12); padding-top: var(--esp-12); border-top: 1px solid var(--gray-200); }
+.oficina-ficha { display: inline-flex; align-items: center; gap: var(--esp-4); padding: var(--esp-2) var(--esp-8) var(--esp-2) var(--esp-2); border: 1px solid var(--gray-300); border-radius: 999px; background: var(--surface-inset); color: var(--gray-900); font-size: var(--letra-12); cursor: pointer; }
+.oficina-ficha:hover, .oficina-ficha.is-elegido { border-color: var(--accent); }
+.oficina-ficha.estado-error { border-color: var(--red-borde); color: var(--oficina-error); }
+.oficina-ficha.estado-pausado, .oficina-ficha.estado-nuevo { color: var(--gray-500); }
+.oficina-avatar { flex-shrink: 0; border-radius: 50%; background: var(--surface-raised); }
+.oficina-avatar.estado-pausado, .oficina-avatar.estado-nuevo { opacity: .55; }
+
+.oficina-estado { display: inline-block; padding: 1px var(--esp-8); border-radius: 999px; font-size: var(--letra-11); font-weight: 600; background: var(--gray-200); color: var(--gray-700); }
+.oficina-estado.estado-trabajando { background: var(--green-100); color: var(--green-600); }
+.oficina-estado.estado-error { background: var(--red-100); color: var(--red-600); }
+
+.oficina-tetoca, .oficina-activos, .oficina-tareas, .oficina-herramientas { list-style: none; margin: 0; padding: 0; }
+.oficina-tetoca li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--esp-2) var(--esp-8); align-items: center; padding: var(--esp-8) 0 var(--esp-8) var(--esp-12); border-bottom: 1px solid var(--gray-200); border-left: 3px solid var(--amber-600); font-size: var(--letra-13); }
+.oficina-tetoca li.nivel-error { border-left-color: var(--red-600); }
+.oficina-tetoca li:last-child { border-bottom: 0; }
+.oficina-tetoca-texto { grid-column: 1; overflow-wrap: anywhere; }
+.oficina-tetoca-donde { grid-column: 1; font-size: var(--letra-11); color: var(--gray-500); }
+.oficina-tetoca .btn { grid-column: 2; grid-row: 1 / span 2; }
+
+.oficina-activos li + li { border-top: 1px solid var(--gray-200); }
+.oficina-activos button { display: flex; gap: var(--esp-8); align-items: flex-start; width: 100%; padding: var(--esp-8) 0; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; font-size: var(--letra-13); }
+.oficina-activos button > span { display: flex; flex-wrap: wrap; gap: var(--esp-2) var(--esp-8); min-width: 0; }
+.oficina-activos .tenue { flex-basis: 100%; overflow-wrap: anywhere; }
+
+/* Panel del agente: a la derecha en pantalla ancha, de abajo en el celular. */
+.oficina-panel-fondo { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); z-index: 70; }
+.oficina-panel { position: fixed; z-index: 71; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--gray-300); box-shadow: var(--shadow-md); outline: none; }
+.oficina-panel-cabeza { display: flex; gap: var(--esp-12); align-items: center; padding: var(--esp-16); border-bottom: 1px solid var(--gray-200); }
+.oficina-panel-cabeza .oficina-avatar { width: 40px; height: 40px; }
+.oficina-panel-cabeza > div { flex: 1; min-width: 0; }
+.oficina-panel-cabeza h2 { margin: 0; font-size: var(--letra-16); }
+.oficina-panel-cabeza p { margin: 0; font-size: var(--letra-12); }
+.oficina-pestanas { display: flex; gap: var(--esp-4); padding: var(--esp-8) var(--esp-16) 0; border-bottom: 1px solid var(--gray-200); overflow-x: auto; }
+.oficina-pestanas button { flex-shrink: 0; padding: var(--esp-8); background: none; border: 0; border-bottom: 2px solid transparent; color: var(--gray-500); font-size: var(--letra-12); cursor: pointer; }
+.oficina-pestanas button.is-activa { color: var(--gray-900); border-bottom-color: var(--accent); }
+.oficina-panel-cuerpo { flex: 1; min-height: 0; overflow-y: auto; padding: var(--esp-16); font-size: var(--letra-13); display: flex; flex-direction: column; gap: var(--esp-8); }
+.oficina-panel-cuerpo p { margin: 0; }
+.oficina-ahora { font-size: var(--letra-14); color: var(--gray-900); overflow-wrap: anywhere; }
+.oficina-panel-cuerpo > .btn { align-self: flex-start; }
+.oficina-descripcion { white-space: pre-line; line-height: 1.5; }
+.oficina-tareas li { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: var(--esp-8); padding: var(--esp-8) 0; border-bottom: 1px solid var(--gray-200); overflow-wrap: anywhere; }
+.oficina-tareas li.nivel-error { color: var(--red-600); }
+.oficina-tareas li.nivel-aviso { color: var(--amber-600); }
+.oficina-tarea-cuando { color: var(--gray-500); font-size: var(--letra-12); }
+.oficina-herramientas { display: flex; flex-wrap: wrap; gap: var(--esp-8); }
+.oficina-herramientas li { padding: var(--esp-4) var(--esp-8); border: 1px solid var(--gray-300); border-radius: var(--radius-sm); background: var(--surface-inset); }
+
+.oficina-charla { display: flex; flex-direction: column; gap: var(--esp-8); flex: 1; min-height: 0; }
+.oficina-charla-nota { font-size: var(--letra-11); }
+.oficina-mensajes { flex: 1; display: flex; flex-direction: column; gap: var(--esp-8); }
+.oficina-mensaje { max-width: 88%; padding: var(--esp-8) var(--esp-12); border-radius: var(--radius); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+.oficina-mensaje.de-user { align-self: flex-end; background: var(--accent-100); border: 1px solid var(--accent-borde); }
+.oficina-mensaje.de-assistant { align-self: flex-start; background: var(--surface-inset); border: 1px solid var(--gray-200); }
+.oficina-charla-form { display: flex; gap: var(--esp-8); align-items: flex-end; position: sticky; bottom: calc(-1 * var(--esp-16)); padding: var(--esp-8) 0 var(--esp-16); background: var(--surface); }
+.oficina-charla-form textarea { flex: 1; resize: vertical; min-height: 40px; }
+
+@media (max-width: 780px) {
+  .oficina-salas { grid-template-columns: minmax(0, 1fr); }
+  .oficina-panel { top: auto; left: 0; width: 100vw; height: 82vh; border-left: 0; border-top: 1px solid var(--gray-300); border-radius: var(--radius) var(--radius) 0 0; }
+}
