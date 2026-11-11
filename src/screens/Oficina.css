@@ -1,8 +1,8 @@
-/* Oficina: todo lo que rodea al dibujo (el piso con los agentes está en OficinaPlano.css).
+/* Oficina: todo lo que rodea a la escena 3D (que tiene sus estilos en Oficina3D.css).
    El estado se lee en la burbuja, nunca en la ropa (la ropa de un trabajador es su color de identidad). */
 .oficina {
-  --oficina-ropa-up: #f7b98b; /* los mismos de la ropa en el dibujo */
-  --oficina-ropa-pdg: #8fd9bd;
+  --oficina-ropa-up: #d9734e; /* los mismos de la ropa en la escena 3D */
+  --oficina-ropa-pdg: #3fa98a;
   --oficina-piel: #e9c3a0;
   --oficina-pelo: #3b2a22;
   --oficina-trabajando: var(--green-600);
@@ -13,6 +13,8 @@
 .oficina-piel { fill: var(--oficina-piel); }
 .oficina-pelo { fill: var(--oficina-pelo); }
 
+.oficina-sin-3d { padding: var(--esp-32) var(--esp-16); text-align: center; color: var(--gray-500); font-size: var(--letra-13); background: var(--surface-inset); border-radius: var(--radius); }
+.oficina-ayuda { margin: var(--esp-8) 0 0; font-size: var(--letra-12); color: var(--gray-500); }
 .oficina-leyenda { display: flex; flex-wrap: wrap; gap: var(--esp-8) var(--esp-16); list-style: none; margin: var(--esp-12) 0 0; padding: 0; font-size: var(--letra-12); color: var(--gray-700); }
 .oficina-leyenda li { display: flex; align-items: center; gap: var(--esp-4); }
 .burbuja-muestra { display: inline-grid; place-items: center; min-width: 22px; height: 16px; border-radius: 8px; border: 1.5px solid var(--gray-300); font-size: var(--letra-11); font-weight: 700; background: var(--surface); }
