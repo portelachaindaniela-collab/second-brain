@@ -179,3 +179,79 @@ export function texturaAlfombra({ patron, colores: [base, dibujo] }) {
   t.wrapS = t.wrapT = THREE.RepeatWrapping
   return t
 }
+
+// Camiseta enmarcada, vista de espalda: el color del club, el apellido y el número.
+// club: { cuerpo, detalle, letras, contorno, franja? } (franja: banda diagonal, como la de River).
+export function texturaCamiseta({ cuerpo, detalle, letras, contorno, franja = null, apellido, numero, manga = 'corta' }) {
+  const [c, g] = lienzo(300, 360)
+  g.fillStyle = '#f7f5f0'; g.fillRect(0, 0, 300, 360)
+  g.save()
+  g.beginPath()
+  if (manga === 'musculosa') {
+    g.moveTo(95, 40); g.lineTo(125, 40); g.quadraticCurveTo(150, 62, 175, 40); g.lineTo(205, 40)
+    g.quadraticCurveTo(210, 110, 240, 125); g.lineTo(240, 330); g.lineTo(60, 330); g.lineTo(60, 125)
+    g.quadraticCurveTo(90, 110, 95, 40)
+  } else {
+    g.moveTo(105, 38); g.lineTo(125, 34); g.quadraticCurveTo(150, 48, 175, 34); g.lineTo(195, 38)
+    g.lineTo(268, 82); g.lineTo(246, 140); g.lineTo(222, 128); g.lineTo(222, 330); g.lineTo(78, 330)
+    g.lineTo(78, 128); g.lineTo(54, 140); g.lineTo(32, 82); g.closePath()
+  }
+  g.closePath()
+  g.fillStyle = cuerpo; g.fill()
+  g.clip()
+  if (franja) {
+    g.fillStyle = franja
+    g.beginPath(); g.moveTo(20, 60); g.lineTo(80, 20); g.lineTo(300, 300); g.lineTo(240, 340); g.closePath(); g.fill()
+  }
+  g.restore()
+  g.lineWidth = 8; g.strokeStyle = detalle
+  g.beginPath()
+  if (manga === 'musculosa') { g.moveTo(125, 40); g.quadraticCurveTo(150, 62, 175, 40); g.moveTo(95, 42); g.quadraticCurveTo(90, 110, 62, 125); g.moveTo(205, 42); g.quadraticCurveTo(210, 110, 238, 125) }
+  else { g.moveTo(125, 36); g.quadraticCurveTo(150, 48, 175, 36) }
+  g.stroke()
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'
+  const escribir = (texto, y, tam) => {
+    g.font = `900 ${tam}px system-ui, sans-serif`
+    g.lineWidth = Math.max(4, tam / 9); g.strokeStyle = contorno; g.strokeText(texto, 150, y)
+    g.fillStyle = letras; g.fillText(texto, 150, y)
+  }
+  escribir(apellido, 112, apellido.length > 6 ? 30 : 36)
+  escribir(String(numero), 210, 120)
+  return textura(c)
+}
+
+// Póster de Oasis (la banda): letras grandes sobre fondo oscuro.
+export function texturaPosterOasis() {
+  const [c, g] = lienzo(360, 260)
+  const fondo = g.createLinearGradient(0, 0, 0, 260)
+  fondo.addColorStop(0, '#1d1c1a'); fondo.addColorStop(1, '#2e2b27')
+  g.fillStyle = fondo; g.fillRect(0, 0, 360, 260)
+  g.fillStyle = '#f4f1ea'; g.fillRect(60, 78, 240, 92)
+  g.fillStyle = '#1d1c1a'; g.textAlign = 'center'; g.textBaseline = 'middle'
+  g.font = '900 72px system-ui, sans-serif'
+  g.fillText('oasis', 180, 126)
+  g.fillStyle = '#c9a24a'; g.font = '700 16px system-ui, sans-serif'
+  g.fillText('MANCHESTER · 1991', 180, 206)
+  return textura(c)
+}
+
+// Pelotas: la de básquet (naranja con costuras negras) y la de fútbol (blanca con parches negros).
+export function texturaPelota(tipo) {
+  const [c, g] = lienzo(256, 128)
+  if (tipo === 'basquet') {
+    g.fillStyle = '#d9772b'; g.fillRect(0, 0, 256, 128)
+    g.strokeStyle = '#2a1d14'; g.lineWidth = 3
+    for (const x of [0, 64, 128, 192]) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 128); g.stroke() }
+    g.beginPath(); g.moveTo(0, 64); g.lineTo(256, 64); g.stroke()
+  } else {
+    g.fillStyle = '#f7f5f0'; g.fillRect(0, 0, 256, 128)
+    g.fillStyle = '#1d1c1a'
+    for (let fila = 0; fila < 4; fila++) for (let k = 0; k < 6; k++) {
+      const x = k * 44 + (fila % 2) * 22 + 10, y = fila * 34 + 14
+      g.beginPath()
+      for (let v = 0; v < 5; v++) { const a = (v / 5) * Math.PI * 2 - Math.PI / 2; g.lineTo(x + Math.cos(a) * 9, y + Math.sin(a) * 9) }
+      g.closePath(); g.fill()
+    }
+  }
+  return textura(c)
+}

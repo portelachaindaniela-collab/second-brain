@@ -69,6 +69,21 @@ export function chequearCorridas({ corridas, ahora }) {
   return r('corridas', nombre, 'ok', recientes.length ? `${plural(recientes.length, 'corrida', 'corridas')} en 24 horas, sin errores.` : 'Sin corridas en las últimas 24 horas.')
 }
 
+// Si el Diseñador se trabó, Noruega le deriva a Sistemas un pedido con una acción: frenar los carruseles ya
+// aprobados que esperan sus placas (vuelven a revisión, así el Publicador no los publica sin placas) y cancelar la
+// corrida trabada de la Action. No hace nada sola: se ejecuta recién cuando Daniela lo aprueba.
+export function pedidoDisenadorTrabado({ carruseles, ahora }) {
+  const atrasados = carruseles.filter(p => p.texto && p.estado !== 'publicado' && p.assets_texto !== p.texto && ahora - Date.parse(p.updated_at) > ESPERA_DISENADOR_MIN * MIN)
+  if (!atrasados.length) return null
+  const aprobados = atrasados.filter(p => p.estado === 'aprobado')
+  return {
+    agente: 'up:noruega',
+    titulo: aprobados.length ? `Frenar ${plural(aprobados.length, 'carrusel aprobado', 'carruseles aprobados')} sin placas y cancelar el Diseñador trabado` : 'Cancelar la corrida trabada del Diseñador',
+    detalle: `${plural(atrasados.length, 'carrusel espera', 'carruseles esperan')} sus placas hace más de ${ESPERA_DISENADOR_MIN} minutos${aprobados.length ? ` (${aprobados.map(p => p.fecha).join(', ')}). Si se publica así, sale sin placas o con error.` : '.'} Al aprobar: ${aprobados.length ? 'esas piezas vuelven a revisión y ' : ''}se cancela la corrida de la Action «UP · Diseñador» que esté en curso.`,
+    accion: { tipo: 'frenar_pieza', piezas: aprobados.map(p => p.id), cancelar_disenador: true },
+  }
+}
+
 // 3. El diseñador: un carrusel con texto nuevo no puede esperar más de 45 minutos por sus placas.
 export function chequearDisenador({ carruseles, ahora }) {
   const nombre = 'Diseñador'

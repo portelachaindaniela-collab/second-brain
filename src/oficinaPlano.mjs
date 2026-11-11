@@ -6,9 +6,10 @@
 //   Limpieza).
 // - Una mampara con plantas divide el ambiente.
 // - Los dos tablones: UP y PDG comercial (son un mismo sistema), con las PC enfrentadas.
-// - Las oficinas de los trabajadores (compartidas por tema) y, frente a la puerta de Daniela, la sala de espera.
+// - Las oficinas de los trabajadores (compartidas por tema) y, frente a la puerta de Daniela, un living de espera.
 // - Al fondo, sobre una tarima, las dos más importantes: la de María y la de Daniela (con su balcón).
-// A la izquierda, en columna: sala de reuniones, cafetería, comedor, ocio y ping pong.
+// A la izquierda, todo el ocio junto (del fondo hacia adelante: descanso y ping pong, cafetería y cocina-comedor)
+// y, separada del ocio y cerca de la entrada, la sala de reuniones.
 //
 // Qué hace cada uno sale de su estado real (ver oficina.mjs): trabajando o con un problema está en su lugar;
 // libre trabaja y cada tanto sale a la cafetería, el comedor, el ocio o el ping pong y vuelve; pausado duerme en un puf.
@@ -29,15 +30,15 @@ export const ENTRADA = { x: 29.3, y: PISO.fondo }
 export function alturaPiso(x, y) { return x >= X0 && y <= EJECUTIVO.y1 ? EJECUTIVO.tarima : 0 }
 
 export const ZONAS = {
-  reuniones: { x0: 0.5, y0: 0.5, x1: 10.5, y1: 7.5, nombre: 'Sala de reuniones' },
+  reuniones: { x0: 0.5, y0: 19.5, x1: 10.5, y1: 26.5, nombre: 'Sala de reuniones' },
   cafeteria: { x0: 0.5, y0: 8, x1: 13, y1: 13, nombre: 'Cafetería' },
-  comedor: { x0: 0.5, y0: 13.5, x1: 13, y1: 19, nombre: 'Comedor' },
-  ocio: { x0: 0.5, y0: 19.5, x1: 8, y1: 26, nombre: 'Ocio' },
-  ping: { x0: 7.5, y0: 19.5, x1: 13.3, y1: 26, nombre: 'Ping pong' },
+  comedor: { x0: 0.5, y0: 13.5, x1: 13, y1: 19, nombre: 'Cocina y comedor' },
+  ocio: { x0: 0.5, y0: 0.5, x1: 8, y1: 7, nombre: 'Ocio' },
+  ping: { x0: 7.5, y0: 0.5, x1: 13.3, y1: 7, nombre: 'Ping pong' },
   up: { x0: X0, y0: 14.5, x1: 29, y1: 20.5, nombre: 'UP · mesa de trabajo' },
   pdg: { x0: 29.6, y0: 14.5, x1: 45, y1: 20.5, nombre: 'PDG comercial' },
   admin: { x0: X0, y0: 21, x1: 45, y1: PISO.fondo, nombre: 'Administración' },
-  espera: { x0: 39.3, y0: 8.5, x1: 45, y1: 13, nombre: 'Sala de espera' },
+  espera: { x0: 39.3, y0: 8.5, x1: 45, y1: 13, nombre: 'Living' },
 }
 
 // ---------- Oficinas ----------
@@ -130,6 +131,16 @@ function tablon(n, x0, centro, hacia) {
 export function mesaUp(n) { return tablon(n, 16, 17.4, 'pasillo') }
 export function mesaPdg(n) { return tablon(n, 31.2, 17.4, 'pasillo') }
 export function mesaAdmin(n) { return tablon(n, 17.5, 23.6, 'admin') }
+// Sistemas: su mesa, del otro lado de la entrada (también sale por el paso de la mampara).
+export function mesaSistemas(n) { return tablon(n, 37.8, 23.6, 'admin') }
+// Un rincón de descanso entre la entrada y Sistemas: dos sillones, mesa ratona, alfombra y macetones.
+export const RINCON_ENTRADA = {
+  sillones: [{ x: 32.2, y: 24.1, mira: Math.PI / 2 }, { x: 34.6, y: 24.1, mira: -Math.PI / 2 }],
+  mesa: { x: 33.4, y: 24.1, radio: 0.4 },
+}
+// El rack de servidores de Sistemas y los macetones grandes del rincón de la entrada.
+export const RACK = { x0: 43.6, x1: 44.4, y0: 21.9, y1: 22.7 }
+export const MACETONES = [[31.5, 25.9], [35.3, 25.9], [31.5, 22.3]]
 // Sobre la pared de PDG (la mampara de atrás de su tablón): el sistema comercial de punta a punta.
 export const CUADROS_PDG = ['mapa', 'presentacion', 'escudo', 'documento', 'megafono']
 
@@ -138,6 +149,7 @@ export function lugares(equipo, claves) {
   if (equipo === 'trabajadores') return oficinasTrabajadores(claves)
   if (equipo === 'pdg') return mesaPdg(claves.length).asientos
   if (equipo === 'admin') return mesaAdmin(claves.length).asientos
+  if (equipo === 'sistemas') return mesaSistemas(claves.length).asientos
   return mesaUp(claves.length).asientos
 }
 
@@ -153,20 +165,22 @@ const d = (id, x, y, pose, mira, extra = {}) => {
 export const DESCANSOS = [
   d('barra-1', 2.0, 9.9, 'sentado', Math.PI, { objeto: 'taza', altura: 0.22, zona: 'cafeteria', tanda: 0, carril: 11.0 }),
   d('comedor-1', 2.15, 14.85, 'sentado', 0, { zona: 'comedor', tanda: 14, carril: 14.1 }),
-  d('sillon-1', 1.75, 21.05, 'sentado', 0, { zona: 'ocio', tanda: 28, carril: 21.6 }),
-  d('ping-1', 8.0, 22.8, 'parado', Math.PI / 2, { objeto: 'paleta', zona: 'ping', tanda: 42, carril: 24.7 }),
-  d('ping-2', 13.0, 22.8, 'parado', -Math.PI / 2, { objeto: 'paleta', zona: 'ping', tanda: 42 }),
+  d('sillon-1', 1.75, 2.05, 'sentado', 0, { zona: 'ocio', tanda: 28, carril: 2.6 }),
+  d('ping-1', 8.0, 3.8, 'parado', Math.PI / 2, { objeto: 'paleta', zona: 'ping', tanda: 42, carril: 5.7 }),
+  d('ping-2', 13.0, 3.8, 'parado', -Math.PI / 2, { objeto: 'paleta', zona: 'ping', tanda: 42 }),
   d('barra-2', 3.6, 9.9, 'sentado', Math.PI, { objeto: 'taza', altura: 0.22, zona: 'cafeteria', tanda: 56, carril: 11.0 }),
   d('comedor-2', 3.45, 14.85, 'sentado', 0, { zona: 'comedor', tanda: 70, carril: 14.1 }),
-  d('sillon-2', 3.1, 21.05, 'sentado', 0, { objeto: 'taza', zona: 'ocio', tanda: 84, carril: 21.6 }),
+  d('sillon-2', 3.1, 2.05, 'sentado', 0, { objeto: 'taza', zona: 'ocio', tanda: 84, carril: 2.6 }),
   d('cafe-1', 9.8, 11.9, 'parado', Math.PI / 2, { objeto: 'taza', zona: 'cafeteria', tanda: 98, carril: 11.0 }),
   d('comedor-3', 6.45, 14.85, 'sentado', 0, { zona: 'comedor', tanda: 112, carril: 14.1 }),
   d('cafe-2', 11.2, 11.9, 'parado', -Math.PI / 2, { objeto: 'taza', zona: 'cafeteria', tanda: 126 }),
-  d('sillon-3', 4.45, 21.05, 'sentado', 0, { zona: 'ocio', tanda: 140, carril: 21.6 }),
+  d('sillon-3', 4.45, 2.05, 'sentado', 0, { zona: 'ocio', tanda: 140, carril: 2.6 }),
   d('barra-3', 5.2, 9.9, 'sentado', Math.PI, { altura: 0.22, zona: 'cafeteria', tanda: 154, carril: 11.0 }),
   d('comedor-4', 7.75, 14.85, 'sentado', 0, { zona: 'comedor', tanda: 168, carril: 14.1 }),
 ]
-export const PUFS = [{ x: 6.3, y: 24.0 }, { x: 5.0, y: 25.2 }, { x: 6.9, y: 25.4 }]
+// La cocina: mesada con anafe y pileta y la heladera, contra el costado del pasillo.
+export const COCINA = { x0: 11.8, x1: 12.8, y0: 14.6, y1: 18.6 }
+export const PUFS = [{ x: 6.3, y: 5 }, { x: 5.0, y: 6.2 }, { x: 6.9, y: 6.4 }]
 
 // Rutina de cada agente según su estado (ids en el orden del plantel): { [id]: rutina }.
 // - rutina: el lugar de descanso y un retraso (s); dos con el mismo lugar salen en medio ciclo distinto.
@@ -302,11 +316,14 @@ export function luzDelDia(ahoraMs) {
 }
 
 // ---------- Reuniones ----------
-// La sala de reuniones (arriba de la columna de salas comunes) tiene una mesa redonda grande. Del lado de la pantalla
+// La sala de reuniones (adelante a la izquierda, separada del ocio) tiene una mesa redonda grande. Del lado de la pantalla
 // (al este, donde está la cámara) no se sienta nadie: las sillas forman un arco del otro lado, de frente a Daniela, y
 // detrás, a media distancia entre silla y silla, una segunda fila de pie. Así nadie le tapa la cara a otro.
-export const MESA_REUNION = { x: 4.9, y: 4.0, radio: 1.75 }
-export const PUERTA_REUNION = { x: ZONAS.reuniones.x1, y: 6.5 }
+export const MESA_REUNION = { x: 4.9, y: 23.0, radio: 1.75 }
+export const PUERTA_REUNION = { x: ZONAS.reuniones.x1, y: 25.5 }
+// El lugar de Daniela en la sala: del lado de la pantalla, justo debajo de la cámara (por eso no sale en la imagen),
+// mirando a todos.
+export const DANIELA_SALA = { x: MESA_REUNION.x + MESA_REUNION.radio + 0.8, y: MESA_REUNION.y, mira: -Math.PI / 2 }
 const RADIO_SILLAS = 2.55
 const RADIO_PIE = 3.25
 const RADIO_PASO = 2.15 // por donde se camina adentro: entre la mesa y las sillas
@@ -368,6 +385,13 @@ export const DIRECCION = { x0: 28.5, x1: PISO.ancho, y0: 0, y1: EJECUTIVO.y1, pu
 export const DANIELA = { id: 'yo:daniela', nombre: 'Daniela', escritorio: { x: 36.5, y: 2.9 }, sentado: { x: 36.5, y: 2.0 }, mira: 0 }
 export const VISITA = { x: 36.5, y: 4.3, mira: Math.PI } // la silla frente a su escritorio
 // Roberta, la perra de Daniela: su camita al lado del escritorio. Cuando Daniela camina, la sigue.
+// Las mesas de reuniones chicas (redondas, 3 sillas) de Daniela y de María, y las plantas de la oficina de Daniela.
+export const MESA_CHICA_DANIELA = { x: 40.3, y: 3.0 }
+export const MESA_CHICA_MARIA = { dx: 3.7, dy: 4.6 } // relativa a la oficina de María (x0, y0)
+export const PLANTAS_DANIELA = [
+  { x: 29.0, y: 6.55, escala: 1.2 }, { x: 31.0, y: 6.4, escala: 1.3 }, { x: 33.6, y: 6.55, escala: 1.0 },
+  { x: 39.3, y: 6.5, escala: 1.1 }, { x: 41.6, y: 6.4, escala: 1.1 }, { x: 44.5, y: 1.0, escala: 1.2 },
+]
 export const ROBERTA = { nombre: 'Roberta', cama: { x: 34.3, y: 1.6 } }
 // Lo que hay en su oficina (lo dibuja oficina3d/mundo.js y lo esquiva su caminata): biblioteca en toda la pared del
 // fondo, tele en la pared izquierda con el sillón enfrente, baño privado en el rincón y balcón del lado abierto.
@@ -380,23 +404,29 @@ export const MUEBLES_DIRECCION = {
   balcon: { x0: 45, x1: 47.2, y0: 0.8, y1: 4.4, puerta: { y0: 1.6, y1: 3.2 } },
 }
 export const PASO_ESTE = { x0: ZONAS.espera.x0, x1: ZONAS.espera.x0 + 1.2 }
+// La espera es un rincón tipo living (no una fila de sillas): dos sillones enfrentados con una mesa ratona en el
+// medio, y algunos lugares de pie hacia el pasillo. Cada lugar tiene su carril (x) para llegar y salir sin atravesar
+// los sillones. Del lado de las oficinas queda un pasillo libre (PASO_ESTE).
+export const LIVING = {
+  sillonOeste: { x0: 40.85, x1: 41.55, y0: 9.0, y1: 12.2 },
+  sillonEste: { x0: 44.05, x1: 44.95, y0: 9.0, y1: 12.2 },
+  mesa: { x0: 42.5, x1: 43.1, y0: 9.6, y1: 11.6 },
+}
 export function asientosEspera() {
   const lista = []
-  // Del lado de las oficinas queda un pasillo libre (PASO_ESTE): por ahí se va del corredor de Dirección al centro.
-  const x0 = PASO_ESTE.x1 + 0.45
-  for (let k = 0; k < 5; k++) lista.push({ x: x0 + k * 0.88, y: 9.4, mira: Math.PI, pose: 'sentado' })
-  for (let k = 0; k < 4; k++) lista.push({ x: x0 + 0.44 + k * 0.88, y: 10.6, mira: Math.PI, pose: 'sentado' })
-  for (let k = 0; k < 5; k++) lista.push({ x: x0 + k * 0.88, y: 11.9, mira: Math.PI, pose: 'parado' })
+  for (const y of [9.4, 10.2, 11.0, 11.8]) lista.push({ x: 41.2, y, mira: Math.PI / 2, pose: 'sentado', carril: 41.95 })
+  for (const y of [9.4, 10.2, 11.0, 11.8]) lista.push({ x: 44.4, y, mira: -Math.PI / 2, pose: 'sentado', carril: 43.6 })
+  for (const x of [41.95, 42.8, 43.6]) lista.push({ x, y: 12.75, mira: Math.PI, pose: 'parado', carril: x })
   return lista
 }
-// Ir a esperar: desde donde esté (hasta el pasillo principal) por el pasillo hasta su lugar en la espera.
+// Ir a esperar: desde donde esté (hasta el pasillo principal) por su carril hasta su lugar en el living.
 export function caminoEspera(hastaPasillo, asiento) {
-  return ancho([...hastaPasillo, { x: asiento.x, y: PASILLO }, { x: asiento.x, y: asiento.y }])
+  return ancho([...hastaPasillo, { x: asiento.carril, y: PASILLO }, { x: asiento.carril, y: asiento.y }, { x: asiento.x, y: asiento.y }])
 }
-// Pasar a la oficina: de la espera al corredor, por la puerta, a la silla frente a Daniela.
+// Pasar a la oficina: del living por su carril al corredor, por la puerta, a la silla frente a Daniela.
 export function caminoTurno(asiento) {
   const P = DIRECCION.puerta
-  return ancho([{ x: asiento.x, y: asiento.y }, { x: asiento.x, y: CORREDOR_EJECUTIVO }, { x: P.x, y: CORREDOR_EJECUTIVO }, { ...P }, { x: VISITA.x, y: VISITA.y }])
+  return ancho([{ x: asiento.x, y: asiento.y }, { x: asiento.carril, y: asiento.y }, { x: asiento.carril, y: CORREDOR_EJECUTIVO }, { x: P.x, y: CORREDOR_EJECUTIVO }, { ...P }, { x: VISITA.x, y: VISITA.y }])
 }
 // Volver a su lugar después del turno: sale por la puerta, va por el corredor y el pasillo vertical al pasillo
 // principal y sigue su camino de siempre al revés.
@@ -411,11 +441,11 @@ export function caminoVueltaTurno(lugar) {
 // acento, cuadros que tienen que ver con lo que hacen y algún objeto. Lo dibuja oficina3d/mundo.js.
 // patron de la alfombra: rayas, cuadros, puntos, rombos o borde. cuadros: los dibuja oficina3d/cuadros.js.
 export const ESTILOS = {
-  monitoreo: { alfombra: { patron: 'cuadros', colores: ['#d4f1ef', '#9fd9d3'] }, pared: '#d8f0ee', cuadros: ['grafico', 'mapa'], objeto: 'tablero' },
-  agenda: { alfombra: { patron: 'rayas', colores: ['#dfeaff', '#f9d3e0'] }, pared: '#e6edff', cuadros: ['calendario', 'sobre'], objeto: 'corcho' },
-  prensa: { alfombra: { patron: 'rombos', colores: ['#f3dcc8', '#c97b7b'] }, pared: '#f6e4d6', cuadros: ['diario', 'mascaras', 'entrada'], objeto: 'diarios' },
-  empleo: { alfombra: { patron: 'borde', colores: ['#fbecc9', '#e0a948'] }, pared: '#fbf0d6', cuadros: ['maletin', 'busqueda'], objeto: 'maletin' },
-  maria: { alfombra: { patron: 'borde', colores: ['#f3e6c4', '#c9a24a'] }, pared: '#f1e6cf', cuadros: ['grafico'], objeto: null },
+  monitoreo: { alfombra: { patron: 'cuadros', colores: ['#e4e7e1', '#a9b5a6'] }, pared: '#e6e8e2', cuadros: ['grafico', 'mapa'], objeto: 'tablero' },
+  agenda: { alfombra: { patron: 'rayas', colores: ['#e6e4df', '#b9b3aa'] }, pared: '#ebe8e2', cuadros: ['calendario', 'sobre'], objeto: 'corcho' },
+  prensa: { alfombra: { patron: 'rombos', colores: ['#ece3d8', '#b89a7c'] }, pared: '#efe7dc', cuadros: ['diario', 'mascaras', 'entrada'], objeto: 'diarios' },
+  empleo: { alfombra: { patron: 'borde', colores: ['#efe8da', '#c9a24a'] }, pared: '#f1ebdf', cuadros: ['maletin', 'busqueda'], objeto: 'maletin' },
+  maria: { alfombra: { patron: 'borde', colores: ['#efe6d2', '#c9a24a'] }, pared: '#f0e9da', cuadros: ['grafico'], objeto: null },
 }
-const ESTILO_COMUN = { alfombra: { patron: 'borde', colores: ['#e8dffa', '#cfc2ef'] }, pared: '#efe8fb', cuadros: ['grafico'], objeto: null }
+const ESTILO_COMUN = { alfombra: { patron: 'borde', colores: ['#e6e2db', '#c8c1b6'] }, pared: '#f3f1ec', cuadros: ['grafico'], objeto: null }
 export function estiloDe(oficinaId) { return ESTILOS[oficinaId] ?? ESTILO_COMUN }

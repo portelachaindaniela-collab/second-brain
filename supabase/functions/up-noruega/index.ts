@@ -3,11 +3,12 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { HEADER_SECRETO } from "../_shared/trabajador.mjs";
 import {
   hoyAR, chequearBorradores, chequearCorridas, chequearDisenador, chequearPublicador, chequearConexiones,
-  chequearPreguntas, chequearCrons, estadoGeneral,
+  chequearPreguntas, chequearCrons, estadoGeneral, pedidoDisenadorTrabado,
 } from "./logic.mjs";
 
 // Noruega, el agente madre de UP. La dispara pg_cron cada 30 minutos (x-trabajador-secreto) o la dueña con
 // "Revisar ahora" (su sesión). Guarda cada revisión en up_chequeos; la pantalla Agentes muestra la última.
+// Si el Diseñador se trabó, le deriva a Sistemas un pedido para frenarlo (lo ejecuta oficina-sistemas al aprobarlo).
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": `authorization, x-client-info, apikey, content-type, ${HEADER_SECRETO}`, "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -22,7 +23,7 @@ async function revisar(admin: any, ownerId: string, crons: any[]) {
     admin.from("up_calendario").select("id,fecha,tema_dia,redes,formato_instagram,salteado").eq("owner_id", ownerId).eq("fecha", hoy),
     admin.from("up_piezas").select("calendario_id,red,texto,estado,error_publicacion").eq("owner_id", ownerId).eq("fecha", hoy),
     admin.from("up_corridas").select("fecha,estado,error,iniciado_at").eq("owner_id", ownerId).gte("iniciado_at", desde),
-    admin.from("up_piezas").select("texto,estado,assets_texto,updated_at").eq("owner_id", ownerId).eq("red", "instagram").eq("contenido->>formato", "carrusel").neq("estado", "publicado").not("texto", "is", null),
+    admin.from("up_piezas").select("id,fecha,texto,estado,assets_texto,updated_at").eq("owner_id", ownerId).eq("red", "instagram").eq("contenido->>formato", "carrusel").neq("estado", "publicado").not("texto", "is", null),
     admin.from("up_horarios").select("red,hora").eq("owner_id", ownerId),
     admin.from("up_conexiones").select("red,expira_at").eq("owner_id", ownerId),
     admin.from("up_piezas").select("fecha").eq("owner_id", ownerId).eq("estado", "falta_info").gte("fecha", hoy),
@@ -42,6 +43,15 @@ async function revisar(admin: any, ownerId: string, crons: any[]) {
   const estado = estadoGeneral(chequeos);
   await admin.from("up_chequeos").insert({ owner_id: ownerId, estado, chequeos });
   await admin.from("up_chequeos").delete().eq("owner_id", ownerId).lt("at", new Date(ahora - DIAS_HISTORIAL * 86_400_000).toISOString());
+  // Si el Diseñador se trabó, deriva el pedido a Sistemas (uno solo mientras siga pendiente).
+  const pedido = pedidoDisenadorTrabado({ carruseles: carruseles.data, ahora });
+  if (pedido) {
+    const { data: abierto } = await admin.from("oficina_solicitudes").select("id").eq("owner_id", ownerId).eq("estado", "pendiente").eq("accion->>tipo", "frenar_pieza").limit(1);
+    if (!abierto?.length) {
+      const { error: e } = await admin.from("oficina_solicitudes").insert({ owner_id: ownerId, ...pedido, origen: "agente" });
+      if (e) console.error("up-noruega: no se pudo derivar el pedido a Sistemas", e.message);
+    }
+  }
   return { estado, chequeos };
 }
 

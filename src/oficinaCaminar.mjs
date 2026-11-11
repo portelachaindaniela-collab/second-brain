@@ -3,7 +3,7 @@
 // línea recta donde puede. Las medidas de los muebles son las de oficina3d/mundo.js.
 import {
   PISO, ZONAS, PUFS, MESA_REUNION, PUERTA_REUNION, DIRECCION, DANIELA, VISITA, ROBERTA, MUEBLES_DIRECCION, OFICINAS, DIVISOR,
-  asientosReunion, asientosEspera, mesaUp, mesaPdg, mesaAdmin,
+  asientosReunion, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RACK, MACETONES,
 } from './oficinaPlano.mjs'
 
 export const CELDA = 0.25
@@ -11,7 +11,7 @@ const RADIO = 0.24 // lo que ocupa una persona: se agranda cada obstáculo esto
 
 // Rectángulos que no se pueden pisar: { x0, x1, y0, y1 }. lugares: los de todos los agentes (oficinas y tablones).
 // nUp, nPdg, nAdmin: cuántos hay en cada tablón (el largo de la mesa depende de eso).
-export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0) {
+export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
   const r = []
   const rect = (x0, x1, y0, y1) => r.push({ x0, x1, y0, y1 })
   const circulo = (x, y, radio) => rect(x - radio, x + radio, y - radio, y + radio)
@@ -30,6 +30,7 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0) {
       rect(o.x0 + 0.2, o.x0 + 2.6, o.y0, o.y0 + 0.5)
       rect(zona, o.x1, o.y0 + 2.15, o.y0 + 3.55)
       circulo(zona - 0.55, o.y0 + 3.75, 0.38)
+      circulo(o.x0 + MESA_CHICA_MARIA.dx, o.y0 + MESA_CHICA_MARIA.dy, 1.05)
     }
   }
   rect(OFICINAS.x0, OFICINAS.x1, OFICINAS.y0 - pared, OFICINAS.y0 + pared)
@@ -42,7 +43,11 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0) {
     circulo(l.sentado.x, l.sentado.y, 0.3)
   }
   // Tablones y la mampara (con su paso en el medio).
-  for (const { mesa } of [mesaUp(nUp), mesaPdg(nPdg), mesaAdmin(nAdmin)]) rect(mesa.x0, mesa.x1, mesa.y0, mesa.y1)
+  for (const { mesa } of [mesaUp(nUp), mesaPdg(nPdg), mesaAdmin(nAdmin), mesaSistemas(nSistemas)]) rect(mesa.x0, mesa.x1, mesa.y0, mesa.y1)
+  for (const c of RINCON_ENTRADA.sillones) circulo(c.x, c.y, 0.5)
+  circulo(RINCON_ENTRADA.mesa.x, RINCON_ENTRADA.mesa.y, RINCON_ENTRADA.mesa.radio)
+  rect(RACK.x0, RACK.x1, RACK.y0, RACK.y1)
+  for (const [x, y] of MACETONES) circulo(x, y, 0.4)
   rect(DIVISOR.x0, DIVISOR.hueco[0], DIVISOR.y - 0.15, DIVISOR.y + 0.15)
   rect(DIVISOR.hueco[1], DIVISOR.x1, DIVISOR.y - 0.15, DIVISOR.y + 0.15)
   // Sala de reuniones: vidrios (la puerta, del lado de la pantalla), mesa redonda y sillas.
@@ -62,10 +67,11 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0) {
     rect(x0, x1, 15.5, 16.5)
     for (const x of [x0 + 0.65, x0 + 1.95]) { circulo(x, 14.85, 0.3); circulo(x, 17.15, 0.3) }
   }
-  rect(0.9, 5.3, 19.8, 21.2)
-  rect(2.2, 4.0, 22.4, 23.2)
+  rect(COCINA.x0, COCINA.x1, COCINA.y0, COCINA.y1)
+  rect(0.9, 5.3, 0.8, 2.2)
+  rect(2.2, 4.0, 3.4, 4.2)
   for (const p of PUFS) circulo(p.x, p.y, 0.45)
-  rect(8.6, 12.4, 22.0, 23.6)
+  rect(8.6, 12.4, 3, 4.6)
   // La oficina de Daniela: pared con la de María, frente de vidrio (puerta al corredor), sus muebles y la camita.
   const Dd = DIRECCION, M = MUEBLES_DIRECCION
   rect(Dd.x0 - pared, Dd.x0 + pared, Dd.y0, Dd.y1)
@@ -78,7 +84,9 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0) {
   circulo(DANIELA.sentado.x, DANIELA.sentado.y, 0.35)
   circulo(VISITA.x, VISITA.y, 0.3)
   circulo(ROBERTA.cama.x, ROBERTA.cama.y, 0.35)
-  for (const a of asientosEspera()) if (a.pose === 'sentado') circulo(a.x, a.y, 0.26)
+  circulo(MESA_CHICA_DANIELA.x, MESA_CHICA_DANIELA.y, 1.05)
+  for (const p of PLANTAS_DANIELA) circulo(p.x, p.y, 0.3 * p.escala)
+  for (const m of Object.values(LIVING)) rect(m.x0, m.x1, m.y0, m.y1)
   return r
 }
 

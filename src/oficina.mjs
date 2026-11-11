@@ -13,6 +13,7 @@ export { partirId } from '../supabase/functions/_shared/oficina.mjs'
 export const EQUIPOS = {
   ...EQUIPOS_SERVIDOR,
   admin: { nombre: 'Administración', descripcion: 'Tareas programadas de apoyo: corren solas a su hora.' },
+  sistemas: { nombre: 'Sistemas', descripcion: 'Reciben los pedidos de María y Noruega y cuidan las conexiones y las tareas programadas. Nada se hace sin tu aprobación.' },
 }
 
 // Estados: trabajando (corrida en curso), libre (hizo lo suyo y espera su turno), error (la última falló o quedó
@@ -158,6 +159,72 @@ export function agentesAdmin(corridas = [], ahora = Date.now()) {
   })
 }
 
+// ---------- Sistemas ----------
+// Tres agentes que trabajan con datos reales y no cambian nada solos:
+// - Mesa de entrada: ordena los pedidos que derivan María y Noruega y recomienda qué hacer con cada uno.
+// - Guardián de claves: mira cuándo vence cada conexión (nunca ve ni entrega las claves).
+// - Operador: mira cada tarea programada (si corrió y cuántas veces falló en el día).
+const DIA = 86400_000
+const RIESGOSO = /token|clave|secret|vault|contraseñ|password|credencial|permiso|acceso|editar la action|workflow/i
+export function riesgoDe(solicitud) {
+  return RIESGOSO.test(`${solicitud.titulo} ${solicitud.detalle ?? ''}`) ? 'alto' : 'normal'
+}
+// La recomendación de la Mesa de entrada para un pedido pendiente.
+export function recomendacion(solicitud) {
+  if (solicitud.accion?.tipo === 'frenar_pieza') return 'Recomiendo aprobar: frena una publicación que podría salir mal; después se revisa con calma.'
+  return riesgoDe(solicitud) === 'alto'
+    ? 'Riesgo alto: pide accesos, permisos o claves. Recomiendo rechazar salvo que sepas para qué hace falta.'
+    : 'Riesgo normal: revisalo y aprobalo si coincide con lo que querés.'
+}
+
+export function agentesSistemas({ solicitudes = [], conexiones = [], operador = [] } = {}, ahora = Date.now()) {
+  const id = clave => idAgente('sistemas', clave)
+  const base = (clave, nombre, rol, descripcion, herramientas) => ({ id: id(clave), equipo: 'sistemas', clave, nombre, rol, descripcion, color: null, herramientas, sinCharla: true })
+
+  const pendientes = solicitudes.filter(x => x.estado === 'pendiente')
+  const riesgosos = pendientes.filter(x => riesgoDe(x) === 'alto').length
+  const mesa = {
+    ...base('mesa_entrada', 'Mesa de entrada', 'Ordena los pedidos para Sistemas', 'Recibe lo que derivan María y Noruega, marca los riesgosos (accesos, permisos, claves) y te los presenta con una recomendación. No aprueba nada: decidís vos.', ['Pedidos a Sistemas']),
+    estado: pendientes.length ? 'trabajando' : 'libre',
+    ultima: ms(solicitudes[0]?.creada),
+    ahora: pendientes.length ? `${plural(pendientes.length, 'pedido espera', 'pedidos esperan')} tu aprobación${riesgosos ? ` (${plural(riesgosos, 'riesgoso', 'riesgosos')})` : ''}` : 'No hay pedidos esperando.',
+    tareas: solicitudes.slice(0, 8).map(x => ({ at: ms(x.creada), texto: `${x.titulo} · ${x.estado}`, nivel: x.estado === 'pendiente' && riesgoDe(x) === 'alto' ? 'aviso' : 'ok' })),
+  }
+
+  const vencimientos = conexiones.map(c => {
+    const vence = ms(c.expira_at)
+    // Las que se renuevan solas (Google) no vencen mientras tengan con qué renovarse.
+    const dias = c.renovable || vence == null ? null : Math.floor((vence - ahora) / DIA)
+    return { ...c, dias }
+  })
+  const vencidas = vencimientos.filter(c => c.dias != null && c.dias < 0)
+  const porVencer = vencimientos.filter(c => c.dias != null && c.dias >= 0 && c.dias <= 7)
+  const guardian = {
+    ...base('guardian', 'Guardián de claves', 'Cuida que las conexiones no venzan', 'Revisa cuándo vence cada conexión (las de UP con LinkedIn, X e Instagram, y Google) y avisa antes de que se corte. Nunca ve ni entrega las claves. Las claves de la IA las prueba María en cada vuelta.', ['Vencimiento de las conexiones']),
+    estado: vencidas.length ? 'error' : conexiones.length ? 'libre' : 'nuevo',
+    ultima: ahora,
+    ahora: vencidas.length ? `Vencida: ${vencidas.map(c => c.origen).join(', ')}. Hay que volver a conectarla.`
+      : porVencer.length ? `Por vencer: ${porVencer.map(c => `${c.origen} (${c.dias === 0 ? 'hoy' : `en ${plural(c.dias, 'día', 'días')}`})`).join(', ')}.`
+        : conexiones.length ? `${plural(conexiones.length, 'conexión vigente', 'conexiones vigentes')}.` : 'No hay conexiones para cuidar.',
+    tareas: vencimientos.map(c => ({ at: null, texto: `${c.origen}${c.nombre ? ` (${c.nombre})` : ''}: ${c.dias == null ? 'se renueva sola' : c.dias < 0 ? 'vencida' : `vence en ${plural(c.dias, 'día', 'días')}`}`, nivel: c.dias != null && c.dias <= 7 ? (c.dias < 0 ? 'error' : 'aviso') : 'ok' })),
+    porVencer, vencidas,
+  }
+
+  const conProblemas = operador.filter(j => j.activo && (j.estado === 'failed' || j.fallas_24h >= 2))
+  const sinCorrer = operador.filter(j => j.activo && !j.ultima)
+  const corriendo = operador.filter(j => j.estado === 'running' || j.estado === 'starting').length
+  const op = {
+    ...base('operador', 'Operador', 'Vigila las tareas programadas', 'Mira cada tarea programada del servidor: si corrió y cuántas veces falló en las últimas 24 horas. Ojo: «corrió» quiere decir que se disparó; si el trabajador falló adentro, lo cuenta María.', ['Tareas programadas del servidor']),
+    estado: conProblemas.length ? 'error' : corriendo ? 'trabajando' : operador.length ? 'libre' : 'nuevo',
+    ultima: Math.max(0, ...operador.map(j => ms(j.ultima) ?? 0)) || null,
+    ahora: conProblemas.length ? `Con problemas: ${conProblemas.map(j => j.jobname).join(', ')}.`
+      : operador.length ? `${plural(operador.filter(j => j.activo).length, 'tarea activa', 'tareas activas')}, sin fallas en las últimas 24 horas${sinCorrer.length ? ` (${plural(sinCorrer.length, 'no corrió nunca', 'no corrieron nunca')})` : ''}.` : 'Todavía no leí las tareas.',
+    tareas: [...conProblemas, ...operador.filter(j => !conProblemas.includes(j))].slice(0, 8).map(j => ({ at: ms(j.ultima), texto: `${j.jobname}: ${j.corridas_24h} corridas y ${j.fallas_24h} fallas en 24 h${!j.activo ? ' · desactivada' : ''}`, nivel: conProblemas.includes(j) ? 'error' : 'ok' })),
+    conProblemas,
+  }
+  return [mesa, guardian, op]
+}
+
 // ---------- Lo que te toca ----------
 // alertas: las de tablero.mjs (trabajadores). piezas: up_piezas de hoy en adelante en falta_info, revision o pendiente.
 // chequeo: la última revisión de Noruega. trabajos / cuentas: de PDG. hoy: 'AAAA-MM-DD' en Buenos Aires.
@@ -190,9 +257,14 @@ export function armarOficina(d, ahora) {
     ...agentesUp(d.upCorridas, d.chequeo, ahora),
     ...agentesPdg(d.pdgAgentes, d.pdgTrabajos, ahora),
     ...agentesAdmin(d.admin ?? [], ahora),
+    ...agentesSistemas({ solicitudes: d.solicitudes ?? [], conexiones: d.conexiones ?? [], operador: d.operador ?? [] }, ahora),
   ]
   const alertas = calcularAlertas({ trabajadores: d.trabajadores, corridasPor: d.corridasPor, ahora, salud: d.salud })
   const pendientes = teToca({ alertas, piezas: d.piezas, chequeo: d.chequeo, trabajos: d.pdgTrabajos, cuentas: d.pdgCuentas, hoy: d.hoy })
+  const [, guardian, operador] = agentes.filter(a => a.equipo === 'sistemas')
+  for (const c of guardian.vencidas) pendientes.push({ nivel: 'error', texto: `Guardián de claves: venció la conexión ${c.origen}. Volvé a conectarla.`, donde: 'UP › Redes', agente: guardian.id })
+  for (const c of guardian.porVencer) pendientes.push({ nivel: 'aviso', texto: `Guardián de claves: la conexión ${c.origen} vence ${c.dias === 0 ? 'hoy' : `en ${plural(c.dias, 'día', 'días')}`}.`, donde: 'UP › Redes', agente: guardian.id })
+  if (operador.conProblemas.length) pendientes.push({ nivel: 'error', texto: `Operador: ${plural(operador.conProblemas.length, 'tarea programada con problemas', 'tareas programadas con problemas')} (${operador.conProblemas.map(j => j.jobname).join(', ')})`, donde: 'Oficina › Sistemas', agente: operador.id })
   const porAprobar = (d.solicitudes ?? []).filter(x => x.estado === 'pendiente').length
   if (porAprobar) pendientes.push({ nivel: 'aviso', texto: `Sistemas: ${plural(porAprobar, 'pedido espera', 'pedidos esperan')} tu aprobación`, donde: 'Oficina › Sistemas' })
   for (const a of agentes) if (a.equipo === 'admin' && a.estado === 'error') pendientes.push({ nivel: 'error', texto: `${a.nombre}: ${a.ahora}`, donde: 'Oficina › Administración', agente: a.id })

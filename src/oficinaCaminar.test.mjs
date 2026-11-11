@@ -56,7 +56,7 @@ test('no atraviesa la mampara: pasa por su paso o por el pasillo del costado', (
 })
 
 test('un doble click sobre un mueble lleva al lugar libre más cercano', () => {
-  const mesa = { x: 10.5, y: 22.8 } // la mesa de ping pong
+  const mesa = { x: 10.5, y: 3.8 } // la mesa de ping pong
   assert.equal(esLibre(g, mesa), false)
   const p = libreCercano(g, mesa)
   assert.ok(p && esLibre(g, p))
