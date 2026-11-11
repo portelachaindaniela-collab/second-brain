@@ -148,6 +148,12 @@ export function armarOficina(d, ahora) {
   ]
   const alertas = calcularAlertas({ trabajadores: d.trabajadores, corridasPor: d.corridasPor, ahora, salud: d.salud })
   const pendientes = teToca({ alertas, piezas: d.piezas, chequeo: d.chequeo, trabajos: d.pdgTrabajos, cuentas: d.pdgCuentas, hoy: d.hoy })
+  // Las alertas de los trabajadores empiezan con su nombre ("Ópera: …"): así se sabe de quién son.
+  for (const p of pendientes) {
+    if (p.agente) continue
+    const a = agentes.find(x => x.equipo === 'trabajadores' && (p.texto.startsWith(`${x.nombre}:`) || p.texto.startsWith(`${x.nombre} ·`)))
+    if (a) p.agente = a.id
+  }
   return { agentes, pendientes }
 }
 
@@ -160,4 +166,40 @@ export function contarEstados(agentes) {
 // Hoy en Buenos Aires, 'AAAA-MM-DD'.
 export function hoyAR(ahora = Date.now()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ahora))
+}
+
+// ---------- Reunión ----------
+// El informe que da cada agente en la reunión, armado con sus datos (sin IA): qué está haciendo, lo último que
+// hizo y qué necesita de vos. pendientes: lo de teToca(); los que tienen `agente` son de él.
+const minuscula = t => (t ? t[0].toLowerCase() + t.slice(1) : t)
+export function informeDe(a, pendientes = [], ahora = Date.now()) {
+  const partes = [`Hola, soy ${a.nombre.split(' (')[0]}.`]
+  if (a.estado === 'trabajando') partes.push(`Estoy trabajando en este momento: ${minuscula(a.ahora)}.`)
+  else if (a.estado === 'error') partes.push(`Tengo un problema: ${minuscula(a.ahora)}.`)
+  else if (a.estado === 'pausado') partes.push('Estoy pausado.')
+  else if (a.estado === 'nuevo') partes.push('Todavía no me tocó trabajar.')
+  else partes.push(`Estoy al día: ${minuscula(a.ahora)}.`)
+  const ultima = a.tareas?.[0]
+  if (ultima && a.estado !== 'nuevo') partes.push(`Lo último: ${minuscula(ultima.texto)}${ultima.at ? ` (${haceCuanto(new Date(ultima.at).toISOString(), ahora)})` : ''}.`)
+  const mios = pendientes.filter(p => p.agente === a.id)
+  partes.push(mios.length ? `Necesito de vos: ${mios.map(p => minuscula(p.texto)).join('; ')}.` : 'No necesito nada de vos por ahora.')
+  return partes.join(' ').replace(/\.\./g, '.')
+}
+
+// Cierre de la jefa: cómo está el equipo que vino a la reunión.
+export function resumenReunion(asistentes, pendientes = []) {
+  const c = contarEstados(asistentes)
+  const partes = [`Resumen: vinieron ${asistentes.length}.`]
+  partes.push(c.trabajando ? `${c.trabajando} ${c.trabajando === 1 ? 'está trabajando' : 'están trabajando'} ahora.` : 'Nadie está corriendo ahora.')
+  if (c.error) partes.push(`${c.error} ${c.error === 1 ? 'tiene un problema' : 'tienen problemas'}: ${asistentes.filter(a => a.estado === 'error').map(a => a.nombre.split(' (')[0]).join(', ')}.`)
+  else partes.push('Nadie tiene problemas.')
+  const ids = new Set(asistentes.map(a => a.id))
+  const tuyos = pendientes.filter(p => !p.agente || ids.has(p.agente)).length
+  partes.push(tuyos ? `Te ${tuyos === 1 ? 'toca 1 cosa' : `tocan ${tuyos} cosas`}: están en "Te toca".` : 'No te toca nada por ahora.')
+  return partes.join(' ')
+}
+
+// Orden de los turnos: en el orden del plantel, y la jefa (si vino) cierra.
+export function turnosReunion(asistentes, idJefa = 'trabajadores:maria') {
+  return [...asistentes.filter(a => a.id !== idJefa), ...asistentes.filter(a => a.id === idJefa)]
 }

@@ -21,7 +21,8 @@ const esfera = (r, material, seg = 20) => {
 }
 
 // ropa: color CSS (los trabajadores, su color de identidad). v: { pelo, colorPelo, piel } de variante().
-export function crearPersonaje({ ropa, v }) {
+// accesorio: el de ACCESORIOS en oficinaPlano.mjs (galera, corona, auriculares…), o null.
+export function crearPersonaje({ ropa, v, accesorio = null }) {
   const grupo = new THREE.Group()
   const cuerpo = new THREE.Group() // todo lo que se balancea al caminar
   grupo.add(cuerpo)
@@ -137,12 +138,165 @@ export function crearPersonaje({ ropa, v }) {
   paleta.visible = false
   brazoD.grupo.add(paleta)
 
+  if (accesorio) ponerAccesorio({ cabeza, cuerpo }, accesorio, v)
   return { grupo, cuerpo, piernaI, piernaD, brazoI: brazoI.grupo, brazoD: brazoD.grupo, cabeza, ojos, cejas, boca, taza, paleta, torso }
+}
+
+// ---------- Accesorios ----------
+// La cabeza tiene radio 0.26 con el centro en el origen del grupo `cabeza`; el pecho está en y ≈ 0.8 de `cuerpo`.
+const cil = (rArriba, rAbajo, alto, material, seg = 24) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rArriba, rAbajo, alto, seg), material); m.castShadow = true; return m }
+const aro = (r, tubo, material, arco = Math.PI * 2) => { const m = new THREE.Mesh(new THREE.TorusGeometry(r, tubo, 10, 32, arco), material); m.castShadow = true; return m }
+const en = (m, x, y, z, rx = 0, ry = 0, rz = 0) => { m.position.set(x, y, z); m.rotation.set(rx, ry, rz); return m }
+
+function ponerAccesorio({ cabeza, cuerpo }, tipo, v) {
+  const oro = mat('#e2b552', { metalness: 0.6, roughness: 0.3, emissive: '#5a4310', emissiveIntensity: 0.25 })
+  const negro = mat('#2a2236', { roughness: 0.5 })
+  const sombrero = (color, banda, rAla = 0.31, alto = 0.17) => {
+    const g = new THREE.Group()
+    g.add(en(cil(rAla, rAla, 0.02, mat(color)), 0, 0.19, 0))
+    g.add(en(cil(0.16, 0.19, alto, mat(color)), 0, 0.19 + alto / 2, 0))
+    g.add(en(cil(0.195, 0.195, 0.04, mat(banda)), 0, 0.22, 0))
+    return g
+  }
+  const anteojos = material => {
+    const g = new THREE.Group()
+    for (const x of [-0.09, 0.09]) g.add(en(aro(0.058, 0.011, material), x, 0.0, 0.258))
+    g.add(en(caja(0.06, 0.012, 0.012, 0.004, material), 0, 0.01, 0.262))
+    return g
+  }
+  switch (tipo) {
+    case 'corona': {
+      const g = new THREE.Group()
+      g.add(en(cil(0.17, 0.16, 0.09, oro, 28), 0, 0.25, 0))
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2
+        const punta = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.1, 10), oro)
+        g.add(en(punta, Math.sin(a) * 0.155, 0.34, Math.cos(a) * 0.155))
+        const gema = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), mat(['#e85d6a', '#6ea8ff', '#3fb878'][k % 3], { roughness: 0.2 }))
+        g.add(en(gema, Math.sin(a) * 0.172, 0.25, Math.cos(a) * 0.172))
+      }
+      g.rotation.z = 0.08
+      cabeza.add(g)
+      break
+    }
+    case 'galera': { const g = sombrero('#2a2236', '#c8323f', 0.29, 0.3); cabeza.add(g); break }
+    case 'sombrero': { const g = sombrero('#7a5a3a', '#3b2a22'); g.rotation.x = -0.08; cabeza.add(g); break }
+    case 'safari': {
+      const g = new THREE.Group()
+      const copa = new THREE.Mesh(new THREE.SphereGeometry(0.25, 24, 14, 0, Math.PI * 2, 0, Math.PI / 2), mat('#e6cf9f'))
+      copa.scale.y = 0.85; copa.castShadow = true
+      g.add(en(copa, 0, 0.12, 0))
+      g.add(en(cil(0.34, 0.34, 0.02, mat('#d9bf8a')), 0, 0.12, 0))
+      g.add(en(cil(0.255, 0.255, 0.04, mat('#7a5a3a')), 0, 0.15, 0))
+      cabeza.add(g)
+      break
+    }
+    case 'gorra-canillita': {
+      const g = new THREE.Group()
+      const copa = new THREE.Mesh(new THREE.SphereGeometry(0.29, 24, 14), mat('#8a7a68'))
+      copa.scale.set(1, 0.42, 1.05); copa.castShadow = true
+      g.add(en(copa, 0, 0.17, -0.01))
+      const visera = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.02, 20, 1, false, -Math.PI / 2, Math.PI), mat('#6f6252'))
+      g.add(en(visera, 0, 0.13, 0.17, 0.15))
+      g.add(en(new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), mat('#6f6252')), 0, 0.29, 0))
+      cabeza.add(g)
+      break
+    }
+    case 'boina': {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.27, 24, 14), mat('#a3303f'))
+      b.scale.set(1, 0.32, 1); b.castShadow = true
+      cabeza.add(en(b, 0.04, 0.2, -0.02, 0, 0, 0.25))
+      cabeza.add(en(cil(0.012, 0.012, 0.05, mat('#a3303f')), 0.05, 0.3, -0.02))
+      break
+    }
+    case 'gorro-lana': {
+      const g = new THREE.Group()
+      const copa = new THREE.Mesh(new THREE.SphereGeometry(0.28, 24, 14, 0, Math.PI * 2, 0, Math.PI / 2), mat('#d64550', { roughness: 0.95 }))
+      copa.castShadow = true
+      g.add(en(copa, 0, 0.05, 0))
+      g.add(en(cil(0.285, 0.285, 0.08, mat('#fffaf3', { roughness: 0.95 })), 0, 0.06, 0))
+      g.add(en(new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 10), mat('#fffaf3', { roughness: 1 })), 0, 0.35, 0))
+      g.rotation.x = -0.12
+      cabeza.add(g)
+      break
+    }
+    case 'gorro-fiesta': {
+      const g = new THREE.Group()
+      const cono = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.32, 20), mat('#e86df2'))
+      cono.castShadow = true
+      g.add(en(cono, 0, 0.36, 0))
+      g.add(en(aro(0.1, 0.018, mat('#f6dd8b')), 0, 0.3, 0, Math.PI / 2))
+      g.add(en(new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), mat('#f6dd8b')), 0, 0.53, 0))
+      g.rotation.z = -0.2
+      cabeza.add(g)
+      break
+    }
+    case 'auriculares':
+    case 'headset': {
+      const color = mat(tipo === 'headset' ? '#3b3450' : '#6ea8ff', { roughness: 0.4 })
+      cabeza.add(en(aro(0.285, 0.025, color, Math.PI), 0, 0.02, 0))
+      for (const lado of [-1, 1]) cabeza.add(en(cil(0.075, 0.075, 0.06, color), 0.27 * lado, 0.0, 0, 0, 0, Math.PI / 2))
+      if (tipo === 'headset') {
+        cabeza.add(en(caja(0.015, 0.015, 0.2, 0.006, color), -0.24, -0.08, 0.12, 0.35, 0.6, 0))
+        cabeza.add(en(new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), negro), -0.17, -0.12, 0.22))
+      }
+      break
+    }
+    case 'vincha': {
+      cabeza.add(en(aro(0.275, 0.022, mat('#ff7eb9'), Math.PI), 0, 0.03, -0.04, -0.25))
+      for (const lado of [-1, 1]) cabeza.add(en(new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), mat('#ff7eb9')), 0.11 + lado * 0.05, 0.25, 0.08))
+      break
+    }
+    case 'visera': {
+      const verde = mat('#3fb878', { transparent: true, opacity: 0.85 })
+      cabeza.add(en(aro(0.265, 0.018, verde), 0, 0.1, 0, Math.PI / 2))
+      const ala = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.015, 20, 1, false, -Math.PI / 2, Math.PI), verde)
+      cabeza.add(en(ala, 0, 0.11, 0.16, 0.25))
+      break
+    }
+    case 'lentes': cabeza.add(anteojos(mat('#5a3a8a', { roughness: 0.4 }))); break
+    case 'lentes-sol': {
+      const g = new THREE.Group()
+      for (const x of [-0.09, 0.09]) g.add(en(caja(0.11, 0.075, 0.02, 0.02, mat('#1d1a26', { roughness: 0.15, metalness: 0.3 })), x, 0.0, 0.255))
+      g.add(en(caja(0.07, 0.014, 0.014, 0.004, negro), 0, 0.02, 0.262))
+      cabeza.add(g)
+      break
+    }
+    case 'corbata': {
+      const color = mat(v.colorPelo % 2 ? '#c8323f' : '#3b4a8a')
+      cuerpo.add(en(caja(0.07, 0.06, 0.03, 0.01, color), 0, 0.8, 0.145))
+      const tira = caja(0.075, 0.26, 0.02, 0.01, color)
+      cuerpo.add(en(tira, 0, 0.65, 0.148))
+      break
+    }
+    case 'monio': {
+      const color = mat('#e85d6a')
+      for (const lado of [-1, 1]) {
+        const ala = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.09, 4), color)
+        cuerpo.add(en(ala, lado * 0.05, 0.8, 0.15, 0, 0, (lado * Math.PI) / 2))
+      }
+      cuerpo.add(en(new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), color), 0, 0.8, 0.16))
+      break
+    }
+    case 'estrella': {
+      // Broche de estrella dorada en el pecho: el de Daniela, la jefa de todos.
+      const forma = new THREE.Shape()
+      for (let k = 0; k < 10; k++) {
+        const r = k % 2 ? 0.035 : 0.08, ang = (k / 10) * Math.PI * 2 + Math.PI / 2
+        const x = Math.cos(ang) * r, y = Math.sin(ang) * r
+        if (k) forma.lineTo(x, y); else forma.moveTo(x, y)
+      }
+      const estrella = new THREE.Mesh(new THREE.ExtrudeGeometry(forma, { depth: 0.02, bevelEnabled: false }), oro)
+      cuerpo.add(en(estrella, -0.11, 0.74, 0.14))
+      break
+    }
+    default: break
+  }
 }
 
 // Pose de cada cuadro. t: segundos. estado: el de la Oficina. pose: 'sentado' | 'caminando' | 'parado' | 'dormido'.
 // fase: un número fijo por agente para que no se muevan todos sincronizados.
-export function posar(p, { pose, estado, objeto = null, t, fase = 0 }) {
+export function posar(p, { pose, estado, objeto = null, t, fase = 0, habla = false }) {
   const tt = t + fase
   p.taza.visible = objeto === 'taza'
   p.paleta.visible = objeto === 'paleta'
@@ -202,6 +356,14 @@ export function posar(p, { pose, estado, objeto = null, t, fase = 0 }) {
     p.cuerpo.rotation.y = Math.sin(tt * 4.5) * 0.15
   }
   if (pose === 'parado' && !objeto) p.cabeza.rotation.y = Math.sin(tt * 0.7) * 0.3
+  // Hablando en la reunión: la boca se abre y cierra y acompaña con una mano.
+  if (habla) {
+    p.boca.rotation.z = Math.PI
+    p.boca.position.y = -0.085
+    p.boca.scale.set(1, 0.6 + Math.abs(Math.sin(tt * 11)) * 1.1, 1)
+    p.brazoD.rotation.set(-1.0 + Math.sin(tt * 2.2) * 0.35, 0, -0.25 + Math.sin(tt * 1.7) * 0.2)
+    p.cabeza.rotation.set(Math.sin(tt * 1.3) * 0.06, Math.sin(tt * 0.9) * 0.12, Math.sin(tt * 1.1) * 0.05)
+  }
   if (pose === 'dormido') {
     p.cuerpo.rotation.x = -1.05
     p.cuerpo.position.set(0, 0.12, -0.25)

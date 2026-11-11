@@ -55,3 +55,30 @@ test('contexto de PDG y prompt', () => {
   const vacio = sistema(contexto('up', 'publicador', {}), 'hoy')
   assert.match(vacio, /todavía no hay nada registrado/)
 })
+
+test('reunión: valida asistentes y mensajes', async () => {
+  const { validarReunion } = await import('./logic.mjs')
+  const ok = validarReunion({ reunion: true, asistentes: ['up:redactor', 'trabajadores:maria'], mensajes: [{ role: 'user', content: 'Hola a todos' }] })
+  assert.equal(ok.ok, true)
+  assert.equal(ok.asistentes.length, 2)
+  assert.equal(validarReunion({ asistentes: ['up:inventado'], mensajes: [{ role: 'user', content: 'x' }] }).ok, false)
+  assert.equal(validarReunion({ asistentes: [], mensajes: [{ role: 'user', content: 'x' }] }).ok, false)
+  assert.equal(validarReunion({ asistentes: Array.from({ length: 30 }, (_, i) => `pdg:a${'b'.repeat(i)}`), mensajes: [{ role: 'user', content: 'x' }] }).ok, false)
+  assert.equal(validarReunion({ asistentes: ['up:redactor'], mensajes: [{ role: 'assistant', content: 'x' }] }).ok, false)
+})
+
+test('reunión: el prompt lleva la ficha de cada uno y pide JSON', async () => {
+  const { sistemaReunion } = await import('./logic.mjs')
+  const c = contexto('up', 'redactor', { pasos: [{ at: '2026-11-11T09:02:00Z', accion: 'escribió LinkedIn' }] })
+  const s = sistemaReunion([{ id: 'up:redactor', c }], 'hoy')
+  assert.match(s, /### Redactor \(id: up:redactor\)/)
+  assert.match(s, /escribió LinkedIn/)
+  assert.match(s, /"respuestas"/)
+})
+
+test('reunión: lee las respuestas aunque vengan con texto alrededor y descarta ids ajenos', async () => {
+  const { leerRespuestas } = await import('./logic.mjs')
+  const r = leerRespuestas('Claro:\n{"respuestas":[{"agente":"up:redactor","texto":" Ya escribí LinkedIn. "},{"agente":"pdg:otro","texto":"hola"},{"agente":"up:revisor","texto":""}]}', ['up:redactor', 'up:revisor'])
+  assert.deepEqual(r, [{ agente: 'up:redactor', texto: 'Ya escribí LinkedIn.' }])
+  assert.deepEqual(leerRespuestas('no es json', ['up:redactor']), [])
+})

@@ -1,10 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 
-// Oficina: hablar con un agente. La app manda { agente: 'up:redactor', mensajes }. Lee los datos de ese agente con la
-// sesión de la dueña (RLS, nunca con permisos de servicio) y responde con la IA. Solo lectura: no cambia nada.
+// Oficina: hablar con un agente. La app manda { agente: 'up:redactor', mensajes } (charla con uno) o
+// { reunion: true, asistentes: [...], mensajes } (reunión con todos los que vinieron: responde con
+// { respuestas: [{ agente, texto }] }). Lee los datos con la sesión de la dueña (RLS, nunca con permisos de servicio)
+// y responde con la IA. Solo lectura: no cambia nada.
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -50,6 +52,29 @@ async function leerDatos(db: any, equipo: string, clave: string) {
   return { agente: a.data, trabajos: t.data || [] };
 }
 
+// Reunión: una sola llamada a la IA con la ficha de cada asistente; responden los que tengan algo que decir.
+async function reunion(db: any, body: any) {
+  const v: any = validarReunion(body);
+  if (!v.ok) return json({ error: v.error }, 400);
+  const provs = proveedores(env);
+  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
+  let participantes: any[];
+  try {
+    participantes = (await Promise.all(v.asistentes.map(async (a: any) => ({ id: a.id, c: contexto(a.equipo, a.clave, await leerDatos(db, a.equipo, a.clave)) }))))
+      .filter((p: any) => p.c);
+  } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
+  if (!participantes.length) return json({ error: "No encontré a los asistentes." }, 404);
+  try {
+    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: mensajesReunion(participantes, v.mensajes, hoyLargo()), temperature: 0.5, max_tokens: 1400 }, { timeoutMs: 90000 }));
+    const respuestas = leerRespuestas((resultado as any)?.content, participantes.map((p: any) => p.id));
+    if (!respuestas.length) return json({ error: "Nadie respondió. Probá preguntar de nuevo, o nombrá a alguien." }, 502);
+    return json({ respuestas, ia });
+  } catch (e) {
+    if (e instanceof ErrorIA) return json({ error: e.message }, 502);
+    return json({ error: (e as Error).message }, 500);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Método no permitido." }, 405);
@@ -61,6 +86,7 @@ Deno.serve(async (req: Request) => {
 
   let body: any = {};
   try { body = await req.json(); } catch { return json({ error: "Cuerpo inválido." }, 400); }
+  if (body?.reunion) return await reunion(db, body);
   const v: any = validar(body);
   if (!v.ok) return json({ error: v.error }, 400);
   const provs = proveedores(env);

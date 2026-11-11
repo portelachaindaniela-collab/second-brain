@@ -102,3 +102,31 @@ test('hoy en Buenos Aires y los ids de agente', () => {
   assert.equal(partirId('otro:x'), null)
   assert.equal(partirId('up:../x'), null)
 })
+
+test('reunión: informe de cada agente con sus datos y lo que necesita', async () => {
+  const { informeDe, resumenReunion, turnosReunion } = await import('./oficina.mjs')
+  const ahora = Date.parse('2026-11-11T15:00:00Z')
+  const opera = { id: 'trabajadores:opera', nombre: 'Ópera', estado: 'error', ahora: 'la última corrida falló hace 29 min', tareas: [{ at: ahora - 30 * 60000, texto: 'Falló: GitHub Actions respondió 404' }] }
+  const pend = [{ texto: 'Ópera: la última corrida falló', agente: 'trabajadores:opera' }, { texto: 'PDG: 1 borrador para revisar' }]
+  const t = informeDe(opera, pend, ahora)
+  assert.match(t, /^Hola, soy Ópera\. Tengo un problema: la última corrida falló hace 29 min\./)
+  assert.match(t, /Lo último: falló: GitHub Actions respondió 404 \(hace 30 min\)\./)
+  assert.match(t, /Necesito de vos: ópera: la última corrida falló\.$/)
+  const google = { id: 'trabajadores:google_sync', nombre: 'Google (calendario y mail)', estado: 'libre', ahora: 'corrió hace 3 min · vuelve en 12 min', tareas: [] }
+  assert.equal(informeDe(google, pend, ahora), 'Hola, soy Google. Estoy al día: corrió hace 3 min · vuelve en 12 min. No necesito nada de vos por ahora.')
+  const maria = { id: 'trabajadores:maria', nombre: 'María', estado: 'trabajando' }
+  assert.deepEqual(turnosReunion([maria, opera, google]).map(a => a.id), ['trabajadores:opera', 'trabajadores:google_sync', 'trabajadores:maria'])
+  const r = resumenReunion([maria, opera, google], pend)
+  assert.match(r, /vinieron 3\. 1 está trabajando ahora\. 1 tiene un problema: Ópera\. Te tocan 2 cosas/)
+})
+
+test('armarOficina: las alertas de un trabajador quedan asociadas a él', async () => {
+  const { armarOficina } = await import('./oficina.mjs')
+  const ahora = Date.parse('2026-11-11T15:00:00Z')
+  const t = { clave: 'opera', nombre: 'Ópera', tipo: 'scraper', activo: true, color: 'bordo', frecuencia: '0 * * * *', minutos_trabado: 10, created_at: '2026-01-01T00:00:00Z' }
+  const d = { trabajadores: [t], corridasPor: { opera: [{ estado: 'error', error: 'HTTP 404', iniciado_at: new Date(ahora - 600000).toISOString(), finalizado_at: new Date(ahora - 590000).toISOString() }] },
+    salud: null, upCorridas: [], chequeo: null, piezas: [], pdgAgentes: [], pdgTrabajos: [], pdgCuentas: [], hoy: '2026-11-11' }
+  const { pendientes } = armarOficina(d, ahora)
+  const suya = pendientes.find(p => p.texto.startsWith('Ópera:'))
+  assert.equal(suya?.agente, 'trabajadores:opera')
+})
