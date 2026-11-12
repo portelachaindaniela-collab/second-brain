@@ -46,7 +46,7 @@ async function cargarOficina() {
     if (error) { errores.push(`${nombre}: ${error.message}`); return vacio }
     return data ?? vacio
   }
-  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, conexiones, operador, tareas] = await Promise.all([
+  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, tareas, conexiones, operador, feminaCorridas, feminaHallazgos] = await Promise.all([
     leer('trabajadores', supabase.from('trabajadores').select('*').order('id'), []),
     leer('salud del sistema', supabase.rpc('salud_sistema'), null),
     leer('corridas de UP', supabase.from('up_corridas').select('estado,error,pasos,iniciado_at').order('iniciado_at', { ascending: false }).limit(15), []),
@@ -61,6 +61,8 @@ async function cargarOficina() {
     leer('tareas', supabase.from('oficina_tareas').select('id,acta_id,tarea,area,responsable,supervisor,vence,estado,presentada').order('vence', { ascending: true, nullsFirst: false }).limit(150), []),
     leer('conexiones', supabase.rpc('oficina_conexiones'), []),
     leer('tareas programadas', supabase.rpc('oficina_operador'), []),
+    leer('vueltas de Femina', supabase.from('pdg_femina_corridas').select('estado,iniciada_at,resumen,error').order('iniciada_at', { ascending: false }).limit(8), []),
+    leer('lo que encontró Femina', supabase.from('pdg_hallazgos').select('tipo,titulo,estado,created_at').eq('estado', 'nuevo').order('created_at', { ascending: false }).limit(60), []),
   ])
   const corridasPor = {}
   await Promise.all(trabajadores.map(async t => {
@@ -70,6 +72,7 @@ async function cargarOficina() {
     trabajadores, corridasPor, salud, upCorridas, chequeo, hoy, errores,
     piezas: piezas.map(p => ({ fecha: p.fecha, estado: p.estado, tiene_texto: Boolean(p.texto) })),
     pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin, solicitudes, actas, conexiones, operador, tareas,
+    femina: { corridas: feminaCorridas, hallazgos: feminaHallazgos },
   }
 }
 

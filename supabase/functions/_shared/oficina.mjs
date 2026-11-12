@@ -52,6 +52,7 @@ export const ORDEN_UP = ['planificador', 'investigador', 'redactor', 'revisor', 
 // (lo que lee supabase/functions/pdg-agente).
 const HERRAMIENTAS_PDG = ['Manual comercial de PDG', 'Ficha de la cuenta', 'Trabajos aprobados de la cuenta', 'IA']
 export function herramientasPdg(clave) {
+  if (clave === 'femina') return ['Webs de tus cuentas (las mira todos los días)', 'Búsqueda web con IA', 'Su criterio en el Manual de PDG', 'IA']
   return clave === 'prospector' || clave === 'demo' ? [...HERRAMIENTAS_PDG, 'Lee la web de la cuenta'] : HERRAMIENTAS_PDG
 }
 
@@ -59,7 +60,7 @@ export function herramientasPdg(clave) {
 // reuniones y el dibujo de cada personaje.
 export const MUJERES = new Set([
   'trabajadores:maria', 'trabajadores:tareas_estancadas', 'trabajadores:google_sync', 'trabajadores:agenda_valentina', 'trabajadores:opera',
-  'up:noruega', 'pdg:marketing', 'admin:agenda_dulce', 'admin:historial_up', 'admin:limpieza', 'sistemas:mesa_entrada',
+  'up:noruega', 'pdg:marketing', 'pdg:femina', 'admin:agenda_dulce', 'admin:historial_up', 'admin:limpieza', 'sistemas:mesa_entrada',
 ])
 export function generoDe(id) { return MUJERES.has(id) ? 'f' : 'm' }
 

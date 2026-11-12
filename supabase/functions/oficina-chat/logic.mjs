@@ -65,10 +65,19 @@ function fichaDe(equipo, clave, datos) {
     return {
       nombre: a.nombre, rol: `agente comercial de ${EQUIPOS.pdg.nombre}`, descripcion: `${a.rol || ''}${a.instrucciones ? `\nTus instrucciones de trabajo (resumen): ${recortar(a.instrucciones, 1500)}` : ''}`,
       herramientas: herramientasPdg(clave),
-      registro: (datos.trabajos || []).map(t => `- ${hora(t.created_at)} · ${t.pdg_cuentas?.nombre ? `cuenta ${t.pdg_cuentas.nombre}` : 'sin cuenta'} · ${t.estado}${t.pedido ? ` · pedido: ${recortar(t.pedido, 200)}` : ''}\n  empieza: ${recortar(t.texto, 400)}`),
+      registro: clave === 'femina' ? registroFemina(datos) : (datos.trabajos || []).map(t => `- ${hora(t.created_at)} · ${t.pdg_cuentas?.nombre ? `cuenta ${t.pdg_cuentas.nombre}` : 'sin cuenta'} · ${t.estado}${t.pedido ? ` · pedido: ${recortar(t.pedido, 200)}` : ''}\n  empieza: ${recortar(t.texto, 400)}`),
     }
   }
   return null
+}
+
+// Femina sale sola a buscar: su registro son sus vueltas y lo que encontró (y si Daniela lo sumó o lo descartó).
+const ESTADO_HALLAZGO = { nuevo: 'sin revisar', agregado: 'Daniela lo sumó a cuentas', descartado: 'Daniela lo descartó' }
+function registroFemina({ corridas = [], hallazgos = [] }) {
+  return [
+    ...corridas.map(c => `- vuelta ${hora(c.iniciada_at)} · ${c.estado}${c.error ? ` · error: ${recortar(c.error, 200)}` : ''}${c.resumen ? ` · ${recortar(JSON.stringify(c.resumen), 300)}` : ''}`),
+    ...hallazgos.map(h => `- ${hora(h.created_at)} · ${h.tipo === 'prospecto' ? 'prospecto' : h.tipo === 'noticia' ? 'noticia' : 'cambio en una web'}${h.pdg_cuentas?.nombre ? ` de ${h.pdg_cuentas.nombre}` : ''} (${ESTADO_HALLAZGO[h.estado] ?? h.estado}): ${recortar(h.titulo, 150)}${h.detalle ? ` — ${recortar(h.detalle, 200)}` : ''}`),
+  ]
 }
 
 // Sistemas: solo María (la jefa de los trabajadores) y Noruega (la agente madre de UP) pueden derivarle pedidos, y

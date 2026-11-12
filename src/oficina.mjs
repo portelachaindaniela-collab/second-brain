@@ -107,8 +107,10 @@ export function agentesUp(corridas = [], chequeo = null, ahora = Date.now()) {
 // ---------- PDG ----------
 // trabajos: los últimos de pdg_trabajos (el más nuevo primero), con la cuenta si la tiene.
 const ESTADO_TRABAJO = { borrador: 'borrador sin revisar', aprobado: 'aprobado', descartado: 'descartado' }
-export function agentesPdg(agentes = [], trabajos = [], ahora = Date.now()) {
+// femina: { corridas, hallazgos } (pdg_femina_corridas y pdg_hallazgos nuevos): ella no escribe trabajos, sale a buscar sola.
+export function agentesPdg(agentes = [], trabajos = [], ahora = Date.now(), femina = {}) {
   return [...agentes].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map(a => {
+    if (a.clave === 'femina') return agenteFemina(a, femina, ahora)
     const suyos = trabajos.filter(t => t.agente === a.clave)
     const ultimo = suyos[0]
     const sobre = t => t.cuenta?.nombre ? `para ${t.cuenta.nombre}` : t.pedido ? `«${recortar(t.pedido, 60)}»` : 'sin cuenta'
@@ -120,6 +122,24 @@ export function agentesPdg(agentes = [], trabajos = [], ahora = Date.now()) {
       herramientas: herramientasPdg(a.clave),
     }
   })
+}
+
+const TIPO_HALLAZGO = { prospecto: 'prospecto', cambio_web: 'cambio en una web', noticia: 'noticia' }
+function agenteFemina(a, { corridas = [], hallazgos = [] }, ahora) {
+  const ultima = corridas[0]
+  const r = ultima?.resumen || {}
+  const estado = !ultima ? 'nuevo' : ultima.estado === 'corriendo' ? 'trabajando' : ultima.estado === 'error' ? 'error' : 'libre'
+  const ahoraTexto = !ultima ? 'todavía no salió a buscar'
+    : ultima.estado === 'corriendo' ? 'está buscando prospectos y novedades'
+      : ultima.estado === 'error' ? `la última vuelta falló: ${recortar(ultima.error, 80)}`
+        : `buscó ${haceCuanto(ultima.iniciada_at, ahora)}: miró ${r.webs?.miradas ?? 0} webs${r.prospectos != null ? `, ${r.prospectos} prospectos` : ''}, ${r.nuevos ?? 0} novedades`
+  return {
+    id: idAgente('pdg', a.clave), equipo: 'pdg', clave: a.clave, nombre: a.nombre, rol: recortar(a.rol?.split('.')[0], 70),
+    descripcion: a.rol || '', color: null, estado, ultima: ms(ultima?.iniciada_at), ahora: ahoraTexto,
+    tareas: hallazgos.slice(0, 8).map(h => ({ at: ms(h.created_at), texto: `${TIPO_HALLAZGO[h.tipo] ?? h.tipo}: ${recortar(h.titulo, 70)}`, nivel: 'aviso' })),
+    herramientas: herramientasPdg(a.clave),
+    prospectos: hallazgos.filter(h => h.tipo === 'prospecto').length,
+  }
 }
 
 // ---------- Administración ----------
@@ -255,12 +275,15 @@ export function armarOficina(d, ahora) {
   const agentes = [
     ...d.trabajadores.map(t => agenteTrabajador(t, d.corridasPor[t.clave] || [], ahora)),
     ...agentesUp(d.upCorridas, d.chequeo, ahora),
-    ...agentesPdg(d.pdgAgentes, d.pdgTrabajos, ahora),
+    ...agentesPdg(d.pdgAgentes, d.pdgTrabajos, ahora, d.femina),
     ...agentesAdmin(d.admin ?? [], ahora),
     ...agentesSistemas({ solicitudes: d.solicitudes ?? [], conexiones: d.conexiones ?? [], operador: d.operador ?? [] }, ahora),
   ]
   const alertas = calcularAlertas({ trabajadores: d.trabajadores, corridasPor: d.corridasPor, ahora, salud: d.salud })
   const pendientes = teToca({ alertas, piezas: d.piezas, chequeo: d.chequeo, trabajos: d.pdgTrabajos, cuentas: d.pdgCuentas, hoy: d.hoy })
+  const femina = agentes.find(a => a.id === 'pdg:femina')
+  if (femina?.estado === 'error') pendientes.push({ nivel: 'error', texto: `Femina: ${femina.ahora}`, donde: 'PDG › Tablero', agente: femina.id })
+  if (femina?.prospectos) pendientes.push({ nivel: 'aviso', texto: `Femina encontró ${plural(femina.prospectos, 'prospecto', 'prospectos')} para revisar`, donde: 'PDG › Tablero', agente: femina.id })
   const [, guardian, operador] = agentes.filter(a => a.equipo === 'sistemas')
   for (const c of guardian.vencidas) pendientes.push({ nivel: 'error', texto: `Guardián de claves: venció la conexión ${c.origen}. Volvé a conectarla.`, donde: 'UP › Redes', agente: guardian.id })
   for (const c of guardian.porVencer) pendientes.push({ nivel: 'aviso', texto: `Guardián de claves: la conexión ${c.origen} vence ${c.dias === 0 ? 'hoy' : `en ${plural(c.dias, 'día', 'días')}`}.`, donde: 'UP › Redes', agente: guardian.id })

@@ -74,6 +74,15 @@ async function leerDatosBase(db: any, equipo: string, clave: string) {
     }
     return { pasos, pendientes };
   }
+  if (clave === "femina") {
+    const [a, c, h] = await Promise.all([
+      db.from("pdg_agentes").select("nombre,rol,instrucciones").eq("clave", clave).maybeSingle(),
+      db.from("pdg_femina_corridas").select("estado,iniciada_at,resumen,error").order("iniciada_at", { ascending: false }).limit(4),
+      db.from("pdg_hallazgos").select("tipo,titulo,detalle,estado,created_at,pdg_cuentas(nombre)").order("created_at", { ascending: false }).limit(10),
+    ]);
+    if (a.error || c.error || h.error) throw new Error((a.error || c.error || h.error).message);
+    return { agente: a.data, corridas: c.data || [], hallazgos: h.data || [] };
+  }
   const [a, t] = await Promise.all([
     db.from("pdg_agentes").select("nombre,rol,instrucciones").eq("clave", clave).maybeSingle(),
     db.from("pdg_trabajos").select("estado,pedido,texto,created_at,pdg_cuentas(nombre)").eq("agente", clave).order("created_at", { ascending: false }).limit(8),
