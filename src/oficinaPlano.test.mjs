@@ -220,6 +220,6 @@ test('reunión en la oficina de Daniela: hasta 5 en su mesa, entran por su puert
     assert.ok(c.some(p => p.x === DIRECCION.puerta.x && p.y === DIRECCION.puerta.y))
   }
   // Las mujeres con pelo largo o rodete; los varones, corto o con rulos.
-  for (const id of ['trabajadores:maria', 'up:noruega', 'sistemas:mesa_entrada']) assert.ok([1, 2].includes(variante(id).pelo), id)
-  for (const id of ['up:redactor', 'trabajadores:opera', 'pdg:demo']) assert.ok([0, 3].includes(variante(id).pelo), id)
+  for (const id of ['trabajadores:maria', 'up:noruega', 'sistemas:mesa_entrada', 'trabajadores:opera', 'pdg:marketing', 'admin:limpieza']) assert.ok([1, 2].includes(variante(id).pelo), id)
+  for (const id of ['up:redactor', 'trabajadores:canillita', 'pdg:demo']) assert.ok([0, 3].includes(variante(id).pelo), id)
 })
