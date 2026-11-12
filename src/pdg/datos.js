@@ -6,10 +6,11 @@ import a2 from '../../sales-system-pdg/agent_02_demo_prep.md?raw'
 import a3 from '../../sales-system-pdg/agent_03_battlecards.md?raw'
 import a4 from '../../sales-system-pdg/agent_04_proposal_builder.md?raw'
 import a5 from '../../sales-system-pdg/agent_05_marketing.md?raw'
+import a6 from '../../sales-system-pdg/agent_06_femina.md?raw'
 
 export const AGENTES_POR_DEFECTO = [
   leerAgenteMd('prospector', a1, 1), leerAgenteMd('demo', a2, 2), leerAgenteMd('objeciones', a3, 3),
-  leerAgenteMd('propuesta', a4, 4), leerAgenteMd('marketing', a5, 5),
+  leerAgenteMd('propuesta', a4, 4), leerAgenteMd('marketing', a5, 5), leerAgenteMd('femina', a6, 6),
 ]
 export const MANUAL_POR_DEFECTO = manualMd.trim()
 

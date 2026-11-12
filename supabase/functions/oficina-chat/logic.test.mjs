@@ -157,3 +157,11 @@ test('los supervisores ven las tareas de su equipo en su contexto', async () => 
   const c = contexto('up', 'noruega', { chequeos: [], tareas: [{ tarea: 'Que el calendario de enero esté cargado', area: 'up', responsable: 'up:redactor', vence: '2026-12-27', estado: 'pendiente' }] })
   assert.match(c.registro[0], /tarea de tu equipo \(la hace up:redactor\) \(pendiente, vence 2026-12-27, área up\): Que el calendario/)
 })
+
+test('contexto: Femina cuenta sus vueltas y lo que encontró; habla en femenino', async () => {
+  const { contexto: ctx, sistema: sis } = await import('./logic.mjs')
+  const c = ctx('pdg', 'femina', { agente: { nombre: 'Femina', rol: 'Exploradora comercial.' }, corridas: [{ estado: 'ok', iniciada_at: '2026-11-12T11:23:00Z', resumen: { nuevos: 2 } }], hallazgos: [{ tipo: 'prospecto', titulo: 'Boca Juniors', estado: 'nuevo', created_at: '2026-11-12T11:24:00Z' }] })
+  assert.match(c.registro.join('\n'), /vuelta .* ok .*"nuevos":2/)
+  assert.match(c.registro.join('\n'), /prospecto \(sin revisar\): Boca Juniors/)
+  assert.match(sis(c, 'hoy'), /Sos mujer/)
+})

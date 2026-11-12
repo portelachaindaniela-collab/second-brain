@@ -347,6 +347,7 @@ export const ACCESORIOS = {
   'pdg:objeciones': 'corbata',
   'pdg:propuesta': 'monio',
   'pdg:marketing': 'lentes-sol',
+  'pdg:femina': 'sombrero',
   'admin:search_console': 'lentes',
   'admin:resumen_diario': 'monio',
   'admin:agenda_dulce': 'vincha',

@@ -214,3 +214,20 @@ test('cuando el equipo termina todas las tareas de un plan, el supervisor pide u
   assert.deepEqual(p.reunion.tareas, [1, 2])
   assert.equal(pide([t(1, 'hecha', { presentada: true }), t(2, 'hecha', { presentada: true })]).length, 0, 'ya se mostró')
 })
+
+test('agentesPdg: Femina toma su estado de sus vueltas y lista lo que encontró', () => {
+  const ahora = Date.parse('2026-11-12T15:00:00Z')
+  const agentes = [{ clave: 'prospector', nombre: 'Prospector', orden: 1 }, { clave: 'femina', nombre: 'Femina', rol: 'Exploradora comercial. Trabaja sola.', orden: 6 }]
+  const femina = {
+    corridas: [{ estado: 'ok', iniciada_at: '2026-11-12T11:23:00Z', resumen: { webs: { miradas: 3 }, prospectos: 4, nuevos: 5 } }],
+    hallazgos: [{ tipo: 'prospecto', titulo: 'Boca Juniors', created_at: '2026-11-12T11:24:00Z' }, { tipo: 'noticia', titulo: 'River suma sponsor', created_at: '2026-11-12T11:24:00Z' }],
+  }
+  const [, f] = agentesPdg(agentes, [], ahora, femina)
+  assert.equal(f.id, 'pdg:femina')
+  assert.equal(f.estado, 'libre')
+  assert.match(f.ahora, /miró 3 webs, 4 prospectos, 5 novedades/)
+  assert.equal(f.prospectos, 1)
+  assert.match(f.tareas[1].texto, /^noticia: River/)
+  assert.equal(agentesPdg(agentes, [], ahora, { corridas: [{ estado: 'error', iniciada_at: '2026-11-12T11:23:00Z', error: 'sin IA' }] })[1].estado, 'error')
+  assert.equal(agentesPdg(agentes, [], ahora)[1].estado, 'nuevo')
+})

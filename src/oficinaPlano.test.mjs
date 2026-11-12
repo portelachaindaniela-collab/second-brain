@@ -67,7 +67,7 @@ test('trabajadores: los que hacen cosas parecidas comparten oficina, sin pisarse
 })
 
 test('tablones: UP, PDG y Administración con las PC enfrentadas y la cabecera, dentro de su zona', () => {
-  for (const [mesaDe, n, zona] of [[mesaUp, 7, ZONAS.up], [mesaPdg, 5, ZONAS.pdg], [mesaAdmin, 5, ZONAS.admin], [mesaSistemas, 3, ZONAS.sistemas]]) {
+  for (const [mesaDe, n, zona] of [[mesaUp, 7, ZONAS.up], [mesaPdg, 5, ZONAS.pdg], [mesaPdg, 6, ZONAS.pdg], [mesaAdmin, 5, ZONAS.admin], [mesaSistemas, 3, ZONAS.sistemas]]) {
     const { mesa, asientos } = mesaDe(n)
     assert.equal(asientos.length, n)
     assert.equal(asientos[0].sentado.x, asientos[1].sentado.x, 'el primer par queda enfrentado')
@@ -220,6 +220,6 @@ test('reunión en la oficina de Daniela: hasta 5 en su mesa, entran por su puert
     assert.ok(c.some(p => p.x === DIRECCION.puerta.x && p.y === DIRECCION.puerta.y))
   }
   // Las mujeres con pelo largo o rodete; los varones, corto o con rulos.
-  for (const id of ['trabajadores:maria', 'up:noruega', 'sistemas:mesa_entrada', 'trabajadores:opera', 'pdg:marketing', 'admin:limpieza']) assert.ok([1, 2].includes(variante(id).pelo), id)
+  for (const id of ['trabajadores:maria', 'up:noruega', 'sistemas:mesa_entrada', 'trabajadores:opera', 'pdg:marketing', 'pdg:femina', 'admin:limpieza']) assert.ok([1, 2].includes(variante(id).pelo), id)
   for (const id of ['up:redactor', 'trabajadores:canillita', 'pdg:demo']) assert.ok([0, 3].includes(variante(id).pelo), id)
 })

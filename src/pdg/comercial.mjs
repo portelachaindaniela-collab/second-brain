@@ -10,6 +10,7 @@ export const AGENTES_INFO = {
   demo: { corto: 'Preparar demo', ayuda: 'Arma el recorrido de 15 minutos para mostrarle el sistema funcionando.', pedido: 'Ej.: la reunión es con el área de prensa' },
   objeciones: { corto: 'Objeciones', ayuda: 'Responde a lo que frena la venta. Sin objeción, arma las 5 más probables.', pedido: 'Ej.: "ya tenemos datos de Opta"' },
   propuesta: { corto: 'Propuesta', ayuda: 'Redacta la propuesta comercial y técnica con fases y entregables.', pedido: 'Ej.: quieren portal + informe post partido, sin app' },
+  femina: { corto: 'Femina', ayuda: 'Trabaja sola todos los días: vigila las webs de tus cuentas, junta noticias de su sector y busca prospectos nuevos. Lo que encuentra está en el Tablero.', pedido: '' },
   marketing: { corto: 'Marketing', ayuda: 'Escribe ideas y piezas que muestran lo que hace el sistema, listas para mandar a UP.', pedido: 'Ej.: campaña para agencias de representación' },
 }
 

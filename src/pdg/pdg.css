@@ -165,3 +165,13 @@ textarea.pdg-campo { resize: vertical; }
   .pdg-lanzador-fila { flex-direction: column; }
   .pdg-btn-alto { height: 40px; }
 }
+
+/* Femina: lo que encontró */
+.pdg-femina-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-12); flex-wrap: wrap; }
+.pdg-hallazgos { list-style: none; margin: var(--esp-8) 0 0; padding: 0; }
+.pdg-hallazgo { display: flex; gap: var(--esp-12); align-items: flex-start; justify-content: space-between; background: var(--p-bg2); border: 1px solid var(--p-borde); border-left: 3px solid var(--p-v); border-radius: var(--radius-sm); padding: var(--esp-12); margin-bottom: var(--esp-8); }
+.pdg-hallazgo > div:first-child { min-width: 0; }
+.pdg-hallazgo p { margin: var(--esp-4) 0; font-size: var(--letra-12); color: var(--p-texto2); }
+.pdg-hallazgo strong { display: block; }
+.pdg-hallazgo-acc { display: flex; flex-direction: column; gap: var(--esp-4); flex-shrink: 0; }
+@media (max-width: 640px) { .pdg-hallazgo { flex-direction: column; } .pdg-hallazgo-acc { flex-direction: row; } }

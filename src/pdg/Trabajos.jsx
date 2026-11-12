@@ -86,9 +86,9 @@ export function Trabajo({ trabajo, nombreAgente, cuenta, alCambiar, abierto: abi
   )
 }
 
-// Botonera de agentes + pedido. Con cuenta corre cualquiera; sin cuenta solo marketing y objeciones.
+// Botonera de agentes + pedido. Con cuenta corre cualquiera; sin cuenta solo marketing y objeciones. Femina no: trabaja sola.
 export function Lanzador({ agentes, cuentaId, alTerminar }) {
-  const disponibles = agentes.filter(a => cuentaId || a.clave === 'marketing' || a.clave === 'objeciones')
+  const disponibles = agentes.filter(a => a.clave !== 'femina' && (cuentaId || a.clave === 'marketing' || a.clave === 'objeciones'))
   const [elegido, setElegido] = useState(cuentaId ? disponibles[0]?.clave : 'marketing')
   const [pedido, setPedido] = useState('')
   const [trabajando, setTrabajando] = useState(false)

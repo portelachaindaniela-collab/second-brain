@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { ETAPAS, SEGMENTOS, NOMBRE_ETAPA, NOMBRE_SEGMENTO, hoyISO } from './comercial.mjs'
 import { Trabajo, Lanzador } from './Trabajos.jsx'
+import { NovedadesCuenta } from './Femina.jsx'
 
 const VACIA = { nombre: '', segmento: 'club', pais: '', web: '', contacto: '', notas: '', etapa: 'prospecto', proxima_accion: '', proxima_fecha: '' }
 const limpiar = f => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, typeof v === 'string' && k !== 'nombre' ? (v.trim() || null) : v]))
@@ -37,7 +38,7 @@ function FormCuenta({ inicial, guardar, cancelar, borrar }) {
   )
 }
 
-function FichaCuenta({ cuenta, agentes, volver, alCambiar }) {
+function FichaCuenta({ cuenta, agentes, hallazgos, volver, alCambiar }) {
   const [c, setC] = useState(cuenta)
   const [editando, setEditando] = useState(false)
   const [trabajos, setTrabajos] = useState(null)
@@ -100,6 +101,8 @@ function FichaCuenta({ cuenta, agentes, volver, alCambiar }) {
           </div>
         )}
 
+      <NovedadesCuenta hallazgos={hallazgos} cuentaId={c.id} recargar={alCambiar} />
+
       <section className="pdg-seccion">
         <h3 className="pdg-h3">Agentes</h3>
         <Lanzador agentes={agentes} cuentaId={c.id} alTerminar={t => { setNuevo(t.id); cargar() }} />
@@ -115,14 +118,14 @@ function FichaCuenta({ cuenta, agentes, volver, alCambiar }) {
   )
 }
 
-export default function Cuentas({ cuentas, agentes, recargar, abrirId, setAbrirId }) {
+export default function Cuentas({ cuentas, agentes, hallazgos = [], recargar, abrirId, setAbrirId }) {
   const [creando, setCreando] = useState(false)
   const [segmento, setSegmento] = useState('')
   const [verCerradas, setVerCerradas] = useState(false)
   const [aviso, setAviso] = useState('')
   const abierta = cuentas.find(c => c.id === abrirId)
 
-  if (abierta) return <FichaCuenta key={abierta.id} cuenta={abierta} agentes={agentes} volver={() => setAbrirId(null)} alCambiar={recargar} />
+  if (abierta) return <FichaCuenta key={abierta.id} cuenta={abierta} agentes={agentes} hallazgos={hallazgos} volver={() => setAbrirId(null)} alCambiar={recargar} />
 
   async function crear(datos) {
     const { data, error } = await supabase.from('pdg_cuentas').insert(datos).select('id').single()

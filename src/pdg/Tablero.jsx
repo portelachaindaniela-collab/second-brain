@@ -1,7 +1,8 @@
 import { proximasAcciones, cifras, porSegmento, ETAPAS_ABIERTAS, NOMBRE_ETAPA, NOMBRE_SEGMENTO } from './comercial.mjs'
 import { Trabajo } from './Trabajos.jsx'
+import Femina from './Femina.jsx'
 
-export default function Tablero({ cuentas, trabajos, agentes, abrirCuenta, irA, recargar }) {
+export default function Tablero({ cuentas, trabajos, agentes, hallazgos = [], corrida = null, abrirCuenta, irA, recargar }) {
   const k = cifras(cuentas)
   const acciones = proximasAcciones(cuentas).slice(0, 8)
   const nombres = Object.fromEntries(agentes.map(a => [a.clave, a.nombre]))
@@ -71,6 +72,8 @@ export default function Tablero({ cuentas, trabajos, agentes, abrirCuenta, irA, 
           )}
         </section>
       </div>
+
+      <Femina hallazgos={hallazgos} corrida={corrida} cuentas={cuentas} abrirCuenta={abrirCuenta} recargar={recargar} />
 
       <section className="pdg-seccion">
         <h3 className="pdg-h3">Último trabajo de los agentes</h3>

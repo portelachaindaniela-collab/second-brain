@@ -20,18 +20,24 @@ export default function PdgApp({ email, volver }) {
   const [cuentas, setCuentas] = useState(null)
   const [trabajos, setTrabajos] = useState([])
   const [agentes, setAgentes] = useState([])
+  const [hallazgos, setHallazgos] = useState([])
+  const [corrida, setCorrida] = useState(null)
   const [abrirId, setAbrirId] = useState(null)
   const [error, setError] = useState('')
 
   const recargar = useCallback(async () => {
-    const [c, t, a] = await Promise.all([
+    const [c, t, a, h, f] = await Promise.all([
       supabase.from('pdg_cuentas').select('*').order('updated_at', { ascending: false }),
       supabase.from('pdg_trabajos').select('*').order('created_at', { ascending: false }).limit(80),
       supabase.from('pdg_agentes').select('clave,nombre,rol,instrucciones,orden').order('orden'),
+      supabase.from('pdg_hallazgos').select('*').neq('estado', 'descartado').order('created_at', { ascending: false }).limit(120),
+      supabase.from('pdg_femina_corridas').select('*').order('iniciada_at', { ascending: false }).limit(1),
     ])
     const e = c.error || t.error || a.error
     if (e) { setError('No se pudo cargar: ' + e.message); return }
     setCuentas(c.data); setTrabajos(t.data); setAgentes(a.data)
+    // Lo de Femina no frena el resto si falla.
+    setHallazgos(h.data || []); setCorrida(f.data?.[0] || null)
   }, [])
 
   useEffect(() => {
@@ -58,8 +64,8 @@ export default function PdgApp({ email, volver }) {
         {error && <p role="alert" className="pdg-error">{error}</p>}
         {!cuentas ? (!error && <p className="pdg-vacio">Cargando…</p>) : (
           <>
-            {pantalla === 'tablero' && <Tablero cuentas={cuentas} trabajos={trabajos} agentes={agentes} abrirCuenta={abrirCuenta} irA={irA} recargar={recargar} />}
-            {pantalla === 'cuentas' && <Cuentas cuentas={cuentas} agentes={agentes} recargar={recargar} abrirId={abrirId} setAbrirId={setAbrirId} />}
+            {pantalla === 'tablero' && <Tablero cuentas={cuentas} trabajos={trabajos} agentes={agentes} hallazgos={hallazgos} corrida={corrida} abrirCuenta={abrirCuenta} irA={irA} recargar={recargar} />}
+            {pantalla === 'cuentas' && <Cuentas cuentas={cuentas} agentes={agentes} hallazgos={hallazgos} recargar={recargar} abrirId={abrirId} setAbrirId={setAbrirId} />}
             {pantalla === 'marketing' && <Marketing agentes={agentes} trabajos={trabajos} cuentas={cuentas} recargar={recargar} />}
             {pantalla === 'manual' && <Manual agentes={agentes} recargar={recargar} />}
           </>
