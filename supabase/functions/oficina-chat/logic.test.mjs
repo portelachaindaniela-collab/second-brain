@@ -120,3 +120,40 @@ test('reunión y charla: conversan en contexto y no prometen entregas', async ()
   assert.match(r, /ni prometer entregas a futuro/)
   assert.match(sistema(ficha('pdg:marketing'), 'hoy'), /No recites tu estado/)
 })
+
+test('acta: María arma el plan, las tareas quedan con su supervisor y el calendario se valida', async () => {
+  const { validarActa, leerActa, pedidosDelActa, mensajesActa } = await import('./logic.mjs')
+  assert.equal(validarActa({ asistentes: ['up:noruega'], mensajes: [], modo: 'sala', inicio: '2026-11-11T10:00:00Z' }).ok, false)
+  const v = validarActa({ asistentes: ['up:noruega', 'trabajadores:maria'], mensajes: [{ de: 'Vos', texto: 'Quiero un plan de enero 2027' }], modo: 'sala', inicio: '2026-11-11T10:00:00Z' })
+  assert.ok(v.ok)
+  assert.match(mensajesActa(['Noruega'], v.mensajes, '2026-11-11', 'hoy')[1].content, /Vos: Quiero un plan/)
+  const crudo = JSON.stringify({
+    titulo: 'Plan de enero 2027', resumen: 'Se armó el plan.', decisiones: ['Tres posts por semana'],
+    tareas: [{ tarea: 'Escribir los textos', area: 'up', vence: '2026-12-27' }, { tarea: 'Revisar cuentas', area: 'pdg', vence: '2020-01-01' }, { tarea: 'x', area: 'up' }],
+    sistemas: [{ titulo: 'Recordatorio de vencimientos', detalle: 'Avisar 3 días antes' }],
+    calendario: [
+      { fecha: '2027-01-04', tema: 'Arranque del año', redes: ['linkedin', 'tiktok'], formato_instagram: 'reel' },
+      { fecha: '2027-01-04', tema: 'Repetido', redes: ['x'] },
+      { fecha: '2027-01-06', tema: 'Carrusel de tendencias', redes: ['instagram', 'linkedin'], formato_instagram: 'carrusel' },
+      { fecha: '2025-01-01', tema: 'Pasado', redes: ['x'] },
+    ],
+  })
+  const equipos = { up: [{ id: 'up:redactor', nombre: 'Redactor' }], pdg: [{ id: 'pdg:propuesta', nombre: 'Propuestas' }] }
+  const acta = leerActa(`Acá va: ${crudo.replace('"area":"up",', '"area":"up","responsable":"up:redactor",').replace('"area":"pdg",', '"area":"pdg","responsable":"up:redactor",')}`, '2026-11-11', equipos)
+  assert.equal(acta.titulo, 'Plan de enero 2027')
+  // UP: la hace el Redactor y la supervisa Noruega; PDG: el responsable no es de su equipo, queda en el supervisor.
+  assert.deepEqual(acta.tareas.map(t => [t.area, t.responsable, t.supervisor, t.vence]), [['up', 'up:redactor', 'up:noruega', '2026-12-27'], ['pdg', 'trabajadores:maria', 'trabajadores:maria', null]])
+  assert.deepEqual(acta.calendario.map(c => [c.fecha, c.redes, c.formato_instagram]), [['2027-01-04', ['linkedin'], 'ninguno'], ['2027-01-06', ['instagram', 'linkedin'], 'carrusel']])
+  const pedidos = pedidosDelActa(acta)
+  assert.equal(pedidos.length, 2)
+  assert.ok(pedidos.every(p => p.agente === 'sistemas:mesa_entrada'))
+  assert.equal(pedidos[1].accion.tipo, 'cargar_calendario_up')
+  assert.match(pedidos[1].titulo, /2 días \(2027-01-04 a 2027-01-06\)/)
+  assert.equal(leerActa('sin json', '2026-11-11'), null)
+})
+
+test('los supervisores ven las tareas de su equipo en su contexto', async () => {
+  const { contexto } = await import('./logic.mjs')
+  const c = contexto('up', 'noruega', { chequeos: [], tareas: [{ tarea: 'Que el calendario de enero esté cargado', area: 'up', responsable: 'up:redactor', vence: '2026-12-27', estado: 'pendiente' }] })
+  assert.match(c.registro[0], /tarea de tu equipo \(la hace up:redactor\) \(pendiente, vence 2026-12-27, área up\): Que el calendario/)
+})

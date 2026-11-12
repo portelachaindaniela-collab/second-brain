@@ -265,6 +265,29 @@ export function armarOficina(d, ahora) {
   for (const c of guardian.vencidas) pendientes.push({ nivel: 'error', texto: `Guardián de claves: venció la conexión ${c.origen}. Volvé a conectarla.`, donde: 'UP › Redes', agente: guardian.id })
   for (const c of guardian.porVencer) pendientes.push({ nivel: 'aviso', texto: `Guardián de claves: la conexión ${c.origen} vence ${c.dias === 0 ? 'hoy' : `en ${plural(c.dias, 'día', 'días')}`}.`, donde: 'UP › Redes', agente: guardian.id })
   if (operador.conProblemas.length) pendientes.push({ nivel: 'error', texto: `Operador: ${plural(operador.conProblemas.length, 'tarea programada con problemas', 'tareas programadas con problemas')} (${operador.conProblemas.map(j => j.jobname).join(', ')})`, donde: 'Oficina › Sistemas', agente: operador.id })
+  // Tareas de las reuniones: las que vencen en 3 días o ya vencieron, con el supervisor que se encarga.
+  const hoy = d.hoy ?? hoyAR(ahora)
+  const en3 = new Date(Date.parse(`${hoy}T12:00:00Z`) + 3 * 86400_000).toISOString().slice(0, 10)
+  for (const t of (d.tareas ?? []).filter(t => t.estado !== 'hecha' && t.vence && t.vence <= en3)) {
+    const sup = agentes.find(a => a.id === t.responsable)
+    pendientes.push({ nivel: t.vence < hoy ? 'error' : 'aviso', texto: `${t.vence < hoy ? 'Venció' : t.vence === hoy ? 'Vence hoy' : `Vence el ${t.vence}`}: ${t.tarea}${sup ? ` (a cargo de ${sup.nombre.split(' (')[0]})` : ''}`, donde: 'Oficina › Archivo', agente: sup?.id })
+  }
+  // Cuando el equipo de un área termina todas sus tareas de un plan, su supervisor pide una reunión para mostrarlo.
+  const grupos = new Map()
+  for (const t of d.tareas ?? []) {
+    if (!t.acta_id || !t.supervisor) continue
+    const k = `${t.acta_id}|${t.supervisor}`
+    if (!grupos.has(k)) grupos.set(k, [])
+    grupos.get(k).push(t)
+  }
+  for (const lista of grupos.values()) {
+    if (!lista.every(t => t.estado === 'hecha') || lista.some(t => t.presentada)) continue
+    const sup = agentes.find(a => a.id === lista[0].supervisor)
+    if (!sup) continue
+    const acta = (d.actas ?? []).find(a => a.id === lista[0].acta_id)
+    const equipo = [...new Set([sup.id, ...lista.map(t => t.responsable)])].filter(id => agentes.some(a => a.id === id))
+    pendientes.push({ nivel: 'aviso', texto: `${sup.nombre.split(' (')[0]} pide una reunión para mostrarte ${acta?.titulo ? `«${acta.titulo}»` : 'el proyecto'}: su equipo terminó ${plural(lista.length, 'tarea', 'tareas')}.`, donde: 'Oficina', agente: sup.id, reunion: { asistentes: equipo, tareas: lista.map(t => t.id) } })
+  }
   const porAprobar = (d.solicitudes ?? []).filter(x => x.estado === 'pendiente').length
   if (porAprobar) pendientes.push({ nivel: 'aviso', texto: `Sistemas: ${plural(porAprobar, 'pedido espera', 'pedidos esperan')} tu aprobación`, donde: 'Oficina › Sistemas' })
   for (const a of agentes) if (a.equipo === 'admin' && a.estado === 'error') pendientes.push({ nivel: 'error', texto: `${a.nombre}: ${a.ahora}`, donde: 'Oficina › Administración', agente: a.id })

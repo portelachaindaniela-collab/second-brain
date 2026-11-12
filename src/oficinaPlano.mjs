@@ -33,6 +33,7 @@ export function alturaPiso(x, y) { return x >= X0 && y <= EJECUTIVO.y1 ? EJECUTI
 
 export const ZONAS = {
   reuniones: { x0: 0.5, y0: 19.5, x1: 10.5, y1: 26.5, nombre: 'Sala de reuniones' },
+  archivo: { x0: 10.9, y0: 19.6, x1: 13.3, y1: 24.6, nombre: 'Archivo' },
   cafeteria: { x0: 0.5, y0: 8, x1: 13, y1: 13, nombre: 'Cafetería' },
   comedor: { x0: 0.5, y0: 13.5, x1: 13, y1: 19, nombre: 'Cocina y comedor' },
   ocio: { x0: 0.5, y0: 0.5, x1: 8, y1: 7, nombre: 'Ocio' },
@@ -376,6 +377,13 @@ export function luzDelDia(ahoraMs) {
 // (al este, donde está la cámara) no se sienta nadie: las sillas forman un arco del otro lado, de frente a Daniela, y
 // detrás, a media distancia entre silla y silla, una segunda fila de pie. Así nadie le tapa la cara a otro.
 export const MESA_REUNION = { x: 4.9, y: 23.0, radio: 1.75 }
+// El Archivo, al lado de la sala de reuniones: ahí quedan las actas que escribe María. Estanterías contra las paredes y
+// la puerta del lado del pasillo.
+export const ARCHIVO = {
+  x0: 10.9, y0: 19.6, x1: 13.3, y1: 24.6,
+  puerta: { y0: 21.6, y1: 22.6 },
+  estantes: [{ x0: 10.95, x1: 11.45, y0: 19.7, y1: 24.5 }, { x0: 11.5, x1: 13.2, y0: 19.65, y1: 20.1 }],
+}
 export const PUERTA_REUNION = { x: ZONAS.reuniones.x1, y: 25.5 }
 // El lugar de Daniela en la sala: del lado de la pantalla, justo debajo de la cámara (por eso no sale en la imagen),
 // mirando a todos.

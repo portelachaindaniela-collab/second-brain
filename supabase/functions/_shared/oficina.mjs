@@ -60,6 +60,10 @@ export function herramientasPdg(clave) {
 export const MUJERES = new Set(['trabajadores:maria', 'up:noruega', 'sistemas:mesa_entrada'])
 export function generoDe(id) { return MUJERES.has(id) ? 'f' : 'm' }
 
+// Supervisores: quién se encarga de que lo acordado en una reunión se cumpla en cada área (PDG, por ahora, María).
+export const SUPERVISORES = { trabajadores: 'trabajadores:maria', up: 'up:noruega', pdg: 'trabajadores:maria', sistemas: 'sistemas:mesa_entrada', admin: 'trabajadores:maria' }
+export const AREAS_TAREA = Object.keys(SUPERVISORES)
+
 // Id de un agente en la Oficina: "<equipo>:<clave>".
 export function idAgente(equipo, clave) { return `${equipo}:${clave}` }
 export function partirId(id) {

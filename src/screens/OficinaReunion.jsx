@@ -12,12 +12,14 @@ const AREAS = ['trabajadores', 'up', 'pdg', 'admin', 'sistemas']
 export const ESPERA_TURNOS = asientosEspera().length
 
 // ---------- Convocar ----------
-export function ConvocarReunion({ agentes, alConvocar, cerrar }) {
+// preseleccion: ids de los que vienen de entrada (por ejemplo, el equipo que pidió mostrar un proyecto terminado).
+export function ConvocarReunion({ agentes, alConvocar, cerrar, preseleccion = null }) {
   // Se elige agente por agente, en una lista desplegable por área. De entrada vienen todos los que no están pausados,
   // menos Administración y Sistemas (no conversan), que vienen solo si los marcás.
   const disponibles = agentes.filter(a => a.estado !== 'pausado')
-  const [elegidos, setElegidos] = useState(() => new Set(disponibles.filter(a => a.equipo !== 'admin' && a.equipo !== 'sistemas').map(a => a.id)))
-  const [modo, setModo] = useState('sala')
+  const [elegidos, setElegidos] = useState(() => new Set(preseleccion ? disponibles.filter(a => preseleccion.includes(a.id)).map(a => a.id)
+    : disponibles.filter(a => a.equipo !== 'admin' && a.equipo !== 'sistemas').map(a => a.id)))
+  const [modo, setModo] = useState(() => (preseleccion && preseleccion.length <= MAX_OFICINA ? 'oficina' : 'sala'))
   const vienen = disponibles.filter(a => elegidos.has(a.id))
   const tope = modo === 'turnos' ? ESPERA_TURNOS : modo === 'oficina' ? MAX_OFICINA : MAX_ASISTENTES
   const alternar = id => setElegidos(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
