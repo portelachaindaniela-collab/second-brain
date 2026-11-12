@@ -1,8 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validarPedido, accionValida, notaResultado, MOTIVO_FRENO, REPO, WORKFLOW_DISENADOR } from "./logic.mjs";
+import { validarPedido, accionValida, notaResultado, notaCalendario, filasCalendario, MOTIVO_FRENO, REPO, WORKFLOW_DISENADOR } from "./logic.mjs";
 
-// Sistemas: aprueba y ejecuta un pedido con acción (hoy, el de Noruega cuando el Diseñador se trabó). Solo lo puede
+// Sistemas: aprueba y ejecuta un pedido con acción: el de Noruega cuando el Diseñador se trabó (frenar piezas) o el
+// de Mesa de entrada para cargar en UP el calendario que salió de una reunión. Solo lo puede
 // pedir la dueña con su sesión: es su aprobación. Frena las piezas (con su sesión, RLS) y cancela la corrida trabada
 // de la Action si hay un token de GitHub con permiso; deja en el pedido una nota con lo que hizo.
 
@@ -57,6 +58,24 @@ Deno.serve(async (req: Request) => {
   // La aprobación queda registrada antes de hacer nada.
   const aprobado = await db.from("oficina_solicitudes").update({ estado: "aprobada", decidida: new Date().toISOString() }).eq("id", s.id).eq("estado", "pendiente").select("id");
   if (aprobado.error || !aprobado.data?.length) return json({ error: "No se pudo aprobar el pedido." }, 409);
+
+  // Cargar en el calendario de UP los días que armó María en el acta (con la sesión de Daniela; no pisa días cargados).
+  if (s.accion.tipo === "cargar_calendario_up") {
+    const fechas = s.accion.dias.map((d: any) => d.fecha).sort();
+    const { data: ya, error: e1 } = await db.from("up_calendario").select("fecha").gte("fecha", fechas[0]).lte("fecha", fechas.at(-1));
+    if (e1) return json({ error: e1.message }, 500);
+    const filas = filasCalendario(s.accion, (ya || []).map((x: any) => x.fecha));
+    if (filas.length) {
+      const { error: e2 } = await db.from("up_calendario").insert(filas);
+      if (e2) {
+        await db.from("oficina_solicitudes").update({ nota: `No pude cargar el calendario: ${e2.message}` }).eq("id", s.id);
+        return json({ error: `No pude cargar el calendario: ${e2.message}` }, 500);
+      }
+    }
+    const nota = notaCalendario({ pedidos: fechas.length, cargados: filas.length });
+    await db.from("oficina_solicitudes").update({ estado: "hecha", nota }).eq("id", s.id);
+    return json({ ok: true, nota, cargados: filas.length });
+  }
 
   const piezas: string[] = s.accion.piezas;
   let frenadas = 0;

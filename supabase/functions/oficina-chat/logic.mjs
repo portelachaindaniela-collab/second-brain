@@ -1,7 +1,7 @@
 // Lógica pura de oficina-chat: validar el pedido, armar el contexto de cada agente con sus datos reales y el prompt.
 // El agente solo habla de lo que está en sus datos; no hace cambios (para eso están sus pantallas).
 import { armarProveedores } from '../_shared/ia.mjs'
-import { AGENTES_UP, EQUIPOS, herramientasPdg, partirId, generoDe } from '../_shared/oficina.mjs'
+import { AGENTES_UP, EQUIPOS, herramientasPdg, partirId, generoDe, SUPERVISORES, AREAS_TAREA } from '../_shared/oficina.mjs'
 
 export const MAX_MENSAJES = 12
 export const MAX_CARACTERES = 2000
@@ -34,7 +34,11 @@ const hora = iso => (iso ? new Date(iso).toLocaleString('es-AR', { timeZone: 'Am
 // La ficha del agente (con su id, que define si puede derivarle pedidos a Sistemas).
 export function contexto(equipo, clave, datos = {}) {
   const c = fichaDe(equipo, clave, datos)
-  return c ? { ...c, id: `${equipo}:${clave}` } : null
+  if (!c) return null
+  // Los supervisores saben qué tareas de las reuniones tienen a cargo, para seguirlas.
+  const yo = `${equipo}:${clave}`
+  const tareas = (datos.tareas || []).map(t => `- ${t.responsable === yo ? 'tarea tuya' : `tarea de tu equipo (la hace ${t.responsable})`} (${t.estado === 'en_curso' ? 'en curso' : 'pendiente'}${t.vence ? `, vence ${t.vence}` : ''}, área ${t.area}): ${recortar(t.tarea, 250)}`)
+  return { ...c, registro: [...tareas, ...c.registro], id: yo }
 }
 function fichaDe(equipo, clave, datos) {
   if (equipo === 'trabajadores') {
@@ -197,4 +201,103 @@ export function extraerSolicitud(texto, id) {
   const limpio = lineas.filter((_, i) => i !== k).join('\n').trim()
   const [solicitud] = limpiarSolicitudes([{ agente: id, titulo, detalle: resto.join('|') }], [id])
   return { texto: limpio, solicitud: solicitud ?? null }
+}
+
+// ---------- Acta ----------
+// Al terminar una reunión, María escribe el acta: el plan que se armó entre todos, las tareas (a cargo del supervisor
+// de cada área, con fecha límite), lo que Sistemas tendría que habilitar y, si se habló de un calendario de redes,
+// sus días. Nada se ejecuta solo: los pedidos a Sistemas quedan esperando la aprobación de Daniela.
+// { acta: true, asistentes, mensajes: [{ de, texto }], modo, inicio }
+const MAX_DIAS_CALENDARIO = 62
+export function validarActa(body) {
+  const v = validarReunion({ asistentes: body?.asistentes, mensajes: [{ role: 'user', content: 'acta' }] })
+  if (!v.ok) return v
+  const mensajes = (Array.isArray(body?.mensajes) ? body.mensajes : []).slice(-60)
+    .map(m => ({ de: String(m?.de ?? '').slice(0, 80), texto: String(m?.texto ?? '').slice(0, MAX_CARACTERES).trim() }))
+    .filter(m => m.de && m.texto)
+  const modo = ['sala', 'oficina', 'turnos'].includes(body?.modo) ? body.modo : null
+  const inicio = Date.parse(body?.inicio)
+  const nombres = (Array.isArray(body?.nombres) ? body.nombres : []).slice(0, 30).map(n => String(n ?? '').slice(0, 80)).filter(Boolean)
+  if (!mensajes.length) return { ok: false, error: 'La reunión no tiene conversación.' }
+  if (!modo || !Number.isFinite(inicio)) return { ok: false, error: 'Faltan datos de la reunión.' }
+  return { ok: true, asistentes: v.asistentes, nombres, mensajes, modo, inicio: new Date(inicio).toISOString() }
+}
+
+export function sistemaActa(nombres, hoyISO, hoy, equipos = {}) {
+  return `Sos María, la jefa de los trabajadores de la Oficina de Daniela. Terminó una reunión y escribís el acta. Hoy es ${hoy} (${hoyISO}).
+Estuvieron: ${nombres.join(', ')}.
+
+Armá el plan que salió de la conversación, sin inventar nada que no se haya dicho o que no se desprenda de lo que pidió Daniela:
+- titulo: corto (por ejemplo «Plan de redes de enero 2027»).
+- resumen: 3 a 6 oraciones con lo que se habló y lo que se decidió.
+- decisiones: lo que quedó acordado, una por línea.
+- tareas: lo que hay que hacer para cumplir el plan. Cada proyecto lo toma el supervisor de su área, que reparte las
+  tareas en su equipo: para cada tarea poné el área (trabajadores, up, pdg, sistemas o admin), quién de ese equipo la hace
+  (responsable: el id exacto de la lista de abajo) y la fecha límite (vence, AAAA-MM-DD). Si Daniela dijo una fecha,
+  respetala; si no, poné una razonable antes de que arranque lo planeado. Ninguna fecha antes de hoy.
+- sistemas: lo que habría que programar o habilitar en la app para que funcione solo (pedidos técnicos claros). Lista
+  vacía si no hace falta nada.
+- calendario: solo si se armó un calendario de redes (UP), los días con su tema: fecha, tema, redes (de linkedin, x,
+  instagram) y formato_instagram (reel, carrusel o ninguno). Como mucho ${MAX_DIAS_CALENDARIO} días; lista vacía si no.
+
+Equipos (id: nombre):
+${Object.entries(equipos).map(([area, gente]) => `- ${area}: ${gente.map(g => `${g.id} (${g.nombre})`).join(', ') || 'sin equipo'}`).join('\n')}
+
+Respondé SOLO con JSON, sin texto alrededor:
+{"titulo":"...","resumen":"...","decisiones":["..."],"tareas":[{"tarea":"...","area":"up","responsable":"up:redactor","vence":"AAAA-MM-DD"}],"sistemas":[{"titulo":"...","detalle":"..."}],"calendario":[{"fecha":"AAAA-MM-DD","tema":"...","redes":["linkedin","x"],"formato_instagram":"ninguno"}]}`
+}
+
+export function mensajesActa(nombres, mensajes, hoyISO, hoy, equipos = {}) {
+  const transcripcion = mensajes.map(m => `${m.de}: ${m.texto}`).join('\n')
+  return [{ role: 'system', content: sistemaActa(nombres, hoyISO, hoy, equipos) }, { role: 'user', content: `La conversación de la reunión:\n${transcripcion}` }]
+}
+
+const fechaValida = (f, desde) => /^\d{4}-\d{2}-\d{2}$/.test(String(f ?? '')) && !Number.isNaN(Date.parse(`${f}T12:00:00Z`)) && (!desde || f >= desde)
+// Lee el acta del modelo y la deja lista para guardar (tareas con su supervisor, calendario con datos válidos).
+export function leerActa(texto, hoyISO, equipos = {}) {
+  const crudo = String(texto ?? '')
+  const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
+  let d = null
+  if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
+  if (!d || typeof d !== 'object') return null
+  const texto1 = (x, max) => String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
+  const lista = x => (Array.isArray(x) ? x : [])
+  const tareas = lista(d.tareas).map(t => {
+    const area = AREAS_TAREA.includes(t?.area) ? t.area : 'trabajadores'
+    const supervisor = SUPERVISORES[area]
+    // El responsable tiene que ser del equipo del área; si no, la tarea queda a cargo del supervisor.
+    const delEquipo = (equipos[area] || []).some(g => g.id === t?.responsable)
+    return { tarea: texto1(t?.tarea, 500), area, responsable: delEquipo ? t.responsable : supervisor, supervisor, vence: fechaValida(t?.vence, hoyISO) ? t.vence : null }
+  }).filter(t => t.tarea.length >= 3).slice(0, 30)
+  const vistos = new Set()
+  const calendario = lista(d.calendario).map(c => ({
+    fecha: c?.fecha, tema: texto1(c?.tema, 300),
+    redes: [...new Set(lista(c?.redes).filter(r => ['linkedin', 'x', 'instagram'].includes(r)))],
+    formato_instagram: ['reel', 'carrusel', 'ninguno'].includes(c?.formato_instagram) ? c.formato_instagram : 'ninguno',
+  })).filter(c => fechaValida(c.fecha, hoyISO) && c.tema.length >= 3 && c.redes.length && !vistos.has(c.fecha) && vistos.add(c.fecha))
+    .map(c => ({ ...c, formato_instagram: c.redes.includes('instagram') ? c.formato_instagram : 'ninguno' }))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(0, MAX_DIAS_CALENDARIO)
+  return {
+    titulo: texto1(d.titulo, 200) || 'Reunión',
+    resumen: String(d.resumen ?? '').trim().slice(0, 3000),
+    decisiones: lista(d.decisiones).map(x => texto1(x, 400)).filter(Boolean).slice(0, 20),
+    tareas,
+    sistemas: lista(d.sistemas).map(x => ({ titulo: texto1(x?.titulo, 200), detalle: String(x?.detalle ?? '').trim().slice(0, 2000) })).filter(x => x.titulo.length >= 3).slice(0, 5),
+    calendario,
+  }
+}
+
+// Los pedidos que Mesa de entrada (Sistemas) deja con el acta: los técnicos y, si hay calendario, cargarlo en UP.
+export function pedidosDelActa(acta) {
+  const pedidos = acta.sistemas.map(x => ({ agente: 'sistemas:mesa_entrada', titulo: x.titulo, detalle: x.detalle, accion: null }))
+  if (acta.calendario.length) {
+    const c = acta.calendario
+    pedidos.push({
+      agente: 'sistemas:mesa_entrada',
+      titulo: `Cargar el calendario de UP: ${c.length} ${c.length === 1 ? 'día' : 'días'} (${c[0].fecha} a ${c.at(-1).fecha})`,
+      detalle: `Sale del acta «${acta.titulo}». Al aprobarlo se cargan en el calendario de UP los días que todavía no tienen publicación; los que ya tienen, no se tocan. Desde ahí la cadena de UP escribe los borradores sola, como siempre.`,
+      accion: { tipo: 'cargar_calendario_up', titulo: acta.titulo, dias: c },
+    })
+  }
+  return pedidos
 }

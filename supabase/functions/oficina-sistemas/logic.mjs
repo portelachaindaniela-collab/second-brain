@@ -11,7 +11,29 @@ export function validarPedido(body) {
 
 // Solo se ejecutan acciones conocidas.
 export function accionValida(accion) {
-  return accion?.tipo === 'frenar_pieza' && Array.isArray(accion.piezas) && accion.piezas.every(p => typeof p === 'string' && p.length <= 64)
+  if (accion?.tipo === 'frenar_pieza') return Array.isArray(accion.piezas) && accion.piezas.every(p => typeof p === 'string' && p.length <= 64)
+  if (accion?.tipo === 'cargar_calendario_up') return diasValidos(accion.dias).length > 0 && diasValidos(accion.dias).length === accion.dias.length
+  return false
+}
+
+// Los días de un calendario para UP (los arma María en el acta): fecha, tema, redes y formato de Instagram.
+const REDES = ['linkedin', 'x', 'instagram']
+export function diasValidos(dias) {
+  if (!Array.isArray(dias) || dias.length > 62) return []
+  return dias.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(String(d?.fecha ?? '')) && typeof d.tema === 'string' && d.tema.trim().length >= 3 && d.tema.length <= 300
+    && Array.isArray(d.redes) && d.redes.length && d.redes.every(x => REDES.includes(x)) && ['reel', 'carrusel', 'ninguno'].includes(d.formato_instagram))
+}
+// Las filas para up_calendario, salteando los días que ya tienen algo cargado (no se pisa nada).
+export function filasCalendario(accion, fechasOcupadas) {
+  const ocupadas = new Set(fechasOcupadas)
+  return diasValidos(accion.dias).filter(d => !ocupadas.has(d.fecha)).map(d => ({
+    fecha: d.fecha, tema_semana: String(accion.titulo || 'Plan de la Oficina').slice(0, 200), tema_dia: d.tema.trim(),
+    redes: d.redes, formato_instagram: d.redes.includes('instagram') ? d.formato_instagram : 'ninguno',
+  }))
+}
+export function notaCalendario({ pedidos, cargados }) {
+  const salteados = pedidos - cargados
+  return `Cargué ${plural(cargados, 'día', 'días')} en el calendario de UP${salteados ? ` (${plural(salteados, 'día ya tenía', 'días ya tenían')} publicación y no lo${salteados === 1 ? '' : 's'} toqué)` : ''}. Desde ahí la cadena de UP escribe los borradores sola y te llegan para aprobar.`
 }
 
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`

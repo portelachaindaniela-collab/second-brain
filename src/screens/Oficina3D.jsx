@@ -380,6 +380,31 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
 
     // ---------- Cámara: modos y vuelos ----------
     let modo = 'general'
+    let claveEncuadre = ''
+    let camaraReunion = CAMARA_SALA.pos.clone()
+    // Busca la distancia más corta (en la dirección de siempre) desde la que entran todos los lugares ocupados, de los
+    // pies a la cabeza, con un margen, para el tamaño actual de la pantalla.
+    const prueba = new THREE.PerspectiveCamera()
+    const encuadrar = (cual, lugares) => {
+      const base = cual === 'oficina' ? CAMARA_OFICINA : CAMARA_SALA
+      const dir = base.pos.clone().sub(base.target).normalize()
+      const pts = lugares.flatMap(l => { const y0 = alturaPiso(l.x, l.y); return [new THREE.Vector3(l.x, y0 + 0.05, l.y), new THREE.Vector3(l.x, y0 + 1.5, l.y)] })
+      if (!pts.length) return { pos: base.pos, target: base.target, fov: base.fov }
+      const centro = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length)
+      const target = new THREE.Vector3(centro.x, 0.8 + alturaPiso(centro.x, centro.z), centro.z)
+      prueba.fov = base.fov
+      prueba.aspect = camara.aspect
+      prueba.near = 0.1; prueba.far = 200
+      prueba.updateProjectionMatrix()
+      let d = 2
+      for (; d < 30; d += 0.2) {
+        prueba.position.copy(target).addScaledVector(dir, d)
+        prueba.lookAt(target)
+        prueba.updateMatrixWorld()
+        if (pts.every(p => { const v = p.clone().project(prueba); return Math.abs(v.x) < 0.86 && Math.abs(v.y) < 0.82 && v.z < 1 })) break
+      }
+      return { pos: target.clone().addScaledVector(dir, d), target, fov: base.fov }
+    }
     let vuelo = null
     let desvio = 0
     const volar = (pos, target, fov, dur = 1.3) => {
@@ -478,7 +503,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
               const s = pr.asiento
               pose = s.pose
               pos = { x: s.x, y: s.pose === 'sentado' ? 0.08 : 0, z: s.y }
-              giro = R.estado === 'en_curso' && R.modo === 'sala' ? Math.atan2(CAMARA_SALA.pos.x - s.x, CAMARA_SALA.pos.z - s.y) : s.mira
+              giro = R.estado === 'en_curso' && R.modo === 'sala' ? Math.atan2(camaraReunion.x - s.x, camaraReunion.z - s.y) : s.mira
               habla = R.estado === 'en_curso' && D.hablando === id
               if (R.modo === 'turnos') numero = pr.numero
             }
@@ -626,8 +651,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       if (pedirGeneral) { pedirGeneral = false; if (modo === 'general' || modo === 'daniela') volar(general.pos, general.target, 30) }
       if (nuevoModo !== modo) {
         if (modo === 'general') { general.pos.copy(camara.position); general.target.copy(controles.target) }
-        if (nuevoModo === 'sala') volar(CAMARA_SALA.pos, CAMARA_SALA.target, CAMARA_SALA.fov)
-        else if (nuevoModo === 'oficina') volar(CAMARA_OFICINA.pos, CAMARA_OFICINA.target, CAMARA_OFICINA.fov)
+        if (nuevoModo === 'sala' || nuevoModo === 'oficina') claveEncuadre = '' // lo encuadra abajo, según quiénes vinieron y la pantalla
         else if (nuevoModo === 'despacho') volar(CAMARA_DESPACHO.pos, CAMARA_DESPACHO.target, CAMARA_DESPACHO.fov)
         else if (nuevoModo === 'general') volar(general.pos, general.target, 30)
         else {
@@ -639,6 +663,18 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
           volar(target.clone().add(dir.multiplyScalar(9)).setY(7.5), target, 30)
         }
         modo = nuevoModo
+      }
+      // En la videollamada la cámara se acomoda para que se vea a todos los que vinieron, sea cual sea el tamaño de la
+      // pantalla: se vuelve a calcular si cambia el tamaño (por ejemplo, al pasar a pantalla completa).
+      if ((modo === 'sala' || modo === 'oficina') && plan) {
+        const clave = `${modo}|${plan.id}|${medida}`
+        if (clave !== claveEncuadre) {
+          const primera = claveEncuadre === ''
+          claveEncuadre = clave
+          const e = encuadrar(modo, [...plan.por.values()].map(x => x.asiento))
+          camaraReunion = e.pos
+          volar(e.pos, e.target, e.fov, primera ? 1.3 : 0.6)
+        }
       }
       controles.enabled = modo !== 'sala' && modo !== 'despacho' && modo !== 'oficina'
       if (vuelo) {

@@ -185,3 +185,32 @@ test('Sistemas: Mesa de entrada, Guardián de claves y Operador con datos reales
   const vencida = agentesSistemas({ conexiones: [{ origen: 'UP · x', expira_at: '2026-11-01T00:00:00Z', renovable: false }] }, ahora)[1]
   assert.equal(vencida.estado, 'error')
 })
+
+test('Te toca: las tareas de las reuniones que vencen pronto, con su supervisor', async () => {
+  const { armarOficina } = await import('./oficina.mjs')
+  const base = { trabajadores: [{ clave: 'maria', nombre: 'María', activo: true, frecuencia: '0 * * * *', tipo: 'orquestador' }], corridasPor: { maria: [] }, salud: null, upCorridas: [], chequeo: null, piezas: [], pdgAgentes: [], pdgTrabajos: [], pdgCuentas: [], hoy: '2026-12-25' }
+  const tareas = [
+    { id: 1, tarea: 'Calendario de enero cargado', area: 'up', responsable: 'up:noruega', vence: '2026-12-27', estado: 'pendiente' },
+    { id: 2, tarea: 'Revisar textos', area: 'trabajadores', responsable: 'trabajadores:maria', vence: '2026-12-20', estado: 'en_curso' },
+    { id: 3, tarea: 'Lejana', area: 'up', responsable: 'up:noruega', vence: '2027-02-01', estado: 'pendiente' },
+    { id: 4, tarea: 'Ya hecha', area: 'up', responsable: 'up:noruega', vence: '2026-12-20', estado: 'hecha' },
+  ]
+  const { pendientes } = armarOficina({ ...base, tareas }, Date.parse('2026-12-25T15:00:00Z'))
+  const deTareas = pendientes.filter(p => p.donde === 'Oficina › Archivo')
+  assert.equal(deTareas.length, 2)
+  assert.ok(deTareas.some(p => p.nivel === 'error' && /Venció: Revisar textos \(a cargo de María\)/.test(p.texto)))
+  assert.ok(deTareas.some(p => p.nivel === 'aviso' && /Vence el 2026-12-27: Calendario de enero cargado \(a cargo de Noruega\)/.test(p.texto)))
+})
+
+test('cuando el equipo termina todas las tareas de un plan, el supervisor pide una reunión para mostrarlo', async () => {
+  const { armarOficina } = await import('./oficina.mjs')
+  const base = { trabajadores: [{ clave: 'maria', nombre: 'María', activo: true, frecuencia: '0 * * * *', tipo: 'orquestador' }], corridasPor: { maria: [] }, salud: null, upCorridas: [], chequeo: null, piezas: [], pdgAgentes: [], pdgTrabajos: [], pdgCuentas: [], hoy: '2026-12-25', actas: [{ id: 7, titulo: 'Plan de enero 2027' }] }
+  const t = (id, estado, extra = {}) => ({ id, acta_id: 7, tarea: `T${id}`, area: 'up', responsable: id === 1 ? 'up:redactor' : 'up:disenador', supervisor: 'up:noruega', vence: '2027-01-10', estado, presentada: false, ...extra })
+  const pide = tareas => armarOficina({ ...base, tareas }, Date.parse('2026-12-25T15:00:00Z')).pendientes.filter(p => p.reunion)
+  assert.equal(pide([t(1, 'hecha'), t(2, 'en_curso')]).length, 0, 'todavía falta una')
+  const [p] = pide([t(1, 'hecha'), t(2, 'hecha')])
+  assert.match(p.texto, /Noruega pide una reunión para mostrarte «Plan de enero 2027»: su equipo terminó 2 tareas/)
+  assert.deepEqual(p.reunion.asistentes, ['up:noruega', 'up:redactor', 'up:disenador'])
+  assert.deepEqual(p.reunion.tareas, [1, 2])
+  assert.equal(pide([t(1, 'hecha', { presentada: true }), t(2, 'hecha', { presentada: true })]).length, 0, 'ya se mostró')
+})

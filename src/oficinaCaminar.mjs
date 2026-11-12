@@ -3,7 +3,7 @@
 // línea recta donde puede. Las medidas de los muebles son las de oficina3d/mundo.js.
 import {
   PISO, ZONAS, PUFS, MESA_REUNION, PUERTA_REUNION, DIRECCION, DANIELA, VISITA, ROBERTA, MUEBLES_DIRECCION, OFICINAS, DIVISOR,
-  asientosReunion, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RINCON_TABLONES, EXPENDEDORAS, SALA_SERVIDORES, MACETONES,
+  asientosReunion, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RINCON_TABLONES, EXPENDEDORAS, SALA_SERVIDORES, ARCHIVO, MACETONES,
 } from './oficinaPlano.mjs'
 
 export const CELDA = 0.25
@@ -53,6 +53,14 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
   for (const { mesa } of [mesaUp(nUp), mesaPdg(nPdg), mesaAdmin(nAdmin), mesaSistemas(nSistemas)]) rect(mesa.x0, mesa.x1, mesa.y0, mesa.y1)
   for (const c of RINCON_ENTRADA.sillones) circulo(c.x, c.y, 0.5)
   circulo(RINCON_ENTRADA.mesa.x, RINCON_ENTRADA.mesa.y, RINCON_ENTRADA.mesa.radio)
+  // El Archivo: paredes (la puerta da al pasillo) y estanterías.
+  const AR = ARCHIVO
+  rect(AR.x0, AR.x1, AR.y0 - pared, AR.y0 + pared)
+  rect(AR.x0, AR.x1, AR.y1 - pared, AR.y1 + pared)
+  rect(AR.x0 - pared, AR.x0 + pared, AR.y0, AR.y1)
+  rect(AR.x1 - pared, AR.x1 + pared, AR.y0, AR.puerta.y0)
+  rect(AR.x1 - pared, AR.x1 + pared, AR.puerta.y1, AR.y1)
+  for (const e of AR.estantes) rect(e.x0, e.x1, e.y0, e.y1)
   // La sala de servidores: vidrios (la puerta del lado de la entrada), racks y el aire acondicionado.
   const SV = SALA_SERVIDORES
   rect(SV.x0, SV.x1, SV.y0 - pared, SV.y0 + pared)

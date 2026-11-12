@@ -46,7 +46,7 @@ async function cargarOficina() {
     if (error) { errores.push(`${nombre}: ${error.message}`); return vacio }
     return data ?? vacio
   }
-  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, conexiones, operador] = await Promise.all([
+  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, conexiones, operador, tareas] = await Promise.all([
     leer('trabajadores', supabase.from('trabajadores').select('*').order('id'), []),
     leer('salud del sistema', supabase.rpc('salud_sistema'), null),
     leer('corridas de UP', supabase.from('up_corridas').select('estado,error,pasos,iniciado_at').order('iniciado_at', { ascending: false }).limit(15), []),
@@ -57,7 +57,8 @@ async function cargarOficina() {
     leer('cuentas de PDG', supabase.from('pdg_cuentas').select('nombre,etapa,proxima_fecha').not('proxima_fecha', 'is', null), []),
     leer('Administración', supabase.rpc('oficina_administracion'), []),
     leer('Sistemas', supabase.from('oficina_solicitudes').select('id,agente,titulo,detalle,estado,nota,creada,decidida,accion,origen').order('creada', { ascending: false }).limit(40), []),
-    leer('actas', supabase.from('oficina_actas').select('id,modo,inicio,fin,asistentes,mensajes,resumen').order('fin', { ascending: false }).limit(10), []),
+    leer('actas', supabase.from('oficina_actas').select('id,modo,inicio,fin,asistentes,mensajes,resumen,titulo,plan').order('fin', { ascending: false }).limit(15), []),
+    leer('tareas', supabase.from('oficina_tareas').select('id,acta_id,tarea,area,responsable,supervisor,vence,estado,presentada').order('vence', { ascending: true, nullsFirst: false }).limit(150), []),
     leer('conexiones', supabase.rpc('oficina_conexiones'), []),
     leer('tareas programadas', supabase.rpc('oficina_operador'), []),
   ])
@@ -68,7 +69,7 @@ async function cargarOficina() {
   return {
     trabajadores, corridasPor, salud, upCorridas, chequeo, hoy, errores,
     piezas: piezas.map(p => ({ fecha: p.fecha, estado: p.estado, tiene_texto: Boolean(p.texto) })),
-    pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin, solicitudes, actas, conexiones, operador,
+    pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin, solicitudes, actas, conexiones, operador, tareas,
   }
 }
 
@@ -101,7 +102,9 @@ export default function Oficina() {
     errores={[error, ...(datos?.errores ?? [])].filter(Boolean)} ahora={ahora} hablar={conAviso(hablarConAgente, recargar)}
     hablarReunion={conAviso(hablarEnReunion, recargar)} actualizar={recargar}
     solicitudes={datos?.solicitudes ?? []} actas={datos?.actas ?? []} decidir={async (id, estado, nota, accion) => { await decidirSolicitud(id, estado, nota, accion); await recargar() }}
-    guardarActa={async acta => { await guardarActa(acta); await recargar() }} />
+    tareas={datos?.tareas ?? []} cambiarTarea={async (id, estado) => { await cambiarTarea(id, estado); await recargar() }}
+    marcarPresentada={async ids => { await marcarPresentada(ids); await recargar() }}
+    guardarActa={async acta => { try { await guardarActa(acta) } finally { await recargar() } }} />
 }
 
 // Reunión: una pregunta de Daniela y responden los que tengan algo que decir ({ agente, texto }).
@@ -118,8 +121,24 @@ async function decidirSolicitud(id, estado, nota, accion) {
   const { error } = await supabase.from('oficina_solicitudes').update({ estado, nota: nota || null, decidida: new Date().toISOString() }).eq('id', id)
   if (error) throw new Error(error.message)
 }
-async function guardarActa(acta) {
-  const { error } = await supabase.from('oficina_actas').insert(acta)
+// Al terminar una reunión, María escribe el acta con el plan (oficina-chat la guarda con las tareas y los pedidos a
+// Sistemas). Si la IA no responde, se guarda igual la conversación con un resumen simple.
+async function guardarActa({ resumen, nombres, ...acta }) {
+  const conversan = acta.asistentes.filter(id => /^(trabajadores|up|pdg):/.test(id))
+  if (conversan.length) {
+    const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { acta: true, ...acta, asistentes: conversan, nombres } })
+    if (!error && data?.id) return
+  }
+  const { error } = await supabase.from('oficina_actas').insert({ ...acta, resumen, titulo: 'Reunión' })
+  if (error) throw new Error(error.message)
+}
+// Cuando convocás la reunión que pidió un supervisor para mostrar un proyecto terminado, sus tareas quedan presentadas.
+async function marcarPresentada(ids) {
+  const { error } = await supabase.from('oficina_tareas').update({ presentada: true }).in('id', ids)
+  if (error) throw new Error(error.message)
+}
+async function cambiarTarea(id, estado) {
+  const { error } = await supabase.from('oficina_tareas').update({ estado, actualizada: new Date().toISOString() }).eq('id', id)
   if (error) throw new Error(error.message)
 }
 // Si en la charla María o Noruega derivaron un pedido a Sistemas, se avisa en su respuesta y se vuelve a leer.
@@ -156,7 +175,7 @@ async function hablarConAgente(agente, mensajes) {
 // ---------- Vista ----------
 // reloj: de dónde sale la hora para la luz del día (en la app, la actual; se puede cambiar para probar).
 export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now,
-  solicitudes = [], actas = [], decidir = async () => {}, guardarActa = async () => {} }) {
+  solicitudes = [], actas = [], tareas = [], decidir = async () => {}, cambiarTarea = async () => {}, marcarPresentada = async () => {}, guardarActa = async () => {} }) {
   const [elegidoId, setElegidoId] = useState(null)
   const [pestana, setPestana] = useState('ahora')
   const [charlas, setCharlas] = useState({})
@@ -175,6 +194,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const [reloj, setReloj] = useState(() => Date.now())
   const [lejos, setLejos] = useState(false)
   const [volverDaniela, setVolverDaniela] = useState(0)
+  const [escribiendoActa, setEscribiendoActa] = useState(false)
   const activa = Boolean(reunion && reunion.estado !== 'volviendo')
   useEffect(() => {
     if (!activa) return
@@ -209,8 +229,10 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     setHablando(null)
     if (reunion?.estado === 'en_curso' && Array.isArray(mensajes)) {
       const vinieron = reunion.asistentes.map(id => agentes.find(a => a.id === id)).filter(Boolean)
-      guardarActa({ modo: reunion.modo, inicio: new Date(reunion.empezo ?? reunion.inicio).toISOString(), asistentes: reunion.asistentes, mensajes, resumen: resumenReunion(vinieron, pendientes) })
+      setEscribiendoActa(true)
+      guardarActa({ modo: reunion.modo, inicio: new Date(reunion.empezo ?? reunion.inicio).toISOString(), asistentes: reunion.asistentes, mensajes, resumen: resumenReunion(vinieron, pendientes), nombres: vinieron.map(a => nombreCorto(a.nombre)) })
         .catch(() => { /* el acta es un extra: si no se pudo guardar, la reunión termina igual */ })
+        .finally(() => setEscribiendoActa(false))
     }
     setReunion(r => {
       if (!r) return r
@@ -279,21 +301,23 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
           ? <ul className="oficina-tetoca">{pendientes.map(p => <li key={p.texto} className={`nivel-${p.nivel}`}>
             <span className="oficina-tetoca-texto">{p.texto}</span>
             <span className="oficina-tetoca-donde">{p.donde}</span>
-            {p.agente && agentes.some(a => a.id === p.agente) && <button type="button" className="btn btn-sm" onClick={() => abrir(p.agente)}>Ver agente</button>}
+            {p.reunion ? <button type="button" className="btn btn-sm btn-primary" disabled={Boolean(reunion)} onClick={() => setConvocando(p.reunion)}>Convocar</button>
+              : p.agente && agentes.some(a => a.id === p.agente) && <button type="button" className="btn btn-sm" onClick={() => abrir(p.agente)}>Ver agente</button>}
           </li>)}</ul>
           : <p className="tenue">Nada pendiente: los agentes no te necesitan por ahora.</p>}
       </Bloque>
       <Bloque titulo={`Sistemas${solicitudes.filter(x => x.estado === 'pendiente').length ? ` · ${solicitudes.filter(x => x.estado === 'pendiente').length} para aprobar` : ''}`}>
         {cargando ? <p className="tenue">Revisando…</p> : <Sistemas solicitudes={solicitudes} agentes={agentes} decidir={decidir} ahora={ahora} />}
       </Bloque>
-      <Bloque titulo="Actas de reuniones">
-        {cargando ? <p className="tenue">Revisando…</p> : <Actas actas={actas} agentes={agentes} />}
+      <Bloque titulo="Archivo de la oficina">
+        {cargando ? <p className="tenue">Revisando…</p> : <Archivo actas={actas} tareas={tareas} agentes={agentes} escribiendo={escribiendoActa} cambiarTarea={cambiarTarea} ahora={ahora} />}
       </Bloque>
       <Bloque titulo="Trabajando ahora">
         {cargando ? <p className="tenue">Revisando…</p> : <ActividadAhora agentes={agentes} abrir={abrir} />}
       </Bloque>
     </Bloques>
-    {convocando && <ConvocarReunion agentes={agentes} alConvocar={convocar} cerrar={() => setConvocando(false)} />}
+    {convocando && <ConvocarReunion agentes={agentes} preseleccion={convocando.asistentes ?? null} cerrar={() => setConvocando(false)}
+      alConvocar={(ids, modo) => { if (convocando.tareas) marcarPresentada(convocando.tareas).catch(() => {}); convocar(ids, modo) }} />}
     {elegido && <PanelAgente key={elegido.id} agente={elegido} pestana={pestana} setPestana={setPestana} ahora={ahora} cerrar={() => setElegidoId(null)}
       charla={charlas[elegido.id] ?? []} setCharla={m => setCharlas(c => ({ ...c, [elegido.id]: typeof m === 'function' ? m(c[elegido.id] ?? []) : m }))} hablar={hablar} />}
   </div>
@@ -358,21 +382,52 @@ function Sistemas({ solicitudes, agentes, decidir, ahora }) {
 }
 
 // ---------- Actas ----------
-function Actas({ actas, agentes }) {
+// El Archivo: las actas de las reuniones (el plan que escribió María) y las tareas que salieron, a cargo del supervisor
+// de cada área, con su fecha límite. Las tareas se marcan a mano: empezada o hecha.
+const ESTADO_TAREA = { pendiente: 'Pendiente', en_curso: 'En curso', hecha: 'Hecha' }
+function fechaCorta(f) { return f ? new Date(`${f}T12:00:00Z`).toLocaleDateString('es-AR', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' }) : 'sin fecha' }
+function Archivo({ actas, tareas, agentes, escribiendo, cambiarTarea, ahora }) {
   const [abierta, setAbierta] = useState(null)
-  if (!actas.length) return <p className="tenue">Todavía no hubo reuniones. Cada vez que termines una, su acta queda acá.</p>
+  const [error, setError] = useState('')
   const quien = id => nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)
-  return <ul className="oficina-actas">{actas.map(a => <li key={a.id}>
-    <button type="button" className="oficina-acta-cabeza" aria-expanded={abierta === a.id} onClick={() => setAbierta(v => (v === a.id ? null : a.id))}>
-      <strong>{{ sala: 'Reunión en la sala', oficina: 'Reunión en tu oficina', turnos: 'Turnos en tu oficina' }[a.modo] ?? 'Reunión'}</strong>
-      <span className="tenue">{new Date(a.fin).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {a.asistentes.length} participantes</span>
-    </button>
-    {abierta === a.id && <div className="oficina-acta">
-      <p>{a.resumen}</p>
-      <p className="tenue">Vinieron: {a.asistentes.map(quien).join(', ')}.</p>
-      {a.mensajes.length > 0 && <ol>{a.mensajes.map((m, i) => <li key={i}><strong>{m.de}:</strong> {m.texto}</li>)}</ol>}
-    </div>}
-  </li>)}</ul>
+  const hoy = hoyAR(ahora)
+  const abiertas = tareas.filter(t => t.estado !== 'hecha')
+  const cambiar = async (t, estado) => { setError(''); try { await cambiarTarea(t.id, estado) } catch (e) { setError(`No se pudo guardar: ${e.message}`) } }
+  const filaTarea = t => <li key={t.id} className={`estado-${t.estado}${t.estado !== 'hecha' && t.vence && t.vence < hoy ? ' vencida' : ''}`}>
+    <span>{t.tarea}</span>
+    <span className="tenue">La hace {quien(t.responsable)}{t.supervisor && t.supervisor !== t.responsable ? ` · supervisa ${quien(t.supervisor)}` : ''} · {EQUIPOS[t.area]?.nombre ?? t.area} · vence {fechaCorta(t.vence)} · {ESTADO_TAREA[t.estado]}</span>
+    <span className="oficina-tarea-botones">
+      {t.estado === 'pendiente' && <button type="button" className="btn btn-sm" onClick={() => cambiar(t, 'en_curso')}>Empezada</button>}
+      {t.estado !== 'hecha' && <button type="button" className="btn btn-sm" onClick={() => cambiar(t, 'hecha')}>Hecha</button>}
+    </span>
+  </li>
+  return <>
+    {escribiendo && <p className="oficina-archivo-escribiendo" role="status">María está escribiendo el acta de la reunión…</p>}
+    {error && <p role="alert" className="feedback-error">{error}</p>}
+    {abiertas.length > 0 && <>
+      <p className="oficina-archivo-titulo">Tareas en marcha</p>
+      <ul className="oficina-tareas-plan">{abiertas.slice(0, 12).map(filaTarea)}</ul>
+    </>}
+    {!actas.length ? <p className="tenue">Todavía no hubo reuniones. Cada vez que termines una, María deja el acta acá.</p>
+      : <ul className="oficina-actas">{actas.map(a => {
+        const deEsta = tareas.filter(t => t.acta_id === a.id)
+        return <li key={a.id}>
+          <button type="button" className="oficina-acta-cabeza" aria-expanded={abierta === a.id} onClick={() => setAbierta(v => (v === a.id ? null : a.id))}>
+            <strong>{a.titulo && a.titulo !== 'Reunión' ? a.titulo : { sala: 'Reunión en la sala', oficina: 'Reunión en tu oficina', turnos: 'Turnos en tu oficina' }[a.modo] ?? 'Reunión'}</strong>
+            <span className="tenue">{new Date(a.fin).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {a.asistentes.length} participantes{deEsta.length ? ` · ${deEsta.length} tareas` : ''}</span>
+          </button>
+          {abierta === a.id && <div className="oficina-acta">
+            <p>{a.resumen}</p>
+            {a.plan?.decisiones?.length > 0 && <><p className="oficina-archivo-titulo">Decisiones</p><ul>{a.plan.decisiones.map((d, i) => <li key={i}>{d}</li>)}</ul></>}
+            {deEsta.length > 0 && <><p className="oficina-archivo-titulo">Tareas</p><ul className="oficina-tareas-plan">{deEsta.map(filaTarea)}</ul></>}
+            {a.plan?.calendario?.length > 0 && <p className="tenue">Calendario: {a.plan.calendario.length} días ({fechaCorta(a.plan.calendario[0].fecha)} a {fechaCorta(a.plan.calendario.at(-1).fecha)}). Sistemas lo carga en UP cuando lo aprobás.</p>}
+            {a.plan?.sistemas?.length > 0 && <p className="tenue">Pedidos para Sistemas: {a.plan.sistemas.map(x => x.titulo).join('; ')}.</p>}
+            <p className="tenue">Vinieron: {a.asistentes.map(quien).join(', ')}.</p>
+            {a.mensajes.length > 0 && <details><summary>Conversación</summary><ol>{a.mensajes.map((m, i) => <li key={i}><strong>{m.de}:</strong> {m.texto}</li>)}</ol></details>}
+          </div>}
+        </li>
+      })}</ul>}
+  </>
 }
 
 function Leyenda() {

@@ -3,7 +3,7 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import {
-  PISO, ZONAS, PUFS, MESA_REUNION, DANIELA_SALA, LIVING, COCINA, MESA_CHICA_DANIELA, DANIELA_OFICINA, asientosOficina, MESA_CHICA_MARIA, PLANTAS_DANIELA, RINCON_ENTRADA, SALA_SERVIDORES, MACETONES, RINCON_TABLONES, EXPENDEDORAS, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, estiloDe, CUADROS_PDG,
+  PISO, ZONAS, PUFS, MESA_REUNION, DANIELA_SALA, LIVING, COCINA, MESA_CHICA_DANIELA, DANIELA_OFICINA, asientosOficina, MESA_CHICA_MARIA, PLANTAS_DANIELA, RINCON_ENTRADA, SALA_SERVIDORES, ARCHIVO, MACETONES, RINCON_TABLONES, EXPENDEDORAS, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, estiloDe, CUADROS_PDG,
   MUEBLES_DIRECCION, ROBERTA, EJECUTIVO, X0, OFICINAS, DIVISOR, ENTRADA, alturaPiso,
 } from '../oficinaPlano.mjs'
 import { texturaCuadro, texturaAlfombra, texturaCamiseta, texturaPosterOasis, texturaPelota } from './cuadros.js'
@@ -616,6 +616,37 @@ export function crearSala(mesas) {
   // Sistemas: su tablón entre UP y PDG.
   g.add(alfombra(Z.sistemas.x0 + 0.3, Z.sistemas.x1 - 0.3, Z.sistemas.y0 + 0.4, Z.sistemas.y1 - 0.9, COLORES.grisClaro))
   tablonMesa(g, mesas.sistemas)
+
+  // El Archivo: paredes bajas, frente de vidrio con puerta al pasillo, estanterías con biblioratos y cajas y un cartel.
+  const AR = ARCHIVO
+  g.add(caja(AR.x0, AR.x1, 0, 0.02, AR.y0, AR.y1, mat(COLORES.amarilloClaro), { sombra: false }))
+  g.add(caja(AR.x0, AR.x1, 0, 1.3, AR.y0 - 0.04, AR.y0 + 0.04, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(caja(AR.x0, AR.x1, 0, 1.3, AR.y1 - 0.04, AR.y1 + 0.04, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(caja(AR.x0 - 0.04, AR.x0 + 0.04, 0, 1.3, AR.y0, AR.y1, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(vidriera(AR.y0, AR.y1, AR.x1, 'z', 2.1, [AR.puerta.y0, AR.puerta.y1]))
+  const tonosArchivo = ['#3f6b8f', '#b0332b', '#c9a24a', '#5c3f2c', '#6f8f5a', '#2c2a28', '#d9a441', '#7f98a8']
+  AR.estantes.forEach((e, k) => {
+    const largoX = e.x1 - e.x0 > e.y1 - e.y0
+    g.add(caja(e.x0, e.x1, 0, 2.0, e.y0, e.y1, mat(COLORES.madera), { r: 0.02 }))
+    for (let n = 0; n < 4; n++) {
+      const y = 0.15 + n * 0.48
+      const largo = largoX ? e.x1 - e.x0 : e.y1 - e.y0
+      for (let b = 0, t = 0.06; t < largo - 0.12; b++) {
+        const ancho = 0.08 + ((b * 7 + n * 3 + k) % 4) * 0.025
+        const color = mat(tonosArchivo[(b + n * 2 + k) % tonosArchivo.length])
+        const alto = (b + n) % 5 === 0 ? 0.24 : 0.34
+        if (largoX) g.add(caja(e.x0 + t, e.x0 + t + ancho, y, y + alto, e.y1 - 0.02, e.y1 + 0.005, color, { sombra: false }))
+        else g.add(caja(e.x1 - 0.02, e.x1 + 0.005, y, y + alto, e.y0 + t, e.y0 + t + ancho, color, { sombra: false }))
+        t += ancho + 0.015
+      }
+    }
+  })
+  g.add(caja(12.4, 13.1, 0, 0.75, 23.6, 24.4, mat(COLORES.blanco), { r: 0.03 }))
+  for (const y of [0.2, 0.45, 0.7]) g.add(caja(12.38, 12.4, y - 0.02, y + 0.02, 23.8, 24.2, mat(COLORES.gris), { sombra: false }))
+  const cartelArchivo = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.3), new THREE.MeshStandardMaterial({ map: textoTextura('Archivo', { fondo: COLORES.nogal, color: '#f2d48a', tam: 66 }), transparent: true }))
+  cartelArchivo.position.set(AR.x1 + 0.05, 1.85, (AR.y0 + AR.y1) / 2 - 1.2)
+  cartelArchivo.rotation.y = Math.PI / 2
+  g.add(cartelArchivo)
 
   // Sala de servidores: vidriada, piso técnico, dos filas de racks con lucecitas y el aire acondicionado.
   const SV = SALA_SERVIDORES

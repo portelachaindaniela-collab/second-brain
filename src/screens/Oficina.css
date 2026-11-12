@@ -168,3 +168,15 @@
 .oficina-sistemas-reco { margin: var(--esp-4) 0 0; padding: var(--esp-4) var(--esp-8); border-radius: var(--radius); background: var(--gray-100); font-size: var(--letra-12); }
 .oficina-sistemas-reco.riesgo-alto { background: var(--red-100); }
 .reunion-novedades { justify-self: start; align-self: start; width: auto; }
+
+/* Archivo: tareas del plan */
+.oficina-archivo-titulo { margin: var(--esp-8) 0 var(--esp-4); font-size: var(--letra-12); color: var(--gray-500); text-transform: uppercase; letter-spacing: .04em; }
+.oficina-archivo-escribiendo { font-size: var(--letra-13); color: var(--gray-500); font-style: italic; }
+.oficina-tareas-plan { list-style: none; margin: 0 0 var(--esp-8); padding: 0; }
+.oficina-tareas-plan li { display: grid; gap: 2px; padding: var(--esp-8) 0 var(--esp-8) var(--esp-12); border-bottom: 1px solid var(--gray-200); border-left: 3px solid var(--amber-600); font-size: var(--letra-13); }
+.oficina-tareas-plan li.estado-en_curso { border-left-color: var(--green-600); }
+.oficina-tareas-plan li.estado-hecha { border-left-color: var(--gray-200); opacity: .7; }
+.oficina-tareas-plan li.vencida { border-left-color: var(--red-600); }
+.oficina-tarea-botones { display: flex; gap: var(--esp-8); margin-top: var(--esp-4); }
+.oficina-tarea-botones:empty { display: none; }
+.oficina-acta details { margin-top: var(--esp-8); }
