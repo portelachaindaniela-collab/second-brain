@@ -57,7 +57,10 @@ export function herramientasPdg(clave) {
 
 // Quiénes son mujeres (el resto habla en masculino). Lo usan los prompts de oficina-chat, los informes de las
 // reuniones y el dibujo de cada personaje.
-export const MUJERES = new Set(['trabajadores:maria', 'up:noruega', 'sistemas:mesa_entrada'])
+export const MUJERES = new Set([
+  'trabajadores:maria', 'trabajadores:tareas_estancadas', 'trabajadores:google_sync', 'trabajadores:agenda_valentina', 'trabajadores:opera',
+  'up:noruega', 'pdg:marketing', 'admin:agenda_dulce', 'admin:historial_up', 'admin:limpieza', 'sistemas:mesa_entrada',
+])
 export function generoDe(id) { return MUJERES.has(id) ? 'f' : 'm' }
 
 // Supervisores: quién se encarga de que lo acordado en una reunión se cumpla en cada área (PDG, por ahora, María).
