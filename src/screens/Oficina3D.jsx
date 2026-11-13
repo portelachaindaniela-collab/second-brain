@@ -32,7 +32,9 @@ const CAMARA_SALA = { pos: new THREE.Vector3(9.1, 4.9, 23.0), target: new THREE.
 const CAMARA_OFICINA = { pos: new THREE.Vector3(42.6, 3.9, 6.5), target: new THREE.Vector3(40.3, 0.9, 3.0), fov: 52 }
 const CAMARA_DESPACHO = { pos: new THREE.Vector3(37.25, 1.92, 1.05), target: new THREE.Vector3(36.5, 1.12, 4.7), fov: 46 }
 const nombreCorto = n => String(n).split(' (')[0]
-const PIZARRON = '__pizarron__' // lo que devuelve el click sobre un pizarrón (en vez del id de un agente)
+const PIZARRON = '__pizarron__'
+const FONDO_APIE = new THREE.Color('#e8e2d8')
+const BRUMA_APIE = new THREE.Fog('#e8e2d8', 14, 46) // lo que devuelve el click sobre un pizarrón (en vez del id de un agente)
 // Al costado de la silla de Daniela, del lado libre: por ahí se levanta y se vuelve a sentar.
 const COSTADO_SILLA = { x: DANIELA.sentado.x + 1.7, y: DANIELA.sentado.y }
 const reducido = () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
@@ -387,7 +389,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     }
     const ayudaAPie = document.createElement('p')
     ayudaAPie.className = 'o3-apie-ayuda'
-    ayudaAPie.textContent = 'Vista a pie: arrastrá para mirar · flechas o W A S D para caminar · doble click en el piso para ir · 🚶 para salir'
+    ayudaAPie.textContent = 'A pie: arrastrá para mirar · flechas para caminar · 🚶 para salir'
     caja.appendChild(botones)
     caja.appendChild(cruz)
     caja.appendChild(ayudaAPie)
@@ -398,6 +400,9 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       botonAPie.setAttribute('aria-pressed', String(activo))
       contenedor.classList.toggle('o3-apie', activo)
       renderer.domElement.style.touchAction = activo ? 'none' : 'pan-y'
+      // Las paredes son bajas (vista de casita): a la altura de los ojos se ve un cielo claro con bruma, no el fondo oscuro.
+      escena.background = activo ? FONDO_APIE : null
+      escena.fog = activo ? BRUMA_APIE : null
       if (activo) {
         // Si estaba sentada, se para al costado de su silla mirando hacia la puerta.
         if (daniela.sentada) { daniela.sentada = false; daniela.pos = { ...COSTADO_SILLA }; daniela.giro = DANIELA.mira }
