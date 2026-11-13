@@ -5,20 +5,20 @@
 .postu-graficos { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:var(--esp-16); margin-bottom:var(--esp-16); }
 .postu-resultado, .postu-antiguedad, .postu-card { padding:var(--esp-16) var(--esp-16); border:1px solid var(--gray-200); border-radius:var(--radius); background:var(--surface-raised); }
 
-/* Colores: los mismos tonos que el resto de los gráficos de la app (paleta --id-*).
-   Barras de estado: azul = esperando, bordó = rechazadas, lima = respondieron.
-   Cuadros de antigüedad, con secundarios: violeta = normal, ámbar = viejas, lima = el elegido. */
+/* Colores: secundarios con los mismos tonos que el resto de la app (paleta --id-*).
+   Violeta = esperando (también los cuadros de antigüedad), ámbar = rechazadas,
+   lima = respondieron y el cuadro elegido, rosa = las que esperan hace más de un mes. */
 .postu-graficos, .postu-card, .postu-resultado, .postu-antiguedad {
-  --postu-azul:var(--grafico-dato); --postu-rojo:var(--grafico-negativo); --postu-verde:var(--grafico-positivo);
   --postu-violeta:var(--id-violeta); --postu-naranja:var(--id-ambar);
+  --postu-verde:var(--id-lima); --postu-rosa:var(--id-rosa);
 }
 
 /* Resultado: una barra apilada */
 .postu-barra { display:flex; gap:var(--esp-4); height:14px; border-radius:var(--radius); overflow:hidden; }
 .postu-barra .seg { min-width:6px; }
-.seg.esperando, .postu-marca.esperando { background:var(--postu-azul); }
+.seg.esperando, .postu-marca.esperando { background:var(--postu-violeta); }
 .seg.respondieron, .postu-marca.respondieron { background:var(--postu-verde); }
-.seg.rechazadas, .postu-marca.rechazadas { background:var(--postu-rojo); }
+.seg.rechazadas, .postu-marca.rechazadas { background:var(--postu-naranja); }
 .postu-resultado { display:flex; flex-direction:column; }
 .postu-barra { margin-top:var(--esp-4); }
 .postu-leyenda { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:var(--esp-8); margin:auto 0 0; padding:var(--esp-16) 0 0; list-style:none; }
@@ -35,7 +35,7 @@
 .postu-col-n { font-size:var(--letra-20); font-weight:700; font-variant-numeric:tabular-nums; color:var(--gray-900); }
 .postu-col-barra { display:flex; align-items:flex-end; width:100%; max-width:46px; height:64px; border-radius:var(--radius-sm); background:var(--surface-inset); }
 .postu-col-barra span { display:block; width:100%; min-height:2px; border-radius:var(--radius-sm); background:var(--postu-violeta); }
-.postu-col.vieja .postu-col-barra span { background:var(--postu-naranja); }
+.postu-col.vieja .postu-col-barra span { background:var(--postu-rosa); }
 .postu-col.activa .postu-col-barra span { background:var(--postu-verde); }
 .postu-col-titulo { font-size:var(--letra-11); color:var(--gray-500); text-align:center; line-height:1.2; }
 
