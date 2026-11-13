@@ -281,3 +281,18 @@ test('Te toca: la reunión agendada aparece el día que toca, para convocarla co
   assert.match(r[0].texto, /^Hoy: reunión «Plan de enero», la pidió Noruega\./)
   assert.deepEqual(r[0].reunion, { asistentes: ['up:noruega', 'up:planificador'], solicitud: 1, tema: 'Plan de enero', detalle: 'Les muestro el avance', pidio: 'up:noruega' })
 })
+
+test('pedidos como hojas de Excel: una por agente, las que esperan respuesta primero', async () => {
+  const { hojasDePedidos } = await import('./oficina.mjs')
+  const p = (id, agente, estado, creada) => ({ id, agente, estado, creada, titulo: `p${id}` })
+  const hojas = hojasDePedidos([
+    p(1, 'up:noruega', 'hecha', '2026-11-13T10:00:00Z'), p(2, 'up:noruega', 'pendiente', '2026-11-10T10:00:00Z'),
+    p(3, 'up:noruega', 'aprobada', '2026-11-12T10:00:00Z'), p(4, 'up:noruega', 'pendiente', '2026-11-11T10:00:00Z'),
+    p(5, 'trabajadores:maria', 'pendiente', '2026-11-13T09:00:00Z'),
+    p(6, 'trabajadores:canillita', 'rechazada', '2026-11-13T11:00:00Z'),
+    p(7, 'pdg:femina', 'hecha', '2026-11-01T11:00:00Z'),
+  ])
+  assert.deepEqual(hojas.map(h => [h.agente, h.pendientes]), [['up:noruega', 2], ['trabajadores:maria', 1], ['trabajadores:canillita', 0], ['pdg:femina', 0]])
+  assert.deepEqual(hojas[0].pedidos.map(x => x.id), [4, 2, 3, 1], 'pendientes (lo más nuevo arriba), en marcha, cerrados')
+  assert.deepEqual(hojasDePedidos([]), [])
+})

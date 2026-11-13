@@ -1,8 +1,8 @@
-import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -378,61 +378,80 @@ function ConLinks({ texto }) {
     ? <a key={i} href={parte} target="_blank" rel="noreferrer">{parte.replace(/^https:\/\/github\.com\/[^/]+\/[^/]+\//, '')}</a>
     : parte))
 }
-// Los mensajes de la oficina: cada pedido llega como un mensaje del agente, con la recomendación de la Mesa de entrada,
-// tu respuesta y lo que hizo Sistemas, como una conversación. Podés aprobar, rechazar o responderle (abre la charla).
-const ETIQUETA_PEDIDO = { programar: 'necesita código', tarea: 'tarea', reunion: 'reunión', cargar_calendario_up: 'calendario de UP', frenar_pieza: 'frenar una publicación' }
+// Los pedidos de los agentes, como un libro de Excel: una hoja por agente (las pestañas de abajo, con cuántos esperan tu
+// respuesta) y en cada hoja una tabla con sus pedidos. Tocando una fila se abre con el detalle, la recomendación de la
+// Mesa de entrada y lo que hizo Sistemas. Podés aprobar, rechazar o responderle (abre la charla con ese agente).
+const ETIQUETA_PEDIDO = { programar: 'Código', tarea: 'Tarea', reunion: 'Reunión', cargar_calendario_up: 'Calendario UP', frenar_pieza: 'Frenar pieza' }
+const ESTADO_PEDIDO = { pendiente: 'Espera tu OK', aprobada: 'En marcha', rechazada: 'Rechazado', hecha: 'Hecho' }
 function fechaReunion(f) { return new Date(`${f}T12:00:00Z`).toLocaleDateString('es-AR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }) }
+function fechaPedido(iso) { return new Date(iso).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short' }) }
 function Mensajes({ solicitudes, agentes, decidir, responder, ahora }) {
   const [ocupado, setOcupado] = useState(null)
   const [error, setError] = useState('')
-  const [verTodos, setVerTodos] = useState(false)
-  const fin = useRef(null)
+  const [hoja, setHoja] = useState(null)
+  const [abierto, setAbierto] = useState(null) // la fila con el detalle desplegado
   const agente = id => agentes.find(a => a.id === id)
-  const abiertos = solicitudes.filter(x => x.estado === 'pendiente' || x.estado === 'aprobada')
-  // Como en un chat: lo más viejo arriba y lo nuevo abajo.
-  const lista = [...(verTodos ? solicitudes : abiertos)].sort((a, b) => Date.parse(a.creada) - Date.parse(b.creada))
-  useEffect(() => { const el = fin.current?.parentElement; if (el) el.scrollTop = el.scrollHeight }, [lista.length])
+  const nombre = id => nombreCorto(agente(id)?.nombre ?? id)
+  const hojas = hojasDePedidos(solicitudes)
+  const actual = hojas.find(h => h.agente === hoja) ?? hojas[0]
   const accion = async (x, estado) => {
     setOcupado(x.id); setError('')
     try { await decidir(x.id, estado, x.nota, x.accion) } catch (e) { setError(`No se pudo guardar: ${e.message}`) }
     setOcupado(null)
   }
+  if (!hojas.length) return <p className="tenue">Todavía nadie te pidió nada.</p>
+  const a = agente(actual.agente)
+  const charla = a && !a.sinCharla
   return <>
-    <p className="tenue">Te escriben los agentes: lo que les pediste, lo que proponen y las reuniones que quieren armar. Nada se hace sin tu permiso; lo que necesita código lo programa Sistemas.</p>
+    <p className="tenue">Lo que te piden los agentes, una hoja por agente. Nada se hace sin tu permiso.</p>
     {error && <p role="alert" className="feedback-error">{error}</p>}
-    {lista.length ? <div className="oficina-mensajes" role="log" aria-label="Mensajes de los agentes">{lista.map(x => {
-      const a = agente(x.agente)
-      const tipo = x.accion?.tipo
-      return <div key={x.id} className={`oficina-hilo estado-${x.estado}`}>
-        <div className="oficina-msj">
-          {a ? <Avatar agente={a} /> : <span className="oficina-avatar-vacio" aria-hidden="true" />}
-          <div className="oficina-msj-burbuja">
-            <span className="oficina-msj-quien">{a ? nombreCorto(a.nombre) : x.agente} · {haceCuanto(x.creada, ahora)}{x.origen === 'propuesta' ? ' · propuesta' : ''}{ETIQUETA_PEDIDO[tipo] ? ` · ${ETIQUETA_PEDIDO[tipo]}` : ''}</span>
-            <p><strong>{tipo === 'reunion' ? 'Quiero armar una reunión: ' : x.origen === 'propuesta' ? 'Te propongo: ' : 'Te pido permiso: '}{x.titulo}</strong></p>
-            {x.detalle && <p className="oficina-msj-detalle">{x.detalle}</p>}
-            {tipo === 'reunion' && <p className="oficina-msj-detalle">📅 {fechaReunion(x.accion.fecha)} · {x.accion.asistentes.map(id => nombreCorto(agente(id)?.nombre ?? id)).join(', ')}</p>}
-          </div>
-        </div>
-        {x.estado === 'pendiente' && <div className="oficina-msj oficina-msj-mesa">
-          <div className={`oficina-msj-burbuja${riesgoDe(x) === 'alto' ? ' riesgo-alto' : ''}`}><span className="oficina-msj-quien">Mesa de entrada</span><p>{recomendacion(x)}</p></div>
-        </div>}
-        {x.decidida && <div className="oficina-msj oficina-msj-yo">
-          <div className="oficina-msj-burbuja"><span className="oficina-msj-quien">Vos · {haceCuanto(x.decidida, ahora)}</span><p>{x.estado === 'rechazada' ? 'No, por ahora no.' : 'Dale, aprobado.'}</p></div>
-        </div>}
-        {x.nota && <div className="oficina-msj oficina-msj-mesa">
-          <div className="oficina-msj-burbuja"><span className="oficina-msj-quien">Sistemas</span><p><ConLinks texto={x.nota} /></p></div>
-        </div>}
-        <div className="oficina-sistemas-acciones">
-          {x.estado === 'pendiente' && <>
-            <button type="button" className="btn btn-sm btn-primary" disabled={ocupado === x.id} onClick={() => accion(x, 'aprobada')}>{TEXTO_APROBAR[tipo] ?? (x.accion ? 'Aprobar y hacerlo' : 'Aprobar')}</button>
-            <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'rechazada')}>Rechazar</button>
-          </>}
-          {a && !a.sinCharla && <button type="button" className="btn btn-sm" onClick={() => responder(x)}>Responder</button>}
-          {x.estado === 'aprobada' && tipo !== 'reunion' && <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'hecha')}>Marcar hecho</button>}
-        </div>
+    <div className="oficina-libro">
+      <div className="oficina-hoja" role="tabpanel" aria-label={`Pedidos de ${nombre(actual.agente)}`}>
+        <table className="oficina-planilla">
+          <thead><tr><th className="col-fecha">Fecha</th><th>Pedido</th><th className="col-tipo">Tipo</th><th className="col-estado">Estado</th><th className="col-acc" aria-label="Acciones" /></tr></thead>
+          <tbody>{actual.pedidos.map(x => {
+            const tipo = x.accion?.tipo
+            const largo = x.id === abierto
+            const riesgo = riesgoDe(x) === 'alto'
+            return <Fragment key={x.id}>
+              <tr className={`estado-${x.estado}${largo ? ' abierta' : ''}`} onClick={() => setAbierto(largo ? null : x.id)}>
+                <td className="col-fecha">{fechaPedido(x.creada)}</td>
+                <td className="col-pedido"><button type="button" className="oficina-celda-boton" aria-expanded={largo} onClick={ev => { ev.stopPropagation(); setAbierto(largo ? null : x.id) }}>
+                  {riesgo && <span className="oficina-fila-riesgo" title="Riesgo alto">⚠ </span>}{x.origen === 'propuesta' && <span className="oficina-etiqueta">propuesta</span>}{x.titulo}
+                </button></td>
+                <td className="col-tipo">{ETIQUETA_PEDIDO[tipo] ?? '—'}</td>
+                <td className="col-estado"><span className={`oficina-estado-pedido estado-${x.estado}`}>{ESTADO_PEDIDO[x.estado]}</span></td>
+                <td className="col-acc" onClick={ev => ev.stopPropagation()}>{x.estado === 'pendiente' && <span className="oficina-fila-acciones">
+                  <button type="button" className="btn btn-sm btn-primary" disabled={ocupado === x.id} title={TEXTO_APROBAR[tipo] ?? 'Aprobar'} aria-label={`${TEXTO_APROBAR[tipo] ?? 'Aprobar'}: ${x.titulo}`} onClick={() => accion(x, 'aprobada')}>✓</button>
+                  <button type="button" className="btn btn-sm" disabled={ocupado === x.id} title="Rechazar" aria-label={`Rechazar: ${x.titulo}`} onClick={() => accion(x, 'rechazada')}>✕</button>
+                </span>}</td>
+              </tr>
+              {largo && <tr className="oficina-planilla-detalle"><td colSpan={5}>
+                {x.detalle && <p className="oficina-msj-detalle">{x.detalle}</p>}
+                {tipo === 'reunion' && <p>📅 {fechaReunion(x.accion.fecha)} · {x.accion.asistentes.map(nombre).join(', ')}</p>}
+                {x.estado === 'pendiente' && <p className={`oficina-msj-reco${riesgo ? ' riesgo-alto' : ''}`}>Mesa de entrada: {recomendacion(x)}</p>}
+                {x.decidida && <p className="oficina-msj-reco">Vos, {haceCuanto(x.decidida, ahora)}: {x.estado === 'rechazada' ? 'no, por ahora no.' : 'dale, aprobado.'}</p>}
+                {x.nota && <p className="oficina-msj-reco">Sistemas: <ConLinks texto={x.nota} /></p>}
+                <div className="oficina-sistemas-acciones">
+                  {x.estado === 'pendiente' && <>
+                    <button type="button" className="btn btn-sm btn-primary" disabled={ocupado === x.id} onClick={() => accion(x, 'aprobada')}>{TEXTO_APROBAR[tipo] ?? (x.accion ? 'Aprobar y hacerlo' : 'Aprobar')}</button>
+                    <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'rechazada')}>Rechazar</button>
+                  </>}
+                  {charla && x.estado !== 'hecha' && x.estado !== 'rechazada' && <button type="button" className="btn btn-sm" onClick={() => responder(x)}>Responder</button>}
+                  {x.estado === 'aprobada' && tipo !== 'reunion' && <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'hecha')}>Marcar hecho</button>}
+                </div>
+              </td></tr>}
+            </Fragment>
+          })}</tbody>
+        </table>
       </div>
-    })}<span ref={fin} /></div> : <p className="tenue">No hay mensajes abiertos.</p>}
-    {solicitudes.length > abiertos.length && <button type="button" className="btn btn-sm" onClick={() => setVerTodos(v => !v)}>{verTodos ? 'Ver solo los abiertos' : `Ver todos (${solicitudes.length})`}</button>}
+      <div className="oficina-pestanas" role="tablist" aria-label="Hojas por agente">
+        {hojas.map(h => <button key={h.agente} type="button" role="tab" aria-selected={h.agente === actual.agente} className={h.agente === actual.agente ? 'activa' : ''}
+          onClick={() => { setHoja(h.agente); setAbierto(null) }}>
+          {nombre(h.agente)}{h.pendientes > 0 && <span className="oficina-pestana-num" aria-label={`${h.pendientes} esperan tu respuesta`}>{h.pendientes}</span>}
+        </button>)}
+      </div>
+    </div>
   </>
 }
 

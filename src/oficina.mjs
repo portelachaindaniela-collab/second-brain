@@ -248,6 +248,22 @@ export function agentesSistemas({ solicitudes = [], conexiones = [], operador = 
   return [mesa, guardian, op]
 }
 
+// Los pedidos como un libro de Excel: una hoja por agente. En cada hoja, primero lo que espera tu respuesta, después lo
+// que está en marcha y al final lo cerrado (lo más nuevo arriba en cada grupo). Las hojas con pedidos esperando van
+// primero (las que más tienen), después las demás por su pedido más reciente.
+const ORDEN_ESTADO = { pendiente: 0, aprobada: 1, hecha: 2, rechazada: 2 }
+export function hojasDePedidos(solicitudes = []) {
+  const por = new Map()
+  for (const x of solicitudes) {
+    if (!por.has(x.agente)) por.set(x.agente, [])
+    por.get(x.agente).push(x)
+  }
+  return [...por].map(([agente, lista]) => {
+    const pedidos = [...lista].sort((a, b) => (ORDEN_ESTADO[a.estado] ?? 3) - (ORDEN_ESTADO[b.estado] ?? 3) || Date.parse(b.creada) - Date.parse(a.creada))
+    return { agente, pedidos, pendientes: lista.filter(x => x.estado === 'pendiente').length, ultimo: Math.max(...lista.map(x => Date.parse(x.creada) || 0)) }
+  }).sort((a, b) => b.pendientes - a.pendientes || b.ultimo - a.ultimo)
+}
+
 // Las propuestas del día se piden una vez por día: si todavía no hay ninguna de hoy (hora de Buenos Aires).
 export function tocanPropuestas(solicitudes = [], ahora = Date.now()) {
   const inicio = Date.parse(`${hoyAR(ahora)}T00:00:00-03:00`)
