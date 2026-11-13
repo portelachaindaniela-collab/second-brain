@@ -2,7 +2,8 @@
 # oficina-sistemas abre un issue con la etiqueta «sistemas» cuando Daniela aprueba un pedido de código; Claude lo toma,
 # escribe el cambio en una rama y deja el link para abrir el PR. Nada llega a master sin que Daniela apruebe el PR.
 # Para seguir la charla en el mismo issue, Daniela comenta con @claude.
-# Requiere el secreto ANTHROPIC_API_KEY en el repositorio y la app de Claude instalada en GitHub.
+# Usa la suscripción de Claude de Daniela (sin costo aparte): el secreto CLAUDE_CODE_OAUTH_TOKEN sale de correr
+# `claude setup-token` en su computadora. Requiere también la app de Claude instalada en GitHub.
 name: Sistemas · Claude programa
 
 on:
@@ -41,6 +42,6 @@ jobs:
       - run: npm ci
       - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           label_trigger: sistemas
           claude_args: --max-turns 60
