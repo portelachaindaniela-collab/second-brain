@@ -264,6 +264,34 @@ export function hojasDePedidos(solicitudes = []) {
   }).sort((a, b) => b.pendientes - a.pendientes || b.ultimo - a.ultimo)
 }
 
+// ---------- Encuentros a pie ----------
+// Cuando Daniela pasa caminando cerca de un agente que tiene algo para ella, se lo dice ahí: primero lo que le pidió y
+// espera su permiso (lo más nuevo), si no, un aviso o una pregunta suya de «Te toca». Lo que ella dejó para después
+// (descartados: claves de encuentros) no se repite. cercanos: ids de los agentes cerca, el más cercano primero.
+const fechaLarga = f => new Date(`${f}T12:00:00Z`).toLocaleDateString('es-AR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })
+export function encuentroCon(id, { solicitudes = [], pendientes = [] } = {}, descartados = new Set()) {
+  const suyos = solicitudes.filter(x => x.agente === id && x.estado === 'pendiente').sort((a, b) => Date.parse(b.creada) - Date.parse(a.creada))
+  const pedido = suyos.find(x => !descartados.has(`p${x.id}`))
+  if (pedido) {
+    const t = pedido.accion?.tipo
+    const mas = suyos.length > 1 ? ` (Y tengo ${plural(suyos.length - 1, 'cosa más', 'cosas más')} para cuando puedas.)` : ''
+    const texto = t === 'reunion' ? `¿Tenés un minuto? Quería armar una reunión: «${pedido.accion.tema || pedido.titulo}», para el ${fechaLarga(pedido.accion.fecha)}.`
+      : pedido.origen === 'propuesta' ? `¿Tenés un minuto? Se me ocurrió algo: «${pedido.titulo}».${t === 'programar' ? ' Necesita código: si me decís que sí, lo programa Sistemas.' : ''}`
+        : `¿Tenés un minuto? Te quería pedir permiso para «${pedido.titulo}».${t === 'programar' ? ' Necesita código: si me decís que sí, lo programa Sistemas.' : ''}`
+    return { id, clave: `p${pedido.id}`, tipo: 'pedido', pedido, texto: texto + mas }
+  }
+  const aviso = pendientes.find(p => p.agente === id && !descartados.has(`a${p.texto}`))
+  if (aviso) return { id, clave: `a${aviso.texto}`, tipo: 'aviso', aviso, texto: `Daniela, una cosa: ${aviso.texto}` }
+  return null
+}
+export function primerEncuentro(cercanos = [], datos = {}, descartados = new Set()) {
+  for (const id of cercanos) {
+    const e = encuentroCon(id, datos, descartados)
+    if (e) return e
+  }
+  return null
+}
+
 // Las propuestas del día se piden una vez por día: si todavía no hay ninguna de hoy (hora de Buenos Aires).
 export function tocanPropuestas(solicitudes = [], ahora = Date.now()) {
   const inicio = Date.parse(`${hoyAR(ahora)}T00:00:00-03:00`)

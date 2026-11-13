@@ -916,9 +916,9 @@ export function crearDireccion() {
   for (const [x0, x1, z0, z1] of [[L.x1 - 0.06, L.x1, L.y0, L.y1], [L.x0, L.x1, L.y0, L.y0 + 0.06], [L.x0, L.x1, L.y1 - 0.06, L.y1]]) g.add(caja(x0, x1, 0.98, 1.04, z0, z1, baranda))
   g.add(planta(L.x1 - 0.4, L.y0 + 0.4, 1.1))
   g.add(planta(L.x1 - 0.4, L.y1 - 0.4, 1.0))
-  for (const z of [2.2, 3.0]) g.add(silla(46.1, z, -Math.PI / 2, COLORES.amarillo))
-  g.add(cilindro(45.6, 2.6, 0.25, 0.5, 0.54, mat(COLORES.blanco)))
-  g.add(cilindro(45.6, 2.6, 0.03, 0, 0.5, mat(COLORES.gris)))
+  for (const s of L.sillas) g.add(silla(s.x, s.y, Math.PI / 2, COLORES.amarillo))
+  g.add(cilindro(L.mesa.x, L.mesa.y, L.mesa.radio, 0.5, 0.54, mat(COLORES.blanco)))
+  g.add(cilindro(L.mesa.x, L.mesa.y, 0.03, 0, 0.5, mat(COLORES.gris)))
 
   // Mesa de reuniones chica, plantas por todos lados y la camita de Roberta.
   // Su mesa de reuniones: para ella y hasta 5 más.

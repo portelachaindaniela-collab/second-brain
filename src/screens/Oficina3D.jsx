@@ -11,7 +11,7 @@ import {
   caminoEspera, caminoTurno, caminoVueltaTurno, DANIELA, DANIELA_SALA, DANIELA_OFICINA, asientosOficina, caminoOficina, VISITA, ROBERTA,
   PIZARRONES,
 } from '../oficinaPlano.mjs'
-import { obstaculos, grilla, buscarCamino, pasoAPie } from '../oficinaCaminar.mjs'
+import { obstaculos, grilla, buscarCamino, pasoAPie, ANCHO_CAMINABLE } from '../oficinaCaminar.mjs'
 import { ESTADOS, mesOficina, hoyAR } from '../oficina.mjs'
 import './Oficina3D.css'
 
@@ -33,6 +33,7 @@ const CAMARA_OFICINA = { pos: new THREE.Vector3(42.6, 3.9, 6.5), target: new THR
 const CAMARA_DESPACHO = { pos: new THREE.Vector3(37.25, 1.92, 1.05), target: new THREE.Vector3(36.5, 1.12, 4.7), fov: 46 }
 const nombreCorto = n => String(n).split(' (')[0]
 const PIZARRON = '__pizarron__'
+const RADIO_ENCUENTRO = 2.4 // a qué distancia de Daniela un agente se da cuenta de que pasa y le habla
 const FONDO_APIE = new THREE.Color('#e8e2d8')
 const BRUMA_APIE = new THREE.Fog('#e8e2d8', 14, 46) // lo que devuelve el click sobre un pizarrón (en vez del id de un agente)
 // Al costado de la silla de Daniela, del lado libre: por ahí se levanta y se vuelve a sentar.
@@ -63,7 +64,7 @@ function etiqueta(clase, texto, alClic) {
 //   inicio, vuelta, turnos: { [id]: { llamado, fin } } }. hablando: id del que habla en la reunión.
 // pantallaCompleta: la vista tipo videollamada (la arma Oficina.jsx con children encima de la escena).
 export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, hablando = null, alPlanificar, alVolvieron,
-  volverDaniela = 0, alMoverDaniela, pantallaCompleta = false, reloj = Date.now, calendario = [], alTocarPizarron = null, children }) {
+  volverDaniela = 0, alMoverDaniela, pantallaCompleta = false, reloj = Date.now, calendario = [], alTocarPizarron = null, alCruzarse = null, children }) {
   const marco = useRef(null)
   const pizarron = useRef(null) // la textura del calendario que comparten los pizarrones
   const escenario = useRef(null)
@@ -71,7 +72,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
   datos.current ??= { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, calendario }
   // Cada render deja a mano lo último: el cuadro de animación lo lee sin rearmar la escena.
   useEffect(() => {
-    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, alTocarPizarron, calendario }
+    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, alTocarPizarron, calendario, alCruzarse }
   })
   // Los pizarrones muestran el mes actual con lo que pasa en la oficina: se redibujan cuando cambia el calendario.
   const firmaCalendario = calendario.map(e => `${e.id}${e.tipo}${e.fecha}`).join('|')
@@ -228,6 +229,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     // Vista a pie (como Street View): la cámara va a la altura de los ojos de Daniela. Se mira arrastrando y se camina
     // con las flechas (o W A S D, o los botones de la pantalla) o con doble click en el piso. rumbo: hacia dónde mira
     // (como el giro de los personajes); cabeceo: arriba o abajo.
+    const cerca = { t: 0, clave: '' }
     const aPie = { activo: false, rumbo: 0, cabeceo: -0.08, teclas: new Set(), ultimo: null }
     const ojoAPie = new THREE.Vector3(), miraAPie = new THREE.Vector3()
     const TECLAS = { ArrowUp: 'adelante', w: 'adelante', W: 'adelante', ArrowDown: 'atras', s: 'atras', S: 'atras', ArrowLeft: 'izquierda', a: 'izquierda', A: 'izquierda', ArrowRight: 'derecha', d: 'derecha', D: 'derecha' }
@@ -332,7 +334,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       apuntar(ev)
       const punto = new THREE.Vector3()
       if (!rayo.ray.intersectPlane(piso, punto)) return
-      if (punto.x < 0 || punto.z < 0 || punto.x > PISO.ancho || punto.z > PISO.fondo) return
+      if (punto.x < 0 || punto.z < 0 || punto.x > ANCHO_CAMINABLE || punto.z > PISO.fondo) return
       const enSuSilla = Math.hypot(punto.x - DANIELA.sentado.x, punto.z - DANIELA.sentado.y) < 1.1
       if (enSuSilla) volverAlEscritorio()
       else caminarA({ x: punto.x, y: punto.z })
@@ -710,6 +712,15 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       yo.grupo.position.set(daniela.pos.x, (sentadaYo ? 0.08 : 0) + alturaPiso(daniela.pos.x, daniela.pos.y), daniela.pos.y)
       yo.grupo.rotation.y = daniela.sentada ? DANIELA.mira : daniela.enSala && !daniela.ruta ? (daniela.lugarReunion ?? DANIELA_SALA).mira : daniela.giro
       posar(yo, { pose: poseYo, estado: 'libre', t: sinMovimiento ? 0 : t, fase: 2.2 })
+      // Encuentros: cuando Daniela anda caminando (no sentada ni en reunión), avisa quiénes están cerca (el más cercano
+      // primero) para que el que tenga algo para ella se lo diga. Se revisa unas veces por segundo.
+      if (t - cerca.t > 0.3) {
+        cerca.t = t
+        const ids = daniela.sentada || R?.estado === 'en_curso' ? [] : [...actores].map(([id, ac]) => [id, Math.hypot(ac.pos.x - daniela.pos.x, ac.pos.z - daniela.pos.y)])
+          .filter(([, d]) => d < RADIO_ENCUENTRO).sort((a, b) => a[1] - b[1]).map(([id]) => id)
+        const clave = ids.join('|')
+        if (clave !== cerca.clave) { cerca.clave = clave; D.alCruzarse?.(ids) }
+      }
       pantallaColor(direccion.escritorio.pantalla, 'libre', daniela.sentada, t)
       direccion.escritorio.lampara.emissiveIntensity = daniela.sentada ? 2.2 * luz.noche : 0
       direccion.luz.intensity = 4.5 * luz.noche

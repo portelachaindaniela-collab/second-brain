@@ -247,3 +247,15 @@
 /* Según el ancho del bloque (no de la pantalla): angosto, se esconden fecha y tipo; los botones quedan siempre. */
 @container (max-width: 560px) { .oficina-planilla .col-tipo, .oficina-planilla .col-fecha { display: none; } }
 @container (max-width: 400px) { .oficina-planilla .col-estado { display: none; } }
+
+/* Encuentros a pie: el agente que te cruza te dice lo suyo, abajo al centro de la escena. */
+.o3-encuentro {
+  position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 3; width: min(420px, calc(100% - 20px));
+  padding: var(--esp-12); border-radius: var(--radius); background: rgba(23, 21, 31, .92); color: #f3effa; font-size: var(--letra-13);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+}
+.o3-encuentro p { margin: var(--esp-4) 0; line-height: 1.4; }
+.o3-encuentro-quien { display: flex; align-items: center; gap: var(--esp-8); }
+.o3-encuentro-quien .oficina-avatar { width: 26px; height: 26px; }
+.o3-encuentro-riesgo { color: var(--red-600); font-size: var(--letra-12); }
+.o3-encuentro-botones { display: flex; flex-wrap: wrap; gap: var(--esp-8); margin-top: var(--esp-8); }

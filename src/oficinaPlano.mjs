@@ -29,7 +29,8 @@ const CARRIL_ADMIN = 21.5 // por donde se sale de la mesa de Administración hac
 export const ENTRADA = { x: 29.3, y: PISO.fondo }
 
 // Altura del piso en un punto: la fila ejecutiva está sobre la tarima.
-export function alturaPiso(x, y) { return x >= X0 && y <= EJECUTIVO.y1 ? EJECUTIVO.tarima : 0 }
+// El balcón de Daniela (afuera del piso, x > PISO.ancho) está al nivel del suelo, un escalón abajo de la tarima.
+export function alturaPiso(x, y) { return x >= X0 && x <= PISO.ancho && y <= EJECUTIVO.y1 ? EJECUTIVO.tarima : 0 }
 
 export const ZONAS = {
   reuniones: { x0: 0.5, y0: 19.5, x1: 10.5, y1: 26.5, nombre: 'Sala de reuniones' },
@@ -501,7 +502,9 @@ export const MUEBLES_DIRECCION = {
   mesita: { x: 29.55, y: 4.0, radio: 0.35 },
   tele: { y0: 3.0, y1: 5.0 },
   bano: { x0: 42.4, x1: 44.95, y0: 4.9, y1: 6.95, puerta: { y0: 5.3, y1: 6.1 } },
-  balcon: { x0: 45, x1: 47.2, y0: 0.8, y1: 4.4, puerta: { y0: 1.6, y1: 3.2 } },
+  balcon: { x0: 45, x1: 47.2, y0: 0.8, y1: 4.4, puerta: { y0: 1.6, y1: 3.2 },
+    // Dos sillas junto a la baranda mirando hacia afuera, con la mesita entre ellas: queda paso a lo largo del ventanal.
+    sillas: [{ x: 46.4, y: 2.0 }, { x: 46.4, y: 3.2 }], mesa: { x: 46.6, y: 2.6, radio: 0.25 } },
 }
 export const PASO_ESTE = { x0: ZONAS.espera.x0, x1: ZONAS.espera.x0 + 1.2 }
 // La espera es un rincón tipo living (no una fila de sillas): dos sillones enfrentados con una mesa ratona en el

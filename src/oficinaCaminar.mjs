@@ -42,6 +42,11 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
   for (const [x, y] of RT.macetones) circulo(x, y, 0.4)
   for (const m of EXPENDEDORAS) rect(m.x0, m.x1, m.y0, m.y1)
   for (const p of PIZARRONES) { const h = huellaPizarron(p); rect(h.x0, h.x1, h.y0, h.y1) }
+  // En el balcón: la mesita con sus dos sillas y las dos plantas (como las dibuja mundo.js).
+  const B = MUEBLES_DIRECCION.balcon
+  circulo(B.mesa.x, B.mesa.y, B.mesa.radio)
+  for (const s of B.sillas) circulo(s.x, s.y, 0.28)
+  for (const y of [B.y0 + 0.4, B.y1 - 0.4]) circulo(B.x1 - 0.4, y, 0.32)
   // Escritorios y sillas de cada agente.
   for (const l of lugares) {
     if (l.escritorio) {
@@ -113,9 +118,12 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
   return r
 }
 
-// Grilla: true = libre. Los bordes del piso no se pisan.
+// Grilla: true = libre. Los bordes del piso no se pisan. A la derecha del piso está el balcón de Daniela: se sale por
+// el ventanal corredizo de su oficina y no se pasa la baranda.
+const BALCON = MUEBLES_DIRECCION.balcon
+export const ANCHO_CAMINABLE = Math.max(PISO.ancho, BALCON.x1 + 0.25)
 export function grilla(obs) {
-  const cols = Math.ceil(PISO.ancho / CELDA), filas = Math.ceil(PISO.fondo / CELDA)
+  const cols = Math.ceil(ANCHO_CAMINABLE / CELDA), filas = Math.ceil(PISO.fondo / CELDA)
   const libre = new Uint8Array(cols * filas).fill(1)
   const marcar = (x0, x1, y0, y1) => {
     // Una celda queda ocupada si su centro cae dentro del obstáculo agrandado (así las puertas de 1 m quedan libres).
@@ -125,9 +133,14 @@ export function grilla(obs) {
   }
   for (const o of obs) marcar(o.x0, o.x1, o.y0, o.y1)
   marcar(-1, 0.05, -1, PISO.fondo + 1)
-  marcar(-1, PISO.ancho + 1, -1, 0.05)
-  marcar(PISO.ancho - 0.05, PISO.ancho + 1, -1, PISO.fondo + 1)
-  marcar(-1, PISO.ancho + 1, PISO.fondo - 0.05, PISO.fondo + 1)
+  marcar(-1, ANCHO_CAMINABLE + 1, -1, 0.05)
+  marcar(-1, ANCHO_CAMINABLE + 1, PISO.fondo - 0.05, PISO.fondo + 1)
+  // La pared derecha, con el paso al balcón por el ventanal; afuera, solo el balcón (con su baranda en tres lados).
+  marcar(PISO.ancho - 0.05, PISO.ancho + 0.05, -1, BALCON.puerta.y0)
+  marcar(PISO.ancho - 0.05, PISO.ancho + 0.05, BALCON.puerta.y1, PISO.fondo + 1)
+  marcar(PISO.ancho + 0.05, ANCHO_CAMINABLE + 1, -1, BALCON.y0 + 0.06)
+  marcar(PISO.ancho + 0.05, ANCHO_CAMINABLE + 1, BALCON.y1 - 0.06, PISO.fondo + 1)
+  marcar(BALCON.x1 - 0.06, ANCHO_CAMINABLE + 1, -1, PISO.fondo + 1)
   return { cols, filas, libre }
 }
 

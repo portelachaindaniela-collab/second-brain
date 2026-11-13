@@ -117,3 +117,20 @@ test('vista a pie: avanza hacia donde mira, no atraviesa paredes y se desliza po
   let r = { x: 30, y: PASILLO }
   for (let i = 0; i < 400; i++) { r = pasoAPie(g, r, i * 0.37, 0.12); assert.ok(esLibre(g, r)) }
 })
+
+test('balcón: se sale por el ventanal de la oficina de Daniela y no se pasa la baranda', async () => {
+  const { MUEBLES_DIRECCION, PISO } = await import('./oficinaPlano.mjs')
+  const { pasoAPie } = await import('./oficinaCaminar.mjs')
+  const B = MUEBLES_DIRECCION.balcon
+  const afuera = { x: 45.5, y: B.puerta.y0 + 0.2 }
+  assert.ok(esLibre(g, afuera), 'se puede estar en el balcón')
+  const ida = buscarCamino(g, salida, afuera)
+  assert.ok(ida && caminable(ida), 'del escritorio al balcón')
+  assert.ok(ida.some(p => p.x > PISO.ancho) && ida.every(p => p.x <= PISO.ancho || (p.y > B.puerta.y0 && p.y < B.puerta.y1) || p.x > PISO.ancho + 0.1), 'pasa por el ventanal')
+  assert.ok(!esLibre(g, { x: 45.5, y: 6 }), 'fuera del balcón no hay piso')
+  assert.ok(!esLibre(g, { x: B.x1 + 0.1, y: 2 }), 'no se pasa la baranda')
+  // Caminando hacia afuera, se frena en la baranda.
+  let p = { ...afuera }
+  for (let i = 0; i < 60; i++) p = pasoAPie(g, p, Math.PI / 2, 0.1)
+  assert.ok(p.x < B.x1 - 0.2, JSON.stringify(p))
+})
