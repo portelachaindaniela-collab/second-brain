@@ -225,3 +225,13 @@ export function buscarCamino(g, desde, hasta) {
   }
   return suave
 }
+
+// Un paso en la vista a pie: avanza d metros hacia donde mira (rumbo: 0 = hacia +y del plano, como el giro de los
+// personajes). Si choca, prueba deslizarse por la pared (solo en x o solo en y); si tampoco puede, se queda donde está.
+export function pasoAPie(g, pos, rumbo, d) {
+  const dx = Math.sin(rumbo) * d, dy = Math.cos(rumbo) * d
+  for (const p of [{ x: pos.x + dx, y: pos.y + dy }, { x: pos.x + dx, y: pos.y }, { x: pos.x, y: pos.y + dy }]) {
+    if ((p.x !== pos.x || p.y !== pos.y) && esLibre(g, p)) return p
+  }
+  return { ...pos }
+}

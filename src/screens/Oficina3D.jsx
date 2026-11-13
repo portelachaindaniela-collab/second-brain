@@ -11,7 +11,7 @@ import {
   caminoEspera, caminoTurno, caminoVueltaTurno, DANIELA, DANIELA_SALA, DANIELA_OFICINA, asientosOficina, caminoOficina, VISITA, ROBERTA,
   PIZARRONES,
 } from '../oficinaPlano.mjs'
-import { obstaculos, grilla, buscarCamino } from '../oficinaCaminar.mjs'
+import { obstaculos, grilla, buscarCamino, pasoAPie } from '../oficinaCaminar.mjs'
 import { ESTADOS, mesOficina, hoyAR } from '../oficina.mjs'
 import './Oficina3D.css'
 
@@ -223,6 +223,21 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     }
     const volverAlEscritorio = () => caminarA(COSTADO_SILLA, true)
 
+    // Vista a pie (como Street View): la cámara va a la altura de los ojos de Daniela. Se mira arrastrando y se camina
+    // con las flechas (o W A S D, o los botones de la pantalla) o con doble click en el piso. rumbo: hacia dónde mira
+    // (como el giro de los personajes); cabeceo: arriba o abajo.
+    const aPie = { activo: false, rumbo: 0, cabeceo: -0.08, teclas: new Set(), ultimo: null }
+    const ojoAPie = new THREE.Vector3(), miraAPie = new THREE.Vector3()
+    const TECLAS = { ArrowUp: 'adelante', w: 'adelante', W: 'adelante', ArrowDown: 'atras', s: 'atras', S: 'atras', ArrowLeft: 'izquierda', a: 'izquierda', A: 'izquierda', ArrowRight: 'derecha', d: 'derecha', D: 'derecha' }
+    const escribiendo = el => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+    const alTecla = ev => {
+      if (!aPie.activo || escribiendo(ev.target) || !TECLAS[ev.key]) return
+      ev.preventDefault()
+      if (ev.type === 'keydown') aPie.teclas.add(TECLAS[ev.key]); else aPie.teclas.delete(TECLAS[ev.key])
+    }
+    window.addEventListener('keydown', alTecla)
+    window.addEventListener('keyup', alTecla)
+
     // Roberta, su perra: echada en su camita; cuando Daniela camina, la sigue por el mismo rastro (así no atraviesa
     // paredes) y se sienta cerca; cuando Daniela vuelve a sentarse, vuelve a su camita.
     const perra = crearRoberta()
@@ -291,7 +306,15 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       const hit = rayo.intersectObjects(clicables, true).find(h => h.object.visible)
       return hit?.object.userData.agenteId ?? null
     }
-    const alBajar = ev => { bajada = { x: ev.clientX, y: ev.clientY } }
+    const alBajar = ev => { bajada = { x: ev.clientX, y: ev.clientY }; aPie.ultimo = { x: ev.clientX, y: ev.clientY } }
+    // A pie, arrastrar mueve la vista como en Street View (arrastrás la escena: a la derecha, mirás a la izquierda).
+    const alArrastrarAPie = ev => {
+      if (!aPie.activo || !ev.buttons || !aPie.ultimo) return
+      aPie.rumbo += (ev.clientX - aPie.ultimo.x) * 0.005
+      aPie.cabeceo = Math.max(-0.7, Math.min(0.55, aPie.cabeceo + (ev.clientY - aPie.ultimo.y) * 0.004))
+      aPie.ultimo = { x: ev.clientX, y: ev.clientY }
+    }
+    renderer.domElement.addEventListener('pointermove', alArrastrarAPie)
     const alSubir = ev => {
       if (!bajada || Math.hypot(ev.clientX - bajada.x, ev.clientY - bajada.y) > 6) return
       const id = agenteBajo(ev)
@@ -320,12 +343,14 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
 
     // Botones de cámara (girar, acercar, centrar): sirven en el celular y para quien no usa el mouse derecho.
     const girar = ang => {
+      if (aPie.activo) { aPie.rumbo -= ang * 1.6; return }
       const off = camara.position.clone().sub(controles.target)
       const s = new THREE.Spherical().setFromVector3(off)
       s.theta = Math.min(controles.maxAzimuthAngle, Math.max(controles.minAzimuthAngle, s.theta + ang))
       camara.position.copy(controles.target).add(off.setFromSpherical(s))
     }
     const acercar = f => {
+      if (aPie.activo) return
       const off = camara.position.clone().sub(controles.target)
       const l = Math.min(controles.maxDistance, Math.max(controles.minDistance, off.length() * f))
       camara.position.copy(controles.target).add(off.setLength(l))
@@ -343,7 +368,44 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       b.addEventListener('click', accion)
       botones.appendChild(b)
     }
+    const botonAPie = document.createElement('button')
+    botonAPie.type = 'button'
+    botonAPie.textContent = '🚶'
+    botonAPie.title = 'Recorrer a pie (como Street View)'
+    botonAPie.setAttribute('aria-label', botonAPie.title)
+    botonAPie.setAttribute('aria-pressed', 'false')
+    botones.prepend(botonAPie)
+    const cruz = document.createElement('div')
+    cruz.className = 'o3-cruz'
+    for (const [texto, accion, titulo] of [['↑', 'adelante', 'Caminar'], ['←', 'izquierda', 'Girar a la izquierda'], ['↓', 'atras', 'Retroceder'], ['→', 'derecha', 'Girar a la derecha']]) {
+      const b = document.createElement('button')
+      b.type = 'button'; b.textContent = texto; b.title = titulo; b.setAttribute('aria-label', titulo); b.dataset.accion = accion
+      const soltar = () => aPie.teclas.delete(accion)
+      b.addEventListener('pointerdown', ev => { ev.preventDefault(); aPie.teclas.add(accion) })
+      b.addEventListener('pointerup', soltar); b.addEventListener('pointerleave', soltar); b.addEventListener('pointercancel', soltar)
+      cruz.appendChild(b)
+    }
+    const ayudaAPie = document.createElement('p')
+    ayudaAPie.className = 'o3-apie-ayuda'
+    ayudaAPie.textContent = 'Vista a pie: arrastrá para mirar · flechas o W A S D para caminar · doble click en el piso para ir · 🚶 para salir'
     caja.appendChild(botones)
+    caja.appendChild(cruz)
+    caja.appendChild(ayudaAPie)
+    const ponerAPie = activo => {
+      if (activo === aPie.activo) return
+      aPie.activo = activo
+      aPie.teclas.clear()
+      botonAPie.setAttribute('aria-pressed', String(activo))
+      contenedor.classList.toggle('o3-apie', activo)
+      renderer.domElement.style.touchAction = activo ? 'none' : 'pan-y'
+      if (activo) {
+        // Si estaba sentada, se para al costado de su silla mirando hacia la puerta.
+        if (daniela.sentada) { daniela.sentada = false; daniela.pos = { ...COSTADO_SILLA }; daniela.giro = DANIELA.mira }
+        aPie.rumbo = daniela.giro
+        aPie.cabeceo = -0.08
+      }
+    }
+    botonAPie.addEventListener('click', () => ponerAPie(!aPie.activo))
 
     // Solo se anima mientras se ve (la pantalla queda montada oculta cuando vas a otra).
     let visible = true
@@ -426,6 +488,13 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         if (pts.every(p => { const v = p.clone().project(prueba); return Math.abs(v.x) < 0.86 && Math.abs(v.y) < 0.82 && v.z < 1 })) break
       }
       return { pos: target.clone().addScaledVector(dir, d), target, fov: base.fov }
+    }
+    // Dónde están los ojos de Daniela y hacia dónde mira (para la vista a pie).
+    const calcularOjo = () => {
+      const alto = (daniela.sentada ? 1.15 : 1.55) + alturaPiso(daniela.pos.x, daniela.pos.y)
+      ojoAPie.set(daniela.pos.x, alto, daniela.pos.y)
+      const c = Math.cos(aPie.cabeceo)
+      miraAPie.set(daniela.pos.x + Math.sin(aPie.rumbo) * c, alto + Math.sin(aPie.cabeceo), daniela.pos.y + Math.cos(aPie.rumbo) * c)
     }
     let vuelo = null
     let desvio = 0
@@ -596,6 +665,26 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       if (R?.modo === 'turnos' && R.estado === 'en_curso' && !daniela.sentada) {
         daniela.ruta = null; daniela.sentada = true; daniela.pos = { x: DANIELA.sentado.x, y: DANIELA.sentado.y }; daniela.giro = DANIELA.mira
       }
+      // A pie: girar y caminar con las teclas (o la cruz); si va por un doble click, la vista acompaña su camino.
+      if (aPie.activo && R?.estado === 'en_curso') ponerAPie(false)
+      let caminandoAPie = false
+      if (aPie.activo) {
+        const tc = aPie.teclas
+        if (tc.has('izquierda')) aPie.rumbo += 1.9 * dt
+        if (tc.has('derecha')) aPie.rumbo -= 1.9 * dt
+        const sentido = (tc.has('adelante') ? 1 : 0) - (tc.has('atras') ? 1 : 0)
+        if (sentido) {
+          daniela.ruta = null; daniela.sentada = false; daniela.enSala = false
+          daniela.pos = pasoAPie(mapa, daniela.pos, aPie.rumbo + (sentido < 0 ? Math.PI : 0), VELOCIDAD * 1.4 * dt)
+          daniela.giro = aPie.rumbo
+          caminandoAPie = true
+        } else if (daniela.ruta) {
+          const dif = Math.atan2(Math.sin(daniela.giro - aPie.rumbo), Math.cos(daniela.giro - aPie.rumbo))
+          aPie.rumbo += dif * Math.min(1, dt * 4)
+        }
+      }
+      yo.grupo.visible = !aPie.activo
+      cartelYo.visible = !aPie.activo
       let poseYo = 'sentado'
       if (daniela.ruta) {
         daniela.d += VELOCIDAD * 1.15 * dt
@@ -611,6 +700,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         }
       }
       if (!daniela.ruta && !daniela.sentada) poseYo = daniela.enSala ? 'sentado' : 'parado'
+      if (caminandoAPie) poseYo = 'caminando'
       const sentadaYo = daniela.sentada || (daniela.enSala && !daniela.ruta)
       yo.grupo.position.set(daniela.pos.x, (sentadaYo ? 0.08 : 0) + alturaPiso(daniela.pos.x, daniela.pos.y), daniela.pos.y)
       yo.grupo.rotation.y = daniela.sentada ? DANIELA.mira : daniela.enSala && !daniela.ruta ? (daniela.lugarReunion ?? DANIELA_SALA).mira : daniela.giro
@@ -667,6 +757,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       const nuevoModo = R?.estado === 'en_curso' && R.modo === 'sala' ? 'sala'
         : R?.estado === 'en_curso' && R.modo === 'oficina' ? 'oficina'
         : R?.estado === 'en_curso' && R.modo === 'turnos' ? 'despacho'
+          : aPie.activo ? 'apie'
           : elegido && actores.has(elegido) ? `agente:${elegido}`
             : daniela.ruta ? 'daniela' : 'general'
       if (pedirEntrada) { pedirEntrada = false; volar(general.pos, CENTRO, 30, 2.8) }
@@ -676,6 +767,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         if (nuevoModo === 'sala' || nuevoModo === 'oficina') claveEncuadre = '' // lo encuadra abajo, según quiénes vinieron y la pantalla
         else if (nuevoModo === 'despacho') volar(CAMARA_DESPACHO.pos, CAMARA_DESPACHO.target, CAMARA_DESPACHO.fov)
         else if (nuevoModo === 'general') volar(general.pos, general.target, 30)
+        else if (nuevoModo === 'apie') { calcularOjo(); volar(ojoAPie, miraAPie, 70, 0.9) }
         else {
           const quien = nuevoModo === 'daniela' ? { x: daniela.pos.x, z: daniela.pos.y } : actores.get(elegido).pos
           const target = new THREE.Vector3(quien.x, 0.9, quien.z)
@@ -698,7 +790,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
           volar(e.pos, e.target, e.fov, primera ? 1.3 : 0.6)
         }
       }
-      controles.enabled = modo !== 'sala' && modo !== 'despacho' && modo !== 'oficina'
+      controles.enabled = modo !== 'sala' && modo !== 'despacho' && modo !== 'oficina' && modo !== 'apie'
       if (vuelo) {
         const f = Math.min(1, (t - vuelo.t0) / vuelo.dur)
         const k = suaveIn(f)
@@ -711,6 +803,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         const q = actores.get(elegido)?.pos
         if (q) seguir(q.x, q.z)
       } else if (modo === 'daniela') seguir(daniela.pos.x, daniela.pos.y)
+      else if (modo === 'apie') { calcularOjo(); camara.position.copy(ojoAPie); controles.target.copy(miraAPie) }
       // Con el panel del agente abierto (a la derecha en pantalla ancha), la escena se corre un poco a la izquierda.
       const quiereDesvio = modo.startsWith('agente:') && window.innerWidth > 780 && !contenedor.classList.contains('o3-completa') ? 0.16 : 0
       desvio += (quiereDesvio - desvio) * 0.08
@@ -738,6 +831,9 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       renderer.domElement.removeEventListener('pointerup', alSubir)
       renderer.domElement.removeEventListener('pointermove', alMover)
       renderer.domElement.removeEventListener('dblclick', alDobleClic)
+      renderer.domElement.removeEventListener('pointermove', alArrastrarAPie)
+      window.removeEventListener('keydown', alTecla)
+      window.removeEventListener('keyup', alTecla)
       controles.dispose()
       liberar(escena)
       texPizarron.dispose()

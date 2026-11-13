@@ -101,3 +101,19 @@ test('pizarrones con rueditas: no pisan muebles y dejan pasar al balcón y por e
   const rincon = buscarCamino(g, { x: 36, y: PASILLO }, { x: RINCON_TABLONES.mesa.x + 1.2, y: 16.2 })
   assert.ok(rincon && caminable(rincon), 'por el pasillo llega al rincón de PDG')
 })
+
+test('vista a pie: avanza hacia donde mira, no atraviesa paredes y se desliza por ellas', async () => {
+  const { pasoAPie } = await import('./oficinaCaminar.mjs')
+  const { PASILLO } = await import('./oficinaPlano.mjs')
+  // En el pasillo, mirando hacia +x: avanza.
+  const p = pasoAPie(g, { x: 30, y: PASILLO }, Math.PI / 2, 0.5)
+  assert.ok(Math.abs(p.x - 30.5) < 1e-9 && Math.abs(p.y - PASILLO) < 1e-9)
+  // Contra la pared de una oficina (y = 13), mirando en diagonal: se desliza en x.
+  const q = pasoAPie(g, { x: 30, y: 13.4 }, Math.PI * 0.75, 0.3)
+  assert.ok(q.x > 30 && Math.abs(q.y - 13.4) < 1e-9, JSON.stringify(q))
+  // De frente contra la pared: no se mueve.
+  assert.deepEqual(pasoAPie(g, { x: 30, y: 13.4 }, Math.PI, 0.4), { x: 30, y: 13.4 })
+  // Muchos pasos seguidos nunca terminan en un lugar ocupado.
+  let r = { x: 30, y: PASILLO }
+  for (let i = 0; i < 400; i++) { r = pasoAPie(g, r, i * 0.37, 0.12); assert.ok(esLibre(g, r)) }
+})

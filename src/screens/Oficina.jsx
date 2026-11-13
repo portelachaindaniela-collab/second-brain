@@ -302,7 +302,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
             </Suspense></SiFalla>
             : sin3D}
           {tres && <div className="oficina-ayuda">
-            <span>Arrastrá para moverte · botón derecho o ⟲ ⟳ para girar · rueda, + y − para acercar · tocá un agente para ver qué hace · <strong>doble click</strong> en el piso para caminar vos.</span>
+            <span>Arrastrá para moverte · botón derecho o ⟲ ⟳ para girar · rueda, + y − para acercar · tocá un agente para ver qué hace · <strong>doble click</strong> en el piso para caminar vos · <strong>🚶</strong> para recorrerla a pie, como en Street View.</span>
             {lejos && <button type="button" className="btn btn-sm" onClick={() => setVolverDaniela(n => n + 1)}>Volver a mi escritorio</button>}
             <SonidoOficina />
           </div>}
