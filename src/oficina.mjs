@@ -191,6 +191,9 @@ export function riesgoDe(solicitud) {
 }
 // La recomendación de la Mesa de entrada para un pedido pendiente.
 export function recomendacion(solicitud) {
+  if (riesgoDe(solicitud) === 'alto') return 'Riesgo alto: pide accesos, permisos o claves. Recomiendo rechazar salvo que sepas para qué hace falta.'
+  if (solicitud.accion?.tipo === 'programar') return 'Necesita código: si lo aprobás, Sistemas lo abre en GitHub y Claude lo programa. Te queda un PR para revisar; nada se publica sin tu OK.'
+  if (solicitud.accion?.tipo === 'tarea') return 'No necesita código: si lo aprobás, queda como tarea en el Archivo y su supervisor la sigue en las reuniones.'
   if (solicitud.accion?.tipo === 'frenar_pieza') return 'Recomiendo aprobar: frena una publicación que podría salir mal; después se revisa con calma.'
   return riesgoDe(solicitud) === 'alto'
     ? 'Riesgo alto: pide accesos, permisos o claves. Recomiendo rechazar salvo que sepas para qué hace falta.'
@@ -204,7 +207,7 @@ export function agentesSistemas({ solicitudes = [], conexiones = [], operador = 
   const pendientes = solicitudes.filter(x => x.estado === 'pendiente')
   const riesgosos = pendientes.filter(x => riesgoDe(x) === 'alto').length
   const mesa = {
-    ...base('mesa_entrada', 'Mesa de entrada', 'Ordena los pedidos para Sistemas', 'Recibe lo que derivan María y Noruega, marca los riesgosos (accesos, permisos, claves) y te los presenta con una recomendación. No aprueba nada: decidís vos.', ['Pedidos a Sistemas']),
+    ...base('mesa_entrada', 'Mesa de entrada', 'Ordena los pedidos de permiso', 'Recibe lo que te piden los agentes (en reuniones, charlas y propuestas del día), marca los riesgosos y te los presenta con una recomendación. No aprueba nada: decidís vos. Lo que necesita código, al aprobarlo lo programa Sistemas.', ['Pedidos de permiso', 'GitHub (Claude programa lo aprobado)']),
     estado: pendientes.length ? 'trabajando' : 'libre',
     ultima: ms(solicitudes[0]?.creada),
     ahora: pendientes.length ? `${plural(pendientes.length, 'pedido espera', 'pedidos esperan')} tu aprobación${riesgosos ? ` (${plural(riesgosos, 'riesgoso', 'riesgosos')})` : ''}` : 'No hay pedidos esperando.',
@@ -243,6 +246,28 @@ export function agentesSistemas({ solicitudes = [], conexiones = [], operador = 
     conProblemas,
   }
   return [mesa, guardian, op]
+}
+
+// Los pedidos como un libro de Excel: una hoja por agente. En cada hoja, primero lo que espera tu respuesta, después lo
+// que está en marcha y al final lo cerrado (lo más nuevo arriba en cada grupo). Las hojas con pedidos esperando van
+// primero (las que más tienen), después las demás por su pedido más reciente.
+const ORDEN_ESTADO = { pendiente: 0, aprobada: 1, hecha: 2, rechazada: 2 }
+export function hojasDePedidos(solicitudes = []) {
+  const por = new Map()
+  for (const x of solicitudes) {
+    if (!por.has(x.agente)) por.set(x.agente, [])
+    por.get(x.agente).push(x)
+  }
+  return [...por].map(([agente, lista]) => {
+    const pedidos = [...lista].sort((a, b) => (ORDEN_ESTADO[a.estado] ?? 3) - (ORDEN_ESTADO[b.estado] ?? 3) || Date.parse(b.creada) - Date.parse(a.creada))
+    return { agente, pedidos, pendientes: lista.filter(x => x.estado === 'pendiente').length, ultimo: Math.max(...lista.map(x => Date.parse(x.creada) || 0)) }
+  }).sort((a, b) => b.pendientes - a.pendientes || b.ultimo - a.ultimo)
+}
+
+// Las propuestas del día se piden una vez por día: si todavía no hay ninguna de hoy (hora de Buenos Aires).
+export function tocanPropuestas(solicitudes = [], ahora = Date.now()) {
+  const inicio = Date.parse(`${hoyAR(ahora)}T00:00:00-03:00`)
+  return !solicitudes.some(x => x.origen === 'propuesta' && Date.parse(x.creada) >= inicio)
 }
 
 // ---------- Lo que te toca ----------
@@ -311,6 +336,13 @@ export function armarOficina(d, ahora) {
     const equipo = [...new Set([sup.id, ...lista.map(t => t.responsable)])].filter(id => agentes.some(a => a.id === id))
     pendientes.push({ nivel: 'aviso', texto: `${sup.nombre.split(' (')[0]} pide una reunión para mostrarte ${acta?.titulo ? `«${acta.titulo}»` : 'el proyecto'}: su equipo terminó ${plural(lista.length, 'tarea', 'tareas')}.`, donde: 'Oficina', agente: sup.id, reunion: { asistentes: equipo, tareas: lista.map(t => t.id) } })
   }
+  // Reuniones que pidió un agente y aprobaste: el día que toca (o si quedó atrasada), aparece para convocarla.
+  for (const x of reunionesAgendadas(d.solicitudes ?? []).filter(x => x.accion.fecha <= hoy)) {
+    const quien = agentes.find(a => a.id === x.agente)
+    const asistentes = x.accion.asistentes.filter(id => agentes.some(a => a.id === id))
+    pendientes.push({ nivel: 'aviso', texto: `${x.accion.fecha < hoy ? 'Quedó pendiente' : 'Hoy'}: reunión «${x.accion.tema || x.titulo}», la pidió ${quien ? quien.nombre.split(' (')[0] : x.agente}.`, donde: 'Oficina › Calendario', agente: quien?.id,
+      reunion: { asistentes, solicitud: x.id, tema: x.accion.tema || x.titulo, detalle: x.detalle, pidio: x.agente } })
+  }
   const porAprobar = (d.solicitudes ?? []).filter(x => x.estado === 'pendiente').length
   if (porAprobar) pendientes.push({ nivel: 'aviso', texto: `Sistemas: ${plural(porAprobar, 'pedido espera', 'pedidos esperan')} tu aprobación`, donde: 'Oficina › Sistemas' })
   for (const a of agentes) if (a.equipo === 'admin' && a.estado === 'error') pendientes.push({ nivel: 'error', texto: `${a.nombre}: ${a.ahora}`, donde: 'Oficina › Administración', agente: a.id })
@@ -327,6 +359,49 @@ export function contarEstados(agentes) {
   const r = { total: agentes.length, trabajando: 0, libre: 0, error: 0, pausado: 0, nuevo: 0 }
   for (const a of agentes) r[a.estado] = (r[a.estado] ?? 0) + 1
   return r
+}
+
+// ---------- Calendario de la oficina ----------
+// Las reuniones que pidió un agente y Daniela aprobó, todavía sin hacer.
+export function reunionesAgendadas(solicitudes = []) {
+  return solicitudes.filter(x => x.accion?.tipo === 'reunion' && x.estado === 'aprobada' && /^\d{4}-\d{2}-\d{2}$/.test(x.accion.fecha ?? ''))
+}
+// Todo lo que pasa en la oficina por día: las reuniones que se hicieron (actas), las agendadas, las que esperan tu OK y
+// las fechas límite de las tareas. { fecha: 'AAAA-MM-DD', tipo: 'reunion' | 'agendada' | 'propuesta' | 'vence' | 'hecha', texto, id }
+export function eventosOficina({ actas = [], tareas = [], solicitudes = [] } = {}) {
+  const lista = []
+  for (const a of actas) if (a.fin) lista.push({ fecha: hoyAR(Date.parse(a.fin)), tipo: 'reunion', texto: a.titulo || 'Reunión', id: `acta-${a.id}` })
+  for (const x of solicitudes) {
+    if (x.accion?.tipo !== 'reunion' || !/^\d{4}-\d{2}-\d{2}$/.test(x.accion.fecha ?? '')) continue
+    if (x.estado === 'aprobada') lista.push({ fecha: x.accion.fecha, tipo: 'agendada', texto: x.accion.tema || x.titulo, id: `pedido-${x.id}` })
+    else if (x.estado === 'pendiente') lista.push({ fecha: x.accion.fecha, tipo: 'propuesta', texto: `${x.accion.tema || x.titulo} (espera tu OK)`, id: `pedido-${x.id}` })
+  }
+  for (const t of tareas) if (t.vence) lista.push({ fecha: t.vence, tipo: t.estado === 'hecha' ? 'hecha' : 'vence', texto: t.tarea, id: `tarea-${t.id}` })
+  const orden = { reunion: 0, agendada: 1, propuesta: 2, vence: 3, hecha: 4 }
+  return lista.sort((a, b) => a.fecha.localeCompare(b.fecha) || orden[a.tipo] - orden[b.tipo])
+}
+// La grilla de un mes (semanas de lunes a domingo) con los eventos de cada día. mes: 'AAAA-MM'.
+export function mesOficina(mes, eventos = [], hoy = hoyAR()) {
+  const [a, m] = mes.split('-').map(Number)
+  const primero = new Date(Date.UTC(a, m - 1, 1))
+  const dias = new Date(Date.UTC(a, m, 0)).getUTCDate()
+  const corrimiento = (primero.getUTCDay() + 6) % 7 // lunes = 0
+  const celdas = []
+  for (let i = 0; i < corrimiento; i++) celdas.push(null)
+  for (let d = 1; d <= dias; d++) {
+    const fecha = `${mes}-${String(d).padStart(2, '0')}`
+    celdas.push({ dia: d, fecha, hoy: fecha === hoy, pasado: fecha < hoy, eventos: eventos.filter(e => e.fecha === fecha) })
+  }
+  while (celdas.length % 7) celdas.push(null)
+  const semanas = []
+  for (let i = 0; i < celdas.length; i += 7) semanas.push(celdas.slice(i, i + 7))
+  const nombre = primero.toLocaleDateString('es-AR', { timeZone: 'UTC', month: 'long', year: 'numeric' })
+  return { mes, nombre: nombre.charAt(0).toUpperCase() + nombre.slice(1), semanas }
+}
+export function mesVecino(mes, delta) {
+  const [a, m] = mes.split('-').map(Number)
+  const d = new Date(Date.UTC(a, m - 1 + delta, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
 // Hoy en Buenos Aires, 'AAAA-MM-DD'.

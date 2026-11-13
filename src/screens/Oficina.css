@@ -180,3 +180,68 @@
 .oficina-tarea-botones { display: flex; gap: var(--esp-8); margin-top: var(--esp-4); }
 .oficina-tarea-botones:empty { display: none; }
 .oficina-acta details { margin-top: var(--esp-8); }
+
+.oficina-msj-reco { font-size: var(--letra-12); color: var(--gray-500, inherit); }
+.oficina-msj-reco.riesgo-alto { color: var(--red-600); }
+.oficina-msj-detalle { white-space: pre-line; }
+
+/* Calendario de la oficina */
+.oficina-cal-cabeza { display: flex; align-items: center; gap: var(--esp-8); flex-wrap: wrap; margin-bottom: var(--esp-8); }
+.oficina-cal-cabeza strong { min-width: 10rem; text-align: center; }
+.oficina-cal-leyenda { display: flex; gap: var(--esp-12); flex-wrap: wrap; margin-left: auto; font-size: var(--letra-12); color: var(--gray-500, inherit); }
+.oficina-cal-leyenda span, .oficina-cal-detalle li { display: inline-flex; align-items: center; gap: 6px; }
+.oficina-cal i { width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--gray-200)); flex-shrink: 0; }
+.tipo-reunion { --c: var(--id-azul); }
+.tipo-agendada { --c: var(--green-600); }
+.tipo-propuesta { --c: var(--amber-600); }
+.tipo-vence { --c: var(--red-600); }
+.tipo-hecha { --c: var(--gray-200); }
+.oficina-cal-grilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.oficina-cal-dsem { font-size: var(--letra-12); text-align: center; color: var(--gray-500, inherit); text-transform: capitalize; }
+.oficina-cal-dia { display: flex; flex-direction: column; gap: 2px; align-items: stretch; min-height: 5.2rem; padding: 4px; text-align: left; background: var(--surface-raised); border: 1px solid var(--gray-200); border-radius: var(--radius); color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+.oficina-cal-dia.pasado { opacity: 0.6; }
+.oficina-cal-dia.es-hoy { border-color: var(--accent); }
+.oficina-cal-dia.elegido { outline: 2px solid var(--accent); outline-offset: -2px; }
+.oficina-cal-num { font-size: var(--letra-12); font-weight: 700; }
+.oficina-cal-ev { display: block; font-size: 11px; line-height: 1.3; padding: 1px 4px; border-radius: 3px; border-left: 3px solid var(--c, var(--gray-200)); background: var(--surface-inset); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oficina-cal-mas { font-size: 11px; color: var(--gray-500, inherit); }
+.oficina-cal-vacio { min-height: 5.2rem; }
+.oficina-cal-detalle { margin-top: var(--esp-12); font-size: var(--letra-13); }
+.oficina-cal-detalle strong { display: inline-block; }
+.oficina-cal-detalle strong::first-letter { text-transform: uppercase; }
+.oficina-cal-detalle ul { list-style: none; padding: 0; margin: var(--esp-4) 0 0; display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 640px) {
+  .oficina-cal-dia, .oficina-cal-vacio { min-height: 2.6rem; }
+  .oficina-cal-ev { font-size: 0; padding: 0; height: 4px; border-left: 0; background: var(--c, var(--gray-200)); }
+}
+
+
+/* Pedidos como un libro de Excel: tabla por hoja y pestañas por agente abajo. */
+.oficina-libro { border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; }
+.oficina-hoja { max-height: 22rem; overflow: auto; }
+.oficina-planilla { width: 100%; border-collapse: collapse; font-size: var(--letra-13); }
+.oficina-planilla th { position: sticky; top: 0; z-index: 1; background: var(--surface-inset); text-align: left; font-weight: 600; font-size: var(--letra-12); color: var(--gray-500, inherit); padding: 6px 8px; border-bottom: 1px solid var(--gray-200); }
+.oficina-planilla td { padding: 5px 8px; border-bottom: 1px solid var(--gray-200); vertical-align: middle; }
+.oficina-planilla tbody tr { cursor: pointer; }
+.oficina-planilla tbody tr:hover { background: var(--surface-raised); }
+.oficina-planilla tr.estado-rechazada, .oficina-planilla tr.estado-hecha { opacity: 0.6; }
+.oficina-planilla tr.abierta { background: var(--surface-raised); }
+.oficina-planilla .col-fecha { white-space: nowrap; width: 1%; color: var(--gray-500, inherit); }
+.oficina-planilla .col-tipo, .oficina-planilla .col-estado { white-space: nowrap; width: 1%; }
+.oficina-planilla .col-acc { width: 1%; white-space: nowrap; }
+.oficina-planilla .col-pedido { max-width: 0; min-width: 9rem; }
+.oficina-celda-boton { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; width: 100%; background: none; border: 0; padding: 0; color: inherit; font: inherit; line-height: 1.35; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.oficina-etiqueta { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 999px; font-size: 11px; background: var(--accent-100); color: var(--accent); }
+.oficina-fila-riesgo { color: var(--red-600); }
+.oficina-fila-acciones { display: inline-flex; gap: 4px; }
+.oficina-fila-acciones .btn { min-width: 30px; padding-left: 8px; padding-right: 8px; }
+.oficina-estado-pedido { font-size: var(--letra-12); }
+.oficina-estado-pedido.estado-pendiente { color: var(--amber-600); font-weight: 600; }
+.oficina-estado-pedido.estado-aprobada { color: var(--green-600); }
+.oficina-planilla-detalle td { cursor: default; background: var(--surface-inset); padding: var(--esp-8) var(--esp-12); }
+.oficina-planilla-detalle p { margin: 0 0 var(--esp-4); overflow-wrap: anywhere; }
+.oficina-pestanas { display: flex; overflow-x: auto; border-top: 1px solid var(--gray-200); background: var(--surface-inset); }
+.oficina-pestanas button { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 0; border-right: 1px solid var(--gray-200); background: none; color: var(--gray-500, inherit); font: inherit; font-size: var(--letra-12); cursor: pointer; }
+.oficina-pestanas button.activa { background: var(--surface-raised); color: inherit; font-weight: 600; box-shadow: inset 0 2px 0 var(--accent); }
+.oficina-pestana-num { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-size: 11px; font-weight: 700; text-align: center; }
+@media (max-width: 640px) { .oficina-planilla .col-tipo, .oficina-planilla .col-fecha { display: none; } }

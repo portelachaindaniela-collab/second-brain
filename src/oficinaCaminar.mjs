@@ -3,7 +3,7 @@
 // línea recta donde puede. Las medidas de los muebles son las de oficina3d/mundo.js.
 import {
   PISO, ZONAS, PUFS, MESA_REUNION, PUERTA_REUNION, DIRECCION, DANIELA, VISITA, ROBERTA, MUEBLES_DIRECCION, OFICINAS, DIVISOR,
-  asientosReunion, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RINCON_TABLONES, EXPENDEDORAS, SALA_SERVIDORES, ARCHIVO, MACETONES,
+  asientosReunion, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RINCON_TABLONES, EXPENDEDORAS, SALA_SERVIDORES, ARCHIVO, MACETONES, PIZARRONES, huellaPizarron,
 } from './oficinaPlano.mjs'
 
 export const CELDA = 0.25
@@ -41,6 +41,7 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
   rect(RT.pizarra.x0, RT.pizarra.x1, RT.pizarra.y - 0.15, RT.pizarra.y + 0.15)
   for (const [x, y] of RT.macetones) circulo(x, y, 0.4)
   for (const m of EXPENDEDORAS) rect(m.x0, m.x1, m.y0, m.y1)
+  for (const p of PIZARRONES) { const h = huellaPizarron(p); rect(h.x0, h.x1, h.y0, h.y1) }
   // Escritorios y sillas de cada agente.
   for (const l of lugares) {
     if (l.escritorio) {
@@ -223,4 +224,14 @@ export function buscarCamino(g, desde, hasta) {
     k = j
   }
   return suave
+}
+
+// Un paso en la vista a pie: avanza d metros hacia donde mira (rumbo: 0 = hacia +y del plano, como el giro de los
+// personajes). Si choca, prueba deslizarse por la pared (solo en x o solo en y); si tampoco puede, se queda donde está.
+export function pasoAPie(g, pos, rumbo, d) {
+  const dx = Math.sin(rumbo) * d, dy = Math.cos(rumbo) * d
+  for (const p of [{ x: pos.x + dx, y: pos.y + dy }, { x: pos.x + dx, y: pos.y }, { x: pos.x, y: pos.y + dy }]) {
+    if ((p.x !== pos.x || p.y !== pos.y) && esLibre(g, p)) return p
+  }
+  return { ...pos }
 }

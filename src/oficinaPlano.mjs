@@ -478,6 +478,21 @@ export const PLANTAS_DANIELA = [
   { x: 39.3, y: 6.5, escala: 1.1 }, { x: 41.6, y: 6.4, escala: 1.1 }, { x: 44.5, y: 1.0, escala: 1.2 },
 ]
 export const ROBERTA = { nombre: 'Roberta', cama: { x: 34.3, y: 1.6 } }
+// Los pizarrones grandes con rueditas que muestran el calendario de la oficina: uno al final del pasillo principal
+// (entre el living y el rincón de PDG) y otro en la oficina de Daniela, entre el sillón de la tele y su escritorio,
+// mirando hacia ella. giro: hacia dónde mira el frente (0 = al sur; π/2 = al este). Los dos miran hacia donde está la
+// cámara de entrada (desde el sureste). ancho y alto del tablero, en metros.
+export const PIZARRONES = [
+  { id: 'pasillo', x: 43.2, y: 13.45, ancho: 2.8, alto: 1.7, giro: 0.6 },
+  { id: 'daniela', x: 32.8, y: 2.6, ancho: 2.2, alto: 1.45, giro: Math.PI / 2 - 0.25 },
+]
+export const FONDO_PIZARRON = 0.55 // lo que ocupan las patas con rueditas, de adelante hacia atrás
+// El rectángulo que ocupa en el piso (alineado a los ejes, para la caminata).
+export function huellaPizarron(p) {
+  const c = Math.abs(Math.cos(p.giro)), s = Math.abs(Math.sin(p.giro))
+  const dx = (p.ancho / 2) * c + (FONDO_PIZARRON / 2) * s, dy = (p.ancho / 2) * s + (FONDO_PIZARRON / 2) * c
+  return { x0: p.x - dx, x1: p.x + dx, y0: p.y - dy, y1: p.y + dy }
+}
 // Lo que hay en su oficina (lo dibuja oficina3d/mundo.js y lo esquiva su caminata): biblioteca en toda la pared del
 // fondo, tele en la pared izquierda con el sillón enfrente, baño privado en el rincón y balcón del lado abierto.
 export const MUEBLES_DIRECCION = {

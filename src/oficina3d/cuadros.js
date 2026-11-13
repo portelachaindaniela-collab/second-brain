@@ -255,3 +255,45 @@ export function texturaPelota(tipo) {
   }
   return textura(c)
 }
+
+// El calendario de la oficina dibujado en el pizarrón con rueditas: el mes con sus días y, en cada uno, marcas de
+// colores (reunión, agendada, por aprobar, vence) con el texto que entra. mes: lo que devuelve mesOficina().
+const COLOR_EVENTO = { reunion: '#3f6fd6', agendada: '#2f9e5e', propuesta: '#d9902a', vence: '#d4483b', hecha: '#a8a29a' }
+export function texturaPizarron() {
+  const [c] = lienzo(1600, 1000)
+  return textura(c)
+}
+export function dibujarPizarron(tex, mes) {
+  const c = tex.image, g = c.getContext('2d'), W = c.width, H = c.height
+  g.fillStyle = '#fbfbf8'; g.fillRect(0, 0, W, H)
+  // Título a marcador y días de la semana.
+  g.fillStyle = '#2b3a55'; g.font = '800 64px system-ui, -apple-system, "Segoe UI", sans-serif'; g.textBaseline = 'top'; g.textAlign = 'left'
+  g.fillText(`📅 ${mes.nombre}`, 40, 26)
+  g.font = '700 26px system-ui, sans-serif'; g.fillStyle = '#6b6f7a'
+  const ley = [['reunion', 'reunión'], ['agendada', 'agendada'], ['propuesta', 'por aprobar'], ['vence', 'vence']]
+  let lx = W - 40; g.textAlign = 'right'
+  for (const [t, nombre] of [...ley].reverse()) { g.fillText(nombre, lx, 48); lx -= g.measureText(nombre).width + 12; g.fillStyle = COLOR_EVENTO[t]; g.fillRect(lx - 22, 50, 22, 22); g.fillStyle = '#6b6f7a'; lx -= 46 }
+  const x0 = 30, y0 = 140, cw = (W - 60) / 7, filas = mes.semanas.length, ch = (H - y0 - 30) / filas
+  g.textAlign = 'center'; g.font = '700 28px system-ui, sans-serif'; g.fillStyle = '#8b8f99'
+  ;['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'].forEach((d, i) => g.fillText(d, x0 + cw * i + cw / 2, y0 - 40))
+  g.strokeStyle = '#d6d3cc'; g.lineWidth = 2
+  mes.semanas.forEach((sem, f) => sem.forEach((cel, i) => {
+    const x = x0 + cw * i, y = y0 + ch * f
+    g.strokeRect(x, y, cw, ch)
+    if (!cel) return
+    if (cel.hoy) { g.fillStyle = 'rgba(240,166,60,0.18)'; g.fillRect(x + 1, y + 1, cw - 2, ch - 2); g.strokeStyle = '#f0a63c'; g.lineWidth = 5; g.strokeRect(x + 3, y + 3, cw - 6, ch - 6); g.strokeStyle = '#d6d3cc'; g.lineWidth = 2 }
+    g.fillStyle = cel.pasado ? '#b3b0aa' : '#2b3a55'; g.font = '800 30px system-ui, sans-serif'; g.textAlign = 'left'
+    g.fillText(String(cel.dia), x + 10, y + 8)
+    const maxLineas = Math.max(0, Math.floor((ch - 48) / 30))
+    cel.eventos.slice(0, maxLineas).forEach((e, k) => {
+      const yy = y + 46 + k * 30
+      g.fillStyle = COLOR_EVENTO[e.tipo] ?? '#888'; g.fillRect(x + 8, yy + 2, 8, 22)
+      g.fillStyle = '#33363d'; g.font = '600 20px system-ui, sans-serif'
+      let t = e.texto
+      while (t.length > 2 && g.measureText(t).width > cw - 32) t = t.slice(0, -2)
+      g.fillText(t === e.texto ? t : `${t}…`, x + 22, yy + 2)
+    })
+    if (cel.eventos.length > maxLineas && maxLineas > 0) { g.fillStyle = '#6b6f7a'; g.font = '700 20px system-ui, sans-serif'; g.textAlign = 'right'; g.fillText(`+${cel.eventos.length - maxLineas}`, x + cw - 8, y + 10) }
+  }))
+  tex.needsUpdate = true
+}

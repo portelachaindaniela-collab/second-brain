@@ -80,20 +80,58 @@ function registroFemina({ corridas = [], hallazgos = [] }) {
   ]
 }
 
-// Sistemas: solo María (la jefa de los trabajadores) y Noruega (la agente madre de UP) pueden derivarle pedidos, y
-// todos quedan pendientes hasta que Daniela los aprueba. Nadie pide accesos, claves ni permisos por las suyas.
-export const PUEDEN_DERIVAR = ['trabajadores:maria', 'up:noruega']
-const NO_PEDIR = 'No pidan accesos, permisos, claves, tokens ni herramientas nuevas: los agentes ya trabajan con lo que tienen en el servidor.'
-export function reglaSistemas(id) {
-  if (!PUEDEN_DERIVAR.includes(id)) return `- ${NO_PEDIR}`
-  return `- Podés derivarle un pedido al área de Sistemas solo si hace falta algo concreto que hoy falla o falta según tu registro (no por las dudas, y nunca claves ni tokens). Queda pendiente hasta que Daniela lo apruebe. Para derivarlo, terminá tu respuesta con una línea aparte: SOLICITUD: <título corto> | <para qué hace falta>`
+// ---------- El hilo de la oficina ----------
+// Lo que viene pasando: las últimas actas (con lo decidido), las tareas abiertas y los pedidos a Daniela. Lo leen todas
+// las charlas y reuniones, así nadie arranca de cero y lo que se habló ayer sigue hoy.
+// hilo: { actas: [{ fin, titulo, resumen, plan }], tareas: [{ tarea, area, responsable, vence, estado }], pedidos: [{ agente, titulo, estado, origen }] }
+const fechaCorta = iso => (iso ? new Date(iso).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short' }) : '?')
+const ESTADO_PEDIDO = { pendiente: 'esperando tu permiso', aprobada: 'aprobado, en marcha', rechazada: 'rechazado', hecha: 'hecho' }
+export function textoHilo(hilo = {}) {
+  const plantel = (hilo.plantel || []).length ? `\nQuiénes trabajan en la oficina (para convocar a una reunión, usá estos ids): ${hilo.plantel.map(g => `${g.nombre} (${g.id})`).join(', ')}.` : ''
+  return textoHiloBase(hilo) + plantel
+}
+function textoHiloBase(hilo = {}) {
+  const actas = (hilo.actas || []).slice(0, 5)
+  const tareas = (hilo.tareas || []).slice(0, 12)
+  const pedidos = (hilo.pedidos || []).slice(0, 10)
+  if (!actas.length && !tareas.length && !pedidos.length) return '(Todavía no hubo reuniones ni pedidos: es el primer día de la oficina.)'
+  const lineas = []
+  if (actas.length) {
+    lineas.push('Reuniones anteriores (la más nueva primero):')
+    for (const a of actas) {
+      const dec = (a.plan?.decisiones || []).slice(0, 4).map(d => recortar(d, 140))
+      lineas.push(`- ${fechaCorta(a.fin)} «${recortar(a.titulo || 'Reunión', 100)}»: ${recortar(a.resumen, 320)}${dec.length ? ` Decidido: ${dec.join('; ')}.` : ''}`)
+    }
+  }
+  if (tareas.length) {
+    lineas.push('Tareas abiertas de esas reuniones:')
+    for (const t of tareas) lineas.push(`- ${recortar(t.tarea, 160)} (${t.area}, la hace ${t.responsable}, ${t.estado === 'en_curso' ? 'en curso' : 'pendiente'}${t.vence ? `, vence ${t.vence}` : ''})`)
+  }
+  if (pedidos.length) {
+    lineas.push('Pedidos de permiso a Daniela:')
+    for (const x of pedidos) lineas.push(`- «${recortar(x.titulo, 120)}» de ${x.agente}: ${ESTADO_PEDIDO[x.estado] ?? x.estado}`)
+  }
+  return lineas.join('\n')
 }
 
-export function sistema(c, hoy) {
+// ---------- Pedidos de permiso ----------
+// Los agentes son empleados: lo que Daniela les pide, o lo que se les ocurre para su área, no lo dan por hecho: le piden
+// permiso. Si para hacerlo hay que programar algo nuevo en la app, el pedido va a Sistemas, que lo programa al aprobarse
+// (abre el pedido en GitHub y Claude escribe el código); si no, al aprobarse queda como tarea del que lo pidió.
+const NO_CLAVES = 'Nunca pidas claves, tokens, contraseñas ni accesos: eso no se pide por acá.'
+export const REGLA_PEDIDOS = `- Sos parte del equipo, no un buscador: si Daniela te pide que hagas algo, o se te ocurre algo concreto que convendría hacer en tu área (un calendario, un sitio nuevo para leer, una cuenta para PDG, una mejora de la app), no lo das por hecho ni lo prometés: le pedís permiso con un pedido. Contá qué harías, para qué y cuándo.
+- Si hace falta juntarse (para mostrar algo, decidir entre varios o arrancar un proyecto), pedí una reunión: con la fecha, a quiénes convocás (ids del plantel) y el tema. Daniela la aprueba y queda en el calendario de la oficina.
+- Si para hacerlo la app tiene que hacer algo que hoy no hace (una pantalla, un agente o un trabajador nuevo, leer un sitio nuevo, una automatización), el pedido es de código: Sistemas lo programa cuando Daniela lo aprueba. Describí qué tendría que hacer la app, con qué datos y qué se vería. Si alcanza con lo que ya hacés, el pedido es una tarea tuya.
+- ${NO_CLAVES}`
+
+export function sistema(c, hoy, hilo) {
   return `Sos ${c.nombre}, ${c.rol}, en la Oficina de agentes del Second Brain de Daniela. Hoy es ${hoy}.
 
 Qué hacés: ${c.descripcion}
 Con qué trabajás: ${c.herramientas.join('; ') || 'nada declarado'}.
+
+Lo que viene pasando en la oficina (lo saben todos; usalo para retomar lo que se habló):
+${textoHilo(hilo)}
 
 Tu registro reciente (lo más nuevo primero; es todo lo que sabés de tu trabajo):
 ${c.registro.length ? c.registro.join('\n') : '(vacío: todavía no hay nada registrado)'}
@@ -102,14 +140,15 @@ Cómo responder:
 - En primera persona, en español rioplatense, corto y concreto (2 a 6 oraciones salvo que te pidan detalle).
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
 - Respondé a lo que Daniela te dice, en el contexto de la charla: si te pide ideas u opinión, dalas ahí mismo con lo que sabés de tu área. No recites tu estado ni tu registro salvo que te lo pida o venga al caso.
-- No podés cambiar nada desde esta charla (ni correr, ni aprobar, ni editar) ni prometer entregas a futuro («te lo mando en una hora»). Si hace falta producir algo, decile quién lo haría y dónde se pide: Trabajadores para los trabajadores, la app UP para los agentes de UP, la app PDG para los comerciales.
+- No podés cambiar nada desde esta charla ni prometer entregas («te lo mando en una hora»): lo que haya que hacer, lo pedís con permiso (abajo).
 - Si algo falló, explicá qué dice el registro y qué podría revisar ella.
 - ${generoDe(c.id) === 'f' ? 'Sos mujer: hablá de vos en femenino (por ejemplo «estoy lista», «quedé pausada»).' : 'Hablá de vos en masculino.'}
-${reglaSistemas(c.id)}`
+${REGLA_PEDIDOS}
+- Para pedir permiso, terminá tu respuesta con una línea aparte por pedido (como mucho 2): PEDIDO: <título corto> | <qué harías, para qué y cuándo> | <codigo, tarea o reunion> | <fecha AAAA-MM-DD, solo si es reunión> | <ids de los convocados separados por coma, solo si es reunión>`
 }
 
-export function armarMensajes(c, mensajes, hoy) {
-  return [{ role: 'system', content: sistema(c, hoy) }, ...mensajes]
+export function armarMensajes(c, mensajes, hoy, hilo) {
+  return [{ role: 'system', content: sistema(c, hoy, hilo) }, ...mensajes]
 }
 
 // ---------- Reunión ----------
@@ -132,7 +171,7 @@ export function validarReunion(body) {
 }
 
 // participantes: [{ id, c }] con c = contexto() de cada uno.
-export function sistemaReunion(participantes, hoy) {
+export function sistemaReunion(participantes, hoy, hilo) {
   const fichas = participantes.map(({ id, c }) => [
     `### ${c.nombre} (id: ${id}) — ${c.rol} — ${generoDe(id) === 'f' ? 'mujer' : 'varón'}`,
     `Qué hace: ${recortar(c.descripcion, 300)}`,
@@ -142,6 +181,9 @@ export function sistemaReunion(participantes, hoy) {
   return `Es una reunión en la Oficina de agentes del Second Brain de Daniela, por videollamada. Hoy es ${hoy}.
 Daniela habla con todos los agentes que vinieron. Vos das voz a esos agentes: cada uno habla en primera persona,
 en español rioplatense, como en una reunión de trabajo normal (natural, cordial, concreto).
+
+Lo que viene pasando en la oficina (lo saben todos: retomen lo pendiente, digan cómo va lo que se decidió antes):
+${textoHilo(hilo)}
 
 Participantes y lo que sabe cada uno (es TODO lo que saben; no inventen fechas, cifras ni resultados):
 
@@ -154,20 +196,21 @@ Cómo se responde:
 - Hablan solo los que tienen algo que aportar (normalmente 1 a 3). Si nombra a alguien, responde ese.
   Si pide novedades o que hablen todos, cada uno dice en una oración solo lo importante.
 - Cada respuesta: 1 a 3 oraciones, naturales. Pueden hablarse entre ellos o preguntarle algo a Daniela.
-- Nadie puede cambiar nada desde la reunión (correr, aprobar, editar) ni prometer entregas a futuro («te lo mando en una
-  hora»). Si hace falta producir algo, dicen quién lo haría y dónde se pide (por ejemplo, en la app PDG o en la app UP).
+- Son empleados con iniciativa: traen propuestas concretas desde sus datos (calendarios, sitios nuevos, cuentas,
+  mejoras) sin esperar a que Daniela las pida, y retoman lo que quedó abierto en reuniones anteriores.
+- Nadie promete entregas («te lo mando en una hora») ni hace nada sin permiso: lo que haya que hacer va como pedido.
 - Si nadie sabe algo, el que más se acerque lo dice con honestidad.
 - Cada uno habla de sí en su género (mujer o varón, como dice su ficha).
-- ${NO_PEDIR} Solo María (trabajadores:maria) y Noruega (up:noruega) pueden derivarle un pedido al área de Sistemas, y solo
-  si hace falta algo concreto que hoy falla o falta según su registro; queda pendiente hasta que Daniela lo apruebe. Si lo
-  derivan, va en "solicitudes" (si no, la lista va vacía).
+- Para cada agente valen estas reglas (le hablan a él):
+${REGLA_PEDIDOS.replace(/^- /gm, '  · ')}
+- Los pedidos van en "pedidos", del agente que lo haría (como mucho 3 por respuesta; lista vacía si no hay).
 
-Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}],"solicitudes":[{"agente":"trabajadores:maria o up:noruega","titulo":"...","detalle":"para qué hace falta"}]}`
+Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}],"pedidos":[{"agente":"<id exacto>","titulo":"...","detalle":"qué haría, para qué y cuándo","tipo":"codigo, tarea o reunion","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión)"]}]}`
 }
 
 // Los mensajes de los agentes vuelven al modelo como "Nombre: texto" para que sepa quién dijo qué.
-export function mensajesReunion(participantes, mensajes, hoy) {
-  return [{ role: 'system', content: sistemaReunion(participantes, hoy) }, ...mensajes]
+export function mensajesReunion(participantes, mensajes, hoy, hilo) {
+  return [{ role: 'system', content: sistemaReunion(participantes, hoy, hilo) }, ...mensajes]
 }
 
 // Lee la respuesta del modelo: tolera texto alrededor y descarta agentes que no están en la reunión.
@@ -184,32 +227,98 @@ export function leerRespuestas(texto, idsValidos) {
     .slice(0, MAX_ASISTENTES)
 }
 
-// Los pedidos a Sistemas que vienen en la respuesta: solo de María o Noruega (y solo si están en la reunión), con
-// título y detalle recortados; como mucho 3 por vez.
+// Los pedidos que vienen en la respuesta: de cualquiera de los que están (no de otros), con título y detalle recortados,
+// como mucho 3 por vez. Cada uno lleva su acción: programar (Sistemas) o tarea (del que lo pidió, con su supervisor).
 export function leerSolicitudes(texto, idsValidos) {
   const crudo = String(texto ?? '')
   const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
   let datos = null
   if (desde >= 0 && hasta > desde) { try { datos = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { datos = null } }
-  return limpiarSolicitudes(Array.isArray(datos?.solicitudes) ? datos.solicitudes : [], idsValidos)
+  const lista = Array.isArray(datos?.pedidos) ? datos.pedidos : Array.isArray(datos?.solicitudes) ? datos.solicitudes : []
+  return limpiarSolicitudes(lista, idsValidos)
 }
-function limpiarSolicitudes(lista, idsValidos) {
+const ID_AGENTE = /^(trabajadores|up|pdg|sistemas|admin):[a-z_]{1,40}$/
+export const hoyBA = (ahora = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ahora))
+// extra: { fecha, asistentes, titulo } para las reuniones. La fecha no puede ser antes de hoy (si no viene, es hoy) y
+// el que la pide siempre está convocado.
+export function accionDePedido(agente, tipo, extra = {}, hoy = hoyBA()) {
+  if (/reuni[oó]n/i.test(String(tipo ?? ''))) {
+    const f = String(extra.fecha ?? '').trim()
+    const fecha = /^\d{4}-\d{2}-\d{2}$/.test(f) && !Number.isNaN(Date.parse(`${f}T12:00:00Z`)) && f >= hoy ? f : hoy
+    const lista = Array.isArray(extra.asistentes) ? extra.asistentes : String(extra.asistentes ?? '').split(',')
+    const asistentes = [...new Set([agente, ...lista.map(x => String(x).trim())])].filter(x => ID_AGENTE.test(x)).slice(0, 24)
+    return { tipo: 'reunion', fecha, asistentes, tema: String(extra.titulo ?? '').slice(0, 200) }
+  }
+  if (/codigo|código|sistemas/i.test(String(tipo ?? ''))) return { tipo: 'programar' }
+  const area = partirId(agente)?.equipo ?? 'trabajadores'
+  return { tipo: 'tarea', area, responsable: agente, supervisor: SUPERVISORES[area] }
+}
+const PIDE_CLAVES = /\b(token|clave|contraseña|password|api[ _-]?key|secret|credencial)/i
+export function limpiarSolicitudes(lista, idsValidos, max = 3, hoy = hoyBA()) {
   const validos = new Set(idsValidos)
   return lista
-    .map(r => ({ agente: String(r?.agente ?? ''), titulo: String(r?.titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, 200), detalle: String(r?.detalle ?? '').trim().slice(0, 2000) }))
-    .filter(r => PUEDEN_DERIVAR.includes(r.agente) && validos.has(r.agente) && r.titulo.length >= 3)
-    .slice(0, 3)
+    .map(r => ({ agente: String(r?.agente ?? ''), titulo: String(r?.titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, 200), detalle: String(r?.detalle ?? '').trim().slice(0, 4000), tipo: r?.tipo, fecha: r?.fecha, asistentes: r?.asistentes }))
+    .filter(r => validos.has(r.agente) && r.titulo.length >= 3 && !PIDE_CLAVES.test(`${r.titulo} ${r.detalle}`))
+    .slice(0, max)
+    .map(({ tipo, fecha, asistentes, ...r }) => ({ ...r, accion: accionDePedido(r.agente, tipo, { fecha, asistentes, titulo: r.titulo }, hoy) }))
 }
-// En la charla de a uno, el pedido viene en una línea "SOLICITUD: título | detalle": se saca del texto.
-export function extraerSolicitud(texto, id) {
+// En la charla de a uno, cada pedido viene en una línea «PEDIDO: título | detalle | codigo o tarea» (también se acepta
+// SOLICITUD:): se sacan del texto.
+const LINEA_PEDIDO = /^\s*\**\s*(PEDIDO|SOLICITUD)\s*:/i
+export function extraerSolicitudes(texto, id) {
   const lineas = String(texto ?? '').split('\n')
-  const k = lineas.findIndex(l => /^\s*\**\s*SOLICITUD\s*:/i.test(l))
-  if (k < 0) return { texto: String(texto ?? '').trim(), solicitud: null }
-  const cuerpo = lineas[k].replace(/^\s*\**\s*SOLICITUD\s*:\s*/i, '').replace(/\*+\s*$/, '')
-  const [titulo, ...resto] = cuerpo.split('|')
-  const limpio = lineas.filter((_, i) => i !== k).join('\n').trim()
-  const [solicitud] = limpiarSolicitudes([{ agente: id, titulo, detalle: resto.join('|') }], [id])
-  return { texto: limpio, solicitud: solicitud ?? null }
+  const crudos = lineas.filter(l => LINEA_PEDIDO.test(l)).map(l => {
+    const [titulo, detalle = '', tipo = '', fecha = '', asistentes = ''] = l.replace(LINEA_PEDIDO, '').replace(/\*+\s*$/, '').split('|')
+    return { agente: id, titulo, detalle, tipo, fecha, asistentes }
+  })
+  return { texto: lineas.filter(l => !LINEA_PEDIDO.test(l)).join('\n').trim(), solicitudes: limpiarSolicitudes(crudos, [id], 2) }
+}
+// Compatibilidad: el primero.
+export function extraerSolicitud(texto, id) {
+  const { texto: t, solicitudes } = extraerSolicitudes(texto, id)
+  return { texto: t, solicitud: solicitudes[0] ?? null }
+}
+
+// ---------- Propuestas del día ----------
+// La primera vez que Daniela abre la Oficina cada día, los equipos traen propuestas concretas desde sus datos (sin que
+// nadie las pida). Cada una entra como pedido de permiso.
+export const MAX_PROPUESTAS = 5
+export function sistemaPropuestas(participantes, hoy, hilo) {
+  const fichas = participantes.map(({ id, c }) => [
+    `### ${c.nombre} (id: ${id}) — ${c.rol}`,
+    `Qué hace: ${recortar(c.descripcion, 260)}`,
+    ...(c.registro.length ? c.registro.slice(0, 3).map(l => recortar(l, 200)) : ['(sin registro)']),
+  ].join('\n')).join('\n\n')
+  return `Es el arranque del día en la Oficina de agentes del Second Brain de Daniela. Hoy es ${hoy}.
+Los equipos traen propuestas para que Daniela las apruebe, como empleados con iniciativa: cosas concretas que
+mejorarían su trabajo o el de la oficina, sacadas de sus datos y de lo que viene pasando (por ejemplo: un calendario
+de redes para UP, un sitio o medio nuevo para que Canillita lea, cuentas o campañas para PDG, una automatización).
+
+Lo que viene pasando en la oficina:
+${textoHilo(hilo)}
+
+Agentes:
+${fichas}
+
+Reglas:
+- Entre ${MAX_PROPUESTAS - 2} y ${MAX_PROPUESTAS} propuestas en total, de áreas distintas, cada una del agente que la haría.
+- Nada repetido con los pedidos que ya están en el hilo ni con lo ya decidido. Nada inventado: si citás un dato, que
+  esté en las fichas.
+- Cada propuesta: título corto y detalle con qué harían, para qué y cuándo. tipo: "codigo" si la app tiene que hacer algo
+  que hoy no hace (Sistemas lo programa al aprobarse), "tarea" si alcanza con lo que ya hacen, "reunion" si proponen
+  juntarse (con fecha y convocados).
+- ${NO_CLAVES}
+
+Respondé SOLO con JSON: {"propuestas":[{"agente":"<id exacto>","titulo":"...","detalle":"...","tipo":"codigo, tarea o reunion","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión)"]}]}`
+}
+export function leerPropuestas(texto, idsValidos) {
+  const d = (() => {
+    const crudo = String(texto ?? '')
+    const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
+    if (desde < 0 || hasta <= desde) return null
+    try { return JSON.parse(crudo.slice(desde, hasta + 1)) } catch { return null }
+  })()
+  return limpiarSolicitudes(Array.isArray(d?.propuestas) ? d.propuestas : [], idsValidos, MAX_PROPUESTAS)
 }
 
 // ---------- Acta ----------
@@ -232,20 +341,26 @@ export function validarActa(body) {
   return { ok: true, asistentes: v.asistentes, nombres, mensajes, modo, inicio: new Date(inicio).toISOString() }
 }
 
-export function sistemaActa(nombres, hoyISO, hoy, equipos = {}) {
+export function sistemaActa(nombres, hoyISO, hoy, equipos = {}, hilo) {
   return `Sos María, la jefa de los trabajadores de la Oficina de Daniela. Terminó una reunión y escribís el acta. Hoy es ${hoy} (${hoyISO}).
 Estuvieron: ${nombres.join(', ')}.
+
+El acta sigue el hilo de la oficina: retomá lo que venía de antes (qué se cumplió, qué sigue abierto, qué cambió).
+Lo que venía pasando:
+${textoHilo(hilo)}
 
 Armá el plan que salió de la conversación, sin inventar nada que no se haya dicho o que no se desprenda de lo que pidió Daniela:
 - titulo: corto (por ejemplo «Plan de redes de enero 2027»).
 - resumen: 3 a 6 oraciones con lo que se habló y lo que se decidió.
 - decisiones: lo que quedó acordado, una por línea.
+- seguimiento: qué pasó en esta reunión con lo pendiente de reuniones anteriores (una línea por tema; lista vacía si no
+  se tocó nada de antes).
 - tareas: lo que hay que hacer para cumplir el plan. Cada proyecto lo toma el supervisor de su área, que reparte las
   tareas en su equipo: para cada tarea poné el área (trabajadores, up, pdg, sistemas o admin), quién de ese equipo la hace
   (responsable: el id exacto de la lista de abajo) y la fecha límite (vence, AAAA-MM-DD). Si Daniela dijo una fecha,
   respetala; si no, poné una razonable antes de que arranque lo planeado. Ninguna fecha antes de hoy.
-- sistemas: lo que habría que programar o habilitar en la app para que funcione solo (pedidos técnicos claros). Lista
-  vacía si no hace falta nada.
+- sistemas: lo que habría que programar en la app para que funcione solo, como pedidos técnicos claros (qué tiene que
+  hacer la app, con qué datos y qué se vería): Sistemas los programa cuando Daniela los aprueba. Lista vacía si no hace falta.
 - calendario: solo si se armó un calendario de redes (UP), los días con su tema: fecha, tema, redes (de linkedin, x,
   instagram) y formato_instagram (reel, carrusel o ninguno). Como mucho ${MAX_DIAS_CALENDARIO} días; lista vacía si no.
 
@@ -253,12 +368,12 @@ Equipos (id: nombre):
 ${Object.entries(equipos).map(([area, gente]) => `- ${area}: ${gente.map(g => `${g.id} (${g.nombre})`).join(', ') || 'sin equipo'}`).join('\n')}
 
 Respondé SOLO con JSON, sin texto alrededor:
-{"titulo":"...","resumen":"...","decisiones":["..."],"tareas":[{"tarea":"...","area":"up","responsable":"up:redactor","vence":"AAAA-MM-DD"}],"sistemas":[{"titulo":"...","detalle":"..."}],"calendario":[{"fecha":"AAAA-MM-DD","tema":"...","redes":["linkedin","x"],"formato_instagram":"ninguno"}]}`
+{"titulo":"...","resumen":"...","decisiones":["..."],"seguimiento":["..."],"tareas":[{"tarea":"...","area":"up","responsable":"up:redactor","vence":"AAAA-MM-DD"}],"sistemas":[{"titulo":"...","detalle":"..."}],"calendario":[{"fecha":"AAAA-MM-DD","tema":"...","redes":["linkedin","x"],"formato_instagram":"ninguno"}]}`
 }
 
-export function mensajesActa(nombres, mensajes, hoyISO, hoy, equipos = {}) {
+export function mensajesActa(nombres, mensajes, hoyISO, hoy, equipos = {}, hilo) {
   const transcripcion = mensajes.map(m => `${m.de}: ${m.texto}`).join('\n')
-  return [{ role: 'system', content: sistemaActa(nombres, hoyISO, hoy, equipos) }, { role: 'user', content: `La conversación de la reunión:\n${transcripcion}` }]
+  return [{ role: 'system', content: sistemaActa(nombres, hoyISO, hoy, equipos, hilo) }, { role: 'user', content: `La conversación de la reunión:\n${transcripcion}` }]
 }
 
 const fechaValida = (f, desde) => /^\d{4}-\d{2}-\d{2}$/.test(String(f ?? '')) && !Number.isNaN(Date.parse(`${f}T12:00:00Z`)) && (!desde || f >= desde)
@@ -290,15 +405,16 @@ export function leerActa(texto, hoyISO, equipos = {}) {
     titulo: texto1(d.titulo, 200) || 'Reunión',
     resumen: String(d.resumen ?? '').trim().slice(0, 3000),
     decisiones: lista(d.decisiones).map(x => texto1(x, 400)).filter(Boolean).slice(0, 20),
+    seguimiento: lista(d.seguimiento).map(x => texto1(x, 400)).filter(Boolean).slice(0, 15),
     tareas,
-    sistemas: lista(d.sistemas).map(x => ({ titulo: texto1(x?.titulo, 200), detalle: String(x?.detalle ?? '').trim().slice(0, 2000) })).filter(x => x.titulo.length >= 3).slice(0, 5),
+    sistemas: lista(d.sistemas).map(x => ({ titulo: texto1(x?.titulo, 200), detalle: String(x?.detalle ?? '').trim().slice(0, 4000) })).filter(x => x.titulo.length >= 3).slice(0, 5),
     calendario,
   }
 }
 
 // Los pedidos que Mesa de entrada (Sistemas) deja con el acta: los técnicos y, si hay calendario, cargarlo en UP.
 export function pedidosDelActa(acta) {
-  const pedidos = acta.sistemas.map(x => ({ agente: 'sistemas:mesa_entrada', titulo: x.titulo, detalle: x.detalle, accion: null }))
+  const pedidos = acta.sistemas.map(x => ({ agente: 'sistemas:mesa_entrada', titulo: x.titulo, detalle: `Sale del acta «${acta.titulo}».\n\n${x.detalle}`.slice(0, 4000), accion: { tipo: 'programar' } }))
   if (acta.calendario.length) {
     const c = acta.calendario
     pedidos.push({

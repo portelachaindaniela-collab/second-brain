@@ -29,3 +29,29 @@ test('cargar el calendario de UP: valida los días y no pisa los que ya tienen p
   assert.deepEqual(filas, [{ fecha: '2027-01-06', tema_semana: 'Plan de enero 2027', tema_dia: 'Tendencias', redes: ['instagram'], formato_instagram: 'carrusel' }])
   assert.match(notaCalendario({ pedidos: 2, cargados: 1 }), /Cargué 1 día.*1 día ya tenía publicación/)
 })
+
+test('programar y tarea: acciones válidas, el issue lleva la especificación y la tarea queda con su supervisor', async () => {
+  const { accionValida, issueDelPedido, notaProgramar, tareaDelPedido } = await import('./logic.mjs')
+  assert.equal(accionValida({ tipo: 'programar' }), true)
+  assert.equal(accionValida({ tipo: 'tarea', area: 'up', responsable: 'up:planificador', supervisor: 'up:noruega' }), true)
+  assert.equal(accionValida({ tipo: 'tarea', area: 'otra', responsable: 'up:planificador', supervisor: 'up:noruega' }), false)
+  assert.equal(accionValida({ tipo: 'borrar_todo' }), false)
+  const i = issueDelPedido({ id: 7, agente: 'trabajadores:canillita', titulo: 'Leer Olé femenino', detalle: 'Sumar su RSS a los medios de Canillita.' })
+  assert.equal(i.title, 'Sistemas: Leer Olé femenino')
+  assert.deepEqual(i.labels, ['sistemas'])
+  assert.match(i.body, /Pedido #7[\s\S]*Sumar su RSS[\s\S]*CLAUDE\.md[\s\S]*No mergees/)
+  assert.match(notaProgramar({ estado: 'abierto', url: 'https://github.com/x/y/issues/1' }), /issues\/1/)
+  assert.match(notaProgramar({ estado: 'sin_token' }), /token de GitHub/)
+  assert.deepEqual(tareaDelPedido({ titulo: 'Calendario de enero', detalle: 'temas por semana', accion: { tipo: 'tarea', area: 'up', responsable: 'up:planificador', supervisor: 'up:noruega' } }),
+    { tarea: 'Calendario de enero: temas por semana', area: 'up', responsable: 'up:planificador', supervisor: 'up:noruega' })
+})
+
+test('reunión pedida por un agente: se valida y al aprobarla queda agendada', async () => {
+  const { accionValida, notaReunion } = await import('./logic.mjs')
+  const a = { tipo: 'reunion', fecha: '2026-11-20', asistentes: ['up:noruega', 'up:planificador'], tema: 'Calendario de enero' }
+  assert.equal(accionValida(a), true)
+  assert.equal(accionValida({ ...a, fecha: 'el viernes' }), false)
+  assert.equal(accionValida({ ...a, asistentes: ['cualquiera'] }), false)
+  assert.equal(accionValida({ ...a, asistentes: [] }), false)
+  assert.match(notaReunion(a), /^Agendada para el viernes, 20 de noviembre con 2 personas\./)
+})

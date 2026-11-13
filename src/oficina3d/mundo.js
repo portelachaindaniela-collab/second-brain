@@ -4,9 +4,10 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import {
   PISO, ZONAS, PUFS, MESA_REUNION, DANIELA_SALA, LIVING, COCINA, MESA_CHICA_DANIELA, DANIELA_OFICINA, asientosOficina, MESA_CHICA_MARIA, PLANTAS_DANIELA, RINCON_ENTRADA, SALA_SERVIDORES, ARCHIVO, MACETONES, RINCON_TABLONES, EXPENDEDORAS, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, estiloDe, CUADROS_PDG,
-  MUEBLES_DIRECCION, ROBERTA, EJECUTIVO, X0, OFICINAS, DIVISOR, ENTRADA, alturaPiso,
+  MUEBLES_DIRECCION, ROBERTA, EJECUTIVO, X0, OFICINAS, DIVISOR, ENTRADA, alturaPiso, FONDO_PIZARRON,
 } from '../oficinaPlano.mjs'
 import { texturaCuadro, texturaAlfombra, texturaCamiseta, texturaPosterOasis, texturaPelota } from './cuadros.js'
+export { texturaPizarron, dibujarPizarron } from './cuadros.js'
 
 export const COLORES = {
   pared: '#eeebe5', paredLado: '#e2ded6', zocalo: '#b9ab97', tabique: '#f3f1ec',
@@ -802,6 +803,36 @@ export function crearSala(mesas) {
 
 // La oficina de Daniela (la más grande del edificio, sobre la tarima, con balcón) y la sala de espera frente a su
 // puerta. Devuelve su escritorio (pantalla y lámpara) y la luz de su oficina para la escena.
+// Un pizarrón grande con rueditas (p: uno de PIZARRONES): marco de aluminio, el tablero con el calendario de la oficina
+// (tex, la misma textura para todos), bandeja para fibrones, dos patas en T con cuatro rueditas. Se arma mirando a +z y
+// se gira según p.giro.
+export function crearPizarron(p, tex) {
+  const g = new THREE.Group()
+  const w = p.ancho, h = p.alto, base = 0.65
+  const gris = mat(COLORES.gris), alu = mat('#c9ccd1', { metalness: 0.4, roughness: 0.35 })
+  g.add(caja(-w / 2 - 0.05, w / 2 + 0.05, base - 0.05, base + h + 0.05, -0.04, 0.04, alu, { r: 0.02 }))
+  const tablero = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 }))
+  tablero.position.set(0, base + h / 2, 0.045)
+  g.add(tablero)
+  g.add(caja(-w / 2, w / 2, base - 0.1, base - 0.06, 0.04, 0.14, alu))
+  ;[['#d4483b', -0.3], ['#3f6fd6', -0.12], ['#2f9e5e', 0.06]].forEach(([c, x]) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.14, 10), mat(c))
+    m.rotation.z = Math.PI / 2; m.position.set(x, base - 0.04, 0.09); g.add(m)
+  })
+  for (const x of [-w / 2 - 0.02, w / 2 + 0.02]) {
+    g.add(caja(x - 0.03, x + 0.03, 0.1, base + h, -0.03, 0.03, gris))
+    g.add(caja(x - 0.03, x + 0.03, 0.08, 0.13, -FONDO_PIZARRON / 2, FONDO_PIZARRON / 2, gris))
+    for (const z of [-FONDO_PIZARRON / 2 + 0.04, FONDO_PIZARRON / 2 - 0.04]) {
+      const rueda = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.035, 14), mat(COLORES.negro))
+      rueda.rotation.z = Math.PI / 2; rueda.position.set(x, 0.045, z); rueda.castShadow = true; g.add(rueda)
+    }
+  }
+  g.position.set(p.x, alturaPiso(p.x, p.y), p.y)
+  g.rotation.y = p.giro
+  g.traverse(m => { if (m.isMesh) m.castShadow = true })
+  return g
+}
+
 export function crearDireccion() {
   const raiz = new THREE.Group()
   const g = new THREE.Group()

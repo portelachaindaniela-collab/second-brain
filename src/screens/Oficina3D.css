@@ -74,3 +74,25 @@
     grid-template-areas: "barra" "video" "sub" "gente" "controles"; }
   .o3-completa .o3-escenario { margin: 6px 6px 0; }
 }
+
+/* Vista a pie (como Street View): botón activo, cruz de flechas y ayuda. */
+.o3-botones button[aria-pressed="true"] { background: var(--accent); color: #171106; }
+.o3-cruz { display: none; position: absolute; left: 10px; bottom: 10px; z-index: 2; grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(2, 40px); gap: 4px; }
+.o3-apie .o3-cruz { display: grid; }
+.o3-cruz button {
+  border-radius: 10px; border: 0; cursor: pointer; font: 700 18px/1 system-ui, sans-serif; touch-action: none; user-select: none;
+  color: #2c2a28; background: rgba(255, 250, 243, .92); box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+}
+.o3-cruz button:active { background: var(--accent); }
+.o3-cruz [data-accion="adelante"] { grid-column: 2; grid-row: 1; }
+.o3-cruz [data-accion="izquierda"] { grid-column: 1; grid-row: 2; }
+.o3-cruz [data-accion="atras"] { grid-column: 2; grid-row: 2; }
+.o3-cruz [data-accion="derecha"] { grid-column: 3; grid-row: 2; }
+.o3-apie-ayuda {
+  display: none; position: absolute; bottom: 12px; left: 50%; white-space: nowrap; transform: translateX(-50%); z-index: 2; margin: 0; max-width: calc(100% - 20px);
+  padding: 6px 12px; border-radius: 999px; font: 600 12px/1.3 system-ui, sans-serif; text-align: center;
+  color: #2c2a28; background: rgba(255, 250, 243, .9); box-shadow: 0 2px 6px rgba(0, 0, 0, .2); pointer-events: none;
+}
+.o3-apie .o3-apie-ayuda { display: block; }
+.o3-apie canvas { cursor: grab; }
+@media (max-width: 640px) { .o3-apie .o3-apie-ayuda { display: none; } }
