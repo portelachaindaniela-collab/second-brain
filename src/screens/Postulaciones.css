@@ -115,3 +115,43 @@
   .postu-graficos, .postu-grilla { grid-template-columns:minmax(0, 1fr); }
   .postu-detalle dl { grid-template-columns:minmax(0, 1fr); }
 }
+
+/* ── Estilo tech con brillo: degradé, glow del mismo color, grilla tenue y números mono.
+   Los colores salen de --postu-* (arriba); acá solo cambia cómo se pintan. ── */
+.seg.esperando, .postu-marca.esperando { --c:var(--postu-violeta); }
+.seg.respondieron, .postu-marca.respondieron { --c:var(--postu-verde); }
+.seg.rechazadas, .postu-marca.rechazadas { --c:var(--postu-naranja); }
+.postu-marca { box-shadow:0 0 6px color-mix(in srgb, var(--c) 70%, transparent); }
+
+/* Barras horizontales (resultado y por puesto): degradé de izquierda a derecha */
+.postu-barra .seg, .postu-puesto-barra .seg {
+  background:linear-gradient(90deg, color-mix(in srgb, var(--c) 45%, transparent), var(--c));
+  box-shadow:0 0 10px color-mix(in srgb, var(--c) 45%, transparent);
+}
+.postu-barra, .postu-puesto-barra { overflow:visible; }
+.postu-barra { background:repeating-linear-gradient(90deg, transparent 0 9px, color-mix(in srgb, var(--gray-500) 12%, transparent) 9px 10px); }
+
+/* Barras verticales (en el tiempo y antigüedad): degradé de abajo hacia arriba */
+.postu-tiempo-barra .seg {
+  background:linear-gradient(0deg, color-mix(in srgb, var(--c) 35%, transparent), var(--c));
+  box-shadow:0 0 12px color-mix(in srgb, var(--c) 40%, transparent), inset 0 1px 0 color-mix(in srgb, white 35%, transparent);
+}
+.postu-col-barra span { --c:var(--postu-violeta); }
+.postu-col.vieja .postu-col-barra span { --c:var(--postu-rosa); }
+.postu-col.activa .postu-col-barra span { --c:var(--postu-verde); }
+.postu-col-barra span {
+  background:linear-gradient(0deg, color-mix(in srgb, var(--c) 35%, transparent), var(--c));
+  box-shadow:0 0 14px color-mix(in srgb, var(--c) 45%, transparent), inset 0 1px 0 color-mix(in srgb, white 35%, transparent);
+}
+.postu-col-barra { background:repeating-linear-gradient(0deg, color-mix(in srgb, var(--gray-500) 14%, transparent) 0 1px, transparent 1px 16px), var(--surface-inset); }
+
+/* Grilla tenue detrás de "en el tiempo" */
+.postu-tiempo {
+  background-image:repeating-linear-gradient(0deg, color-mix(in srgb, var(--gray-500) 13%, transparent) 0 1px, transparent 1px 36px);
+  background-position:bottom;
+}
+
+/* Números en fuente mono */
+.postu-leyenda strong, .postu-col-n, .postu-tiempo-n, .postu-puestos strong { font-family:var(--font-mono); letter-spacing:-.02em; }
+.postu-col-n, .postu-leyenda strong { text-shadow:0 0 12px color-mix(in srgb, var(--postu-violeta) 35%, transparent); }
+.postu-tiempo-etiqueta, .postu-col-titulo { font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.06em; font-size:var(--letra-11); }
