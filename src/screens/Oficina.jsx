@@ -2,7 +2,7 @@ import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, u
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -193,6 +193,10 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const [charlas, setCharlas] = useState({})
   const elegido = agentes.find(a => a.id === elegidoId) || null
   const eventos = useMemo(() => eventosOficina({ actas, tareas, solicitudes }), [actas, tareas, solicitudes])
+  // Encuentros a pie: el agente cercano que tiene algo para vos te lo dice (lo que dejás para después no se repite).
+  const [cercanos, setCercanos] = useState([])
+  const [despues, setDespues] = useState(() => new Set())
+  const encuentro = primerEncuentro(cercanos, { solicitudes, pendientes }, despues)
   const cuenta = contarEstados(agentes)
   const abrir = (id, p = 'ahora') => { setElegidoId(id); setPestana(p) }
   const [tres] = useState(hayWebGL)
@@ -298,7 +302,10 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
             ? <SiFalla respaldo={sin3D}><Suspense fallback={<p className="oficina-sin-3d">Abriendo la oficina…</p>}>
               <Oficina3D agentes={agentes} elegidoId={elegidoId} abrir={abrir} reunion={reunion} hablando={hablando}
                 alPlanificar={alPlanificar} alVolvieron={alVolvieron} volverDaniela={volverDaniela} alMoverDaniela={setLejos}
-                pantallaCompleta={enCurso} reloj={relojLuz} calendario={eventos} alTocarPizarron={verCalendario}>{superpuesto}</Oficina3D>
+                pantallaCompleta={enCurso} reloj={relojLuz} calendario={eventos} alTocarPizarron={verCalendario} alCruzarse={setCercanos}>
+                {superpuesto ?? (encuentro && !elegido && <Encuentro key={encuentro.clave} encuentro={encuentro} agente={agentes.find(a => a.id === encuentro.id)} decidir={decidir}
+                  responder={responder} hablar={id => abrir(id, 'charla')} despues={() => setDespues(d => new Set(d).add(encuentro.clave))} />)}
+              </Oficina3D>
             </Suspense></SiFalla>
             : sin3D}
           {tres && <div className="oficina-ayuda">
@@ -454,6 +461,32 @@ function Mensajes({ solicitudes, agentes, decidir, responder, ahora }) {
       </div>
     </div>
   </>
+}
+
+// Lo que te dice un agente cuando pasás caminando cerca: su pedido (con aprobar o rechazar ahí mismo) o un aviso.
+function Encuentro({ encuentro, agente, decidir, responder, hablar, despues }) {
+  const [ocupado, setOcupado] = useState(false)
+  const [error, setError] = useState('')
+  const x = encuentro.pedido
+  const charla = agente && !agente.sinCharla
+  const decidirlo = async estado => {
+    setOcupado(true); setError('')
+    try { await decidir(x.id, estado, x.nota, x.accion) } catch (e) { setError(e.message); setOcupado(false) }
+  }
+  return <div className="o3-encuentro" role="dialog" aria-label={`${agente ? nombreCorto(agente.nombre) : encuentro.id} te habla`}>
+    <div className="o3-encuentro-quien">{agente && <Avatar agente={agente} />}<strong>{agente ? nombreCorto(agente.nombre) : encuentro.id}</strong></div>
+    <p>{encuentro.texto}</p>
+    {x && riesgoDe(x) === 'alto' && <p className="o3-encuentro-riesgo">Mesa de entrada: {recomendacion(x)}</p>}
+    {error && <p role="alert" className="o3-encuentro-riesgo">No se pudo guardar: {error}</p>}
+    <div className="o3-encuentro-botones">
+      {x && <>
+        <button type="button" className="btn btn-sm btn-primary" disabled={ocupado} onClick={() => decidirlo('aprobada')}>{TEXTO_APROBAR[x.accion?.tipo] ?? 'Dale, aprobado'}</button>
+        <button type="button" className="btn btn-sm" disabled={ocupado} onClick={() => decidirlo('rechazada')}>No</button>
+      </>}
+      {charla && <button type="button" className="btn btn-sm" onClick={() => (x ? responder(x) : hablar(encuentro.id))}>Hablemos</button>}
+      <button type="button" className="btn btn-sm" onClick={despues}>Ahora no</button>
+    </div>
+  </div>
 }
 
 // ---------- Calendario ----------

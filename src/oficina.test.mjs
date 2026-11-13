@@ -296,3 +296,24 @@ test('pedidos como hojas de Excel: una por agente, las que esperan respuesta pri
   assert.deepEqual(hojas[0].pedidos.map(x => x.id), [4, 2, 3, 1], 'pendientes (lo más nuevo arriba), en marcha, cerrados')
   assert.deepEqual(hojasDePedidos([]), [])
 })
+
+test('encuentros a pie: el agente cercano dice lo que tiene para Daniela, una cosa por vez', async () => {
+  const { encuentroCon, primerEncuentro } = await import('./oficina.mjs')
+  const solicitudes = [
+    { id: 1, agente: 'up:noruega', estado: 'pendiente', titulo: 'Revisar las placas', creada: '2026-11-13T10:00:00Z', accion: { tipo: 'reunion', fecha: '2026-11-20', asistentes: ['up:noruega'], tema: 'Revisar las placas' } },
+    { id: 2, agente: 'up:noruega', estado: 'pendiente', titulo: 'Pantalla de métricas', creada: '2026-11-13T12:00:00Z', origen: 'propuesta', accion: { tipo: 'programar' } },
+    { id: 3, agente: 'trabajadores:canillita', estado: 'aprobada', titulo: 'Ya aprobado', creada: '2026-11-13T12:00:00Z' },
+  ]
+  const pendientes = [{ agente: 'up:investigador', texto: 'El Investigador te dejó preguntas para 1 día' }]
+  const e = encuentroCon('up:noruega', { solicitudes, pendientes })
+  assert.equal(e.pedido.id, 2, 'lo más nuevo primero')
+  assert.match(e.texto, /^¿Tenés un minuto\? Se me ocurrió algo: «Pantalla de métricas»\. Necesita código.*\(Y tengo 1 cosa más para cuando puedas\.\)$/)
+  const r = encuentroCon('up:noruega', { solicitudes, pendientes }, new Set(['p2']))
+  assert.match(r.texto, /Quería armar una reunión: «Revisar las placas», para el viernes, 20 de noviembre\./)
+  assert.equal(encuentroCon('trabajadores:canillita', { solicitudes, pendientes }), null, 'lo aprobado no se repite')
+  assert.match(encuentroCon('up:investigador', { solicitudes, pendientes }).texto, /^Daniela, una cosa: El Investigador te dejó preguntas/)
+  assert.equal(encuentroCon('up:investigador', { solicitudes, pendientes }, new Set(['aEl Investigador te dejó preguntas para 1 día'])), null)
+  // Entre los cercanos, habla el primero que tenga algo.
+  assert.equal(primerEncuentro(['trabajadores:canillita', 'up:investigador', 'up:noruega'], { solicitudes, pendientes }).id, 'up:investigador')
+  assert.equal(primerEncuentro([], { solicitudes, pendientes }), null)
+})
