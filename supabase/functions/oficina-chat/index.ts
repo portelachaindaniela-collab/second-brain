@@ -4,13 +4,12 @@ import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajes
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
-// Oficina: hablar con un agente. Todas las charlas y reuniones leen el hilo de la oficina (actas, tareas y pedidos), y lo
-// que los agentes quieren hacer entra como pedido de permiso para Daniela. { propuestas: true }: las del día. La app manda { agente: 'up:redactor', mensajes } (charla con uno) o
-// { reunion: true, asistentes: [...], mensajes } (reunión con todos los que vinieron: responde con
-// { respuestas: [{ agente, texto }] }). Lee los datos con la sesión de la dueña (RLS, nunca con permisos de servicio)
-// y responde con la IA. Lo único que escribe: los pedidos que María o Noruega le derivan a Sistemas, que entran
-// pendientes (la base no deja crearlos de otra forma) hasta que Daniela los aprueba, y el acta de cada reunión
-// ({ acta: true, ... }: el plan, las tareas a cargo de cada supervisor y los pedidos técnicos para Sistemas).
+// Oficina: hablar con los agentes. La app manda { agente: 'up:redactor', mensajes } (charla con uno),
+// { reunion: true, asistentes: [...], mensajes } (reunión: responde con { respuestas: [{ agente, texto }] }),
+// { acta: true, ... } (María escribe el acta) o { propuestas: true } (las propuestas del día). Todas leen el hilo de la
+// oficina (actas, tareas, pedidos y el plantel). Lee con la sesión de la dueña (RLS, nunca con permisos de servicio).
+// Lo que escribe: los pedidos de permiso de los agentes (entran pendientes, la base no deja crearlos de otra forma,
+// hasta que Daniela decide) y el acta de cada reunión con sus tareas.
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
