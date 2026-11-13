@@ -5,12 +5,20 @@
 .postu-graficos { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:var(--esp-16); margin-bottom:var(--esp-16); }
 .postu-resultado, .postu-antiguedad, .postu-card { padding:var(--esp-16) var(--esp-16); border:1px solid var(--gray-200); border-radius:var(--radius); background:var(--surface-raised); }
 
+/* Colores: los mismos tonos que el resto de los gráficos de la app (paleta --id-*).
+   Barras de estado: azul = esperando, bordó = rechazadas, lima = respondieron.
+   Cuadros de antigüedad, con secundarios: violeta = normal, ámbar = viejas, lima = el elegido. */
+.postu-graficos, .postu-card, .postu-resultado, .postu-antiguedad {
+  --postu-azul:var(--grafico-dato); --postu-rojo:var(--grafico-negativo); --postu-verde:var(--grafico-positivo);
+  --postu-violeta:var(--id-violeta); --postu-naranja:var(--id-ambar);
+}
+
 /* Resultado: una barra apilada */
 .postu-barra { display:flex; gap:var(--esp-4); height:14px; border-radius:var(--radius); overflow:hidden; }
 .postu-barra .seg { min-width:6px; }
-.seg.esperando, .postu-marca.esperando { background:var(--grafico-dato); }
-.seg.respondieron, .postu-marca.respondieron { background:var(--grafico-positivo); }
-.seg.rechazadas, .postu-marca.rechazadas { background:var(--grafico-negativo); }
+.seg.esperando, .postu-marca.esperando { background:var(--postu-azul); }
+.seg.respondieron, .postu-marca.respondieron { background:var(--postu-verde); }
+.seg.rechazadas, .postu-marca.rechazadas { background:var(--postu-rojo); }
 .postu-resultado { display:flex; flex-direction:column; }
 .postu-barra { margin-top:var(--esp-4); }
 .postu-leyenda { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:var(--esp-8); margin:auto 0 0; padding:var(--esp-16) 0 0; list-style:none; }
@@ -26,9 +34,9 @@
 .postu-col.activa { border-color:var(--accent); background:var(--accent-100); }
 .postu-col-n { font-size:var(--letra-20); font-weight:700; font-variant-numeric:tabular-nums; color:var(--gray-900); }
 .postu-col-barra { display:flex; align-items:flex-end; width:100%; max-width:46px; height:64px; border-radius:var(--radius-sm); background:var(--surface-inset); }
-.postu-col-barra span { display:block; width:100%; min-height:2px; border-radius:var(--radius-sm); background:var(--grafico-dato); }
-.postu-col.vieja .postu-col-barra span { background:var(--grafico-atencion); }
-.postu-col.activa .postu-col-barra span { background:var(--accent); }
+.postu-col-barra span { display:block; width:100%; min-height:2px; border-radius:var(--radius-sm); background:var(--postu-violeta); }
+.postu-col.vieja .postu-col-barra span { background:var(--postu-naranja); }
+.postu-col.activa .postu-col-barra span { background:var(--postu-verde); }
 .postu-col-titulo { font-size:var(--letra-11); color:var(--gray-500); text-align:center; line-height:1.2; }
 
 /* En el tiempo */
@@ -37,19 +45,23 @@
 .postu-periodos button { padding:var(--esp-4) var(--esp-8); border:0; border-radius:var(--radius-sm); background:transparent; color:var(--gray-500); font:inherit; font-size:var(--letra-12); cursor:pointer; }
 .postu-periodos button.activo { background:var(--surface-raised); color:var(--gray-900); }
 .postu-card { display:flex; flex-direction:column; }
-.postu-tiempo { display:flex; align-items:stretch; gap:var(--esp-4); flex:1; min-height:130px; margin-top:var(--esp-8); }
+.postu-tiempo { display:flex; align-items:stretch; gap:var(--esp-8); flex:1; min-height:180px; margin-top:var(--esp-8); padding-bottom:var(--esp-4); border-bottom:1px solid var(--gray-300); }
 .postu-tiempo-col { display:flex; flex-direction:column; align-items:center; flex:1 1 0; min-width:0; }
-.postu-tiempo-n { height:16px; font-size:var(--letra-11); color:var(--gray-700); font-variant-numeric:tabular-nums; }
-.postu-tiempo-barra { display:flex; flex-direction:column; justify-content:flex-end; flex:1; width:100%; max-width:26px; }
-.postu-tiempo-barra .seg { display:block; width:100%; }
+.postu-tiempo-n { height:18px; font-size:var(--letra-13); font-weight:700; color:var(--gray-900); font-variant-numeric:tabular-nums; }
+.postu-tiempo-barra { display:flex; flex-direction:column; justify-content:flex-end; gap:2px; flex:1; width:100%; max-width:40px; }
+.postu-tiempo-barra .seg { display:block; width:100%; border-radius:var(--radius-sm); }
+.postu-tiempo-barra .seg[style*="height: 0%"] { display:none; }
 .postu-tiempo-barra .seg:first-child { border-radius:var(--radius-sm) var(--radius-sm) 0 0; }
-.postu-tiempo-etiqueta { height:16px; margin-top:var(--esp-4); font-size:var(--letra-11); color:var(--gray-500); white-space:nowrap; }
+.postu-tiempo-etiqueta { height:16px; margin-top:var(--esp-4); font-size:var(--letra-12); color:var(--gray-700); white-space:nowrap; }
+.postu-tiempo-leyenda { display:flex; gap:var(--esp-16); margin:var(--esp-12) 0 0; padding:0; list-style:none; font-size:var(--letra-12); color:var(--gray-700); }
+.postu-tiempo-leyenda li { display:flex; align-items:center; gap:var(--esp-8); }
+.postu-tiempo-leyenda i { width:12px; height:12px; border-radius:3px; }
 
 /* Por puesto */
 .postu-puestos { display:flex; flex-direction:column; gap:var(--esp-8); margin:0; padding:0; list-style:none; }
 .postu-puestos li { display:grid; grid-template-columns:150px minmax(0, 1fr) 28px; align-items:center; gap:var(--esp-12); }
 .postu-puesto-nombre { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--letra-13); color:var(--gray-700); }
-.postu-puesto-barra { display:flex; height:6px; min-width:4px; border-radius:var(--radius-sm); overflow:hidden; }
+.postu-puesto-barra { display:flex; gap:2px; height:12px; min-width:4px; border-radius:var(--radius-sm); overflow:hidden; }
 .postu-puestos strong { text-align:right; font-size:var(--letra-13); color:var(--gray-900); font-variant-numeric:tabular-nums; }
 
 /* Listas */

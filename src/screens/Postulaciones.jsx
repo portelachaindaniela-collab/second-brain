@@ -108,6 +108,10 @@ function EnElTiempo({ filas }) {
         <span className="postu-tiempo-etiqueta">{(columnas.length - 1 - i) % paso ? '' : c.etiqueta[0]}</span>
       </div> })}
     </div> : <p className="postu-vacio">Todavía no hay enviadas con fecha.</p>}
+    {columnas.length > 0 && <ul className="postu-tiempo-leyenda">
+      <li><i className="seg esperando" />Esperando</li>
+      <li><i className="seg rechazadas" />Rechazadas</li>
+    </ul>}
   </div>
 }
 
