@@ -45,3 +45,13 @@ test('programar y tarea: acciones válidas, el issue lleva la especificación y 
   assert.deepEqual(tareaDelPedido({ titulo: 'Calendario de enero', detalle: 'temas por semana', accion: { tipo: 'tarea', area: 'up', responsable: 'up:planificador', supervisor: 'up:noruega' } }),
     { tarea: 'Calendario de enero: temas por semana', area: 'up', responsable: 'up:planificador', supervisor: 'up:noruega' })
 })
+
+test('reunión pedida por un agente: se valida y al aprobarla queda agendada', async () => {
+  const { accionValida, notaReunion } = await import('./logic.mjs')
+  const a = { tipo: 'reunion', fecha: '2026-11-20', asistentes: ['up:noruega', 'up:planificador'], tema: 'Calendario de enero' }
+  assert.equal(accionValida(a), true)
+  assert.equal(accionValida({ ...a, fecha: 'el viernes' }), false)
+  assert.equal(accionValida({ ...a, asistentes: ['cualquiera'] }), false)
+  assert.equal(accionValida({ ...a, asistentes: [] }), false)
+  assert.match(notaReunion(a), /^Agendada para el viernes, 20 de noviembre con 2 personas\./)
+})

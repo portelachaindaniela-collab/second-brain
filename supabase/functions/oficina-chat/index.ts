@@ -21,12 +21,15 @@ const hoyISO = () => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "num
 
 // El hilo de la oficina: las últimas actas, las tareas abiertas y los pedidos recientes (lo leen todos).
 async function leerHilo(db: any) {
-  const [a, t, p] = await Promise.all([
+  const [a, t, p, g] = await Promise.all([
     db.from("oficina_actas").select("id,fin,titulo,resumen,plan").order("fin", { ascending: false }).limit(5),
     db.from("oficina_tareas").select("tarea,area,responsable,vence,estado").neq("estado", "hecha").order("vence", { ascending: true, nullsFirst: false }).limit(12),
     db.from("oficina_solicitudes").select("agente,titulo,estado,origen,creada").order("creada", { ascending: false }).limit(10),
+    equipos(db),
   ]);
-  return { actas: a.data || [], tareas: t.data || [], pedidos: p.data || [] };
+  // El plantel: para que puedan convocar a una reunión a quien haga falta (Administración no conversa).
+  const plantel = [...g.trabajadores, ...g.up, ...g.pdg, ...g.sistemas];
+  return { actas: a.data || [], tareas: t.data || [], pedidos: p.data || [], plantel };
 }
 
 // Las tareas de los planes que tiene alguien (las suyas y, si es supervisor, las de su equipo), sin terminar.

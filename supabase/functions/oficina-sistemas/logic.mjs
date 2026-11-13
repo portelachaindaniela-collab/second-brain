@@ -14,6 +14,7 @@ export function accionValida(accion) {
   if (accion?.tipo === 'frenar_pieza') return Array.isArray(accion.piezas) && accion.piezas.every(p => typeof p === 'string' && p.length <= 64)
   if (accion?.tipo === 'cargar_calendario_up') return diasValidos(accion.dias).length > 0 && diasValidos(accion.dias).length === accion.dias.length
   if (accion?.tipo === 'programar') return true
+  if (accion?.tipo === 'reunion') return /^\d{4}-\d{2}-\d{2}$/.test(String(accion.fecha ?? '')) && Array.isArray(accion.asistentes) && accion.asistentes.length > 0 && accion.asistentes.length <= 24 && accion.asistentes.every(x => ID.test(x))
   if (accion?.tipo === 'tarea') return AREAS.includes(accion.area) && ID.test(accion.responsable ?? '') && ID.test(accion.supervisor ?? '')
   return false
 }
@@ -48,6 +49,14 @@ export function notaProgramar({ estado, url, detalle }) {
   if (estado === 'abierto') return `Sistemas lo abrió en GitHub y Claude lo está programando: ${url} . Cuando termine te deja el PR para revisar; nada se publica sin que lo apruebes.`
   if (estado === 'sin_token') return 'Aprobado, pero Sistemas no pudo abrirlo en GitHub: falta configurar un token de GitHub con permiso para crear issues (GITHUB_TOKEN en las funciones de Supabase).'
   return `Aprobado, pero Sistemas no pudo abrirlo en GitHub (${detalle}).`
+}
+
+// ---------- Reunión ----------
+// Una reunión que pidió un agente: al aprobarla queda agendada en el calendario de la oficina; ese día aparece en Te toca
+// para convocarla (y al convocarla, el pedido queda hecho).
+export function notaReunion(accion) {
+  const f = new Date(`${accion.fecha}T12:00:00Z`).toLocaleDateString('es-AR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })
+  return `Agendada para el ${f} con ${accion.asistentes.length} ${accion.asistentes.length === 1 ? 'persona' : 'personas'}. Queda en el calendario de la oficina y ese día te aviso en Te toca para convocarla.`
 }
 
 // ---------- Tarea ----------

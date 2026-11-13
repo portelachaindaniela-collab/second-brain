@@ -228,6 +228,12 @@ export function VistaSala({ reunion, agentes, ahora, hablando, setHablando, habl
   useEffect(() => {
     if (saludo.current || !asistentes.length) return
     saludo.current = true
+    // Si la reunión la pidió un agente, abre él con el tema; si no, saluda María (o el primero que conversa).
+    const pidio = reunion.tema?.pidio && asistentes.find(a => a.id === reunion.tema.pidio && conversa(a))
+    if (pidio) {
+      charla.decir([{ de: pidio.id, texto: `Hola, Daniela. Los convoqué para hablar de «${reunion.tema.tema}».${reunion.tema.detalle ? ` ${reunion.tema.detalle}` : ''} ¿Arrancamos?` }])
+      return
+    }
     const anfitrion = asistentes.find(a => a.id === 'trabajadores:maria') ?? asistentes.find(a => conversa(a)) ?? asistentes[0]
     charla.decir([{ de: anfitrion.id, texto: `Hola, Daniela. Ya estamos ${asistentes.length === 1 ? 'acá' : `los ${asistentes.length}`}. ¿De qué querés que hablemos?` }])
   })

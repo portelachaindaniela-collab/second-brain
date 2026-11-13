@@ -87,6 +87,10 @@ function registroFemina({ corridas = [], hallazgos = [] }) {
 const fechaCorta = iso => (iso ? new Date(iso).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short' }) : '?')
 const ESTADO_PEDIDO = { pendiente: 'esperando tu permiso', aprobada: 'aprobado, en marcha', rechazada: 'rechazado', hecha: 'hecho' }
 export function textoHilo(hilo = {}) {
+  const plantel = (hilo.plantel || []).length ? `\nQuiénes trabajan en la oficina (para convocar a una reunión, usá estos ids): ${hilo.plantel.map(g => `${g.nombre} (${g.id})`).join(', ')}.` : ''
+  return textoHiloBase(hilo) + plantel
+}
+function textoHiloBase(hilo = {}) {
   const actas = (hilo.actas || []).slice(0, 5)
   const tareas = (hilo.tareas || []).slice(0, 12)
   const pedidos = (hilo.pedidos || []).slice(0, 10)
@@ -116,6 +120,7 @@ export function textoHilo(hilo = {}) {
 // (abre el pedido en GitHub y Claude escribe el código); si no, al aprobarse queda como tarea del que lo pidió.
 const NO_CLAVES = 'Nunca pidas claves, tokens, contraseñas ni accesos: eso no se pide por acá.'
 export const REGLA_PEDIDOS = `- Sos parte del equipo, no un buscador: si Daniela te pide que hagas algo, o se te ocurre algo concreto que convendría hacer en tu área (un calendario, un sitio nuevo para leer, una cuenta para PDG, una mejora de la app), no lo das por hecho ni lo prometés: le pedís permiso con un pedido. Contá qué harías, para qué y cuándo.
+- Si hace falta juntarse (para mostrar algo, decidir entre varios o arrancar un proyecto), pedí una reunión: con la fecha, a quiénes convocás (ids del plantel) y el tema. Daniela la aprueba y queda en el calendario de la oficina.
 - Si para hacerlo la app tiene que hacer algo que hoy no hace (una pantalla, un agente o un trabajador nuevo, leer un sitio nuevo, una automatización), el pedido es de código: Sistemas lo programa cuando Daniela lo aprueba. Describí qué tendría que hacer la app, con qué datos y qué se vería. Si alcanza con lo que ya hacés, el pedido es una tarea tuya.
 - ${NO_CLAVES}`
 
@@ -139,7 +144,7 @@ Cómo responder:
 - Si algo falló, explicá qué dice el registro y qué podría revisar ella.
 - ${generoDe(c.id) === 'f' ? 'Sos mujer: hablá de vos en femenino (por ejemplo «estoy lista», «quedé pausada»).' : 'Hablá de vos en masculino.'}
 ${REGLA_PEDIDOS}
-- Para pedir permiso, terminá tu respuesta con una línea aparte por pedido (como mucho 2): PEDIDO: <título corto> | <qué harías, para qué y cuándo> | <codigo o tarea>`
+- Para pedir permiso, terminá tu respuesta con una línea aparte por pedido (como mucho 2): PEDIDO: <título corto> | <qué harías, para qué y cuándo> | <codigo, tarea o reunion> | <fecha AAAA-MM-DD, solo si es reunión> | <ids de los convocados separados por coma, solo si es reunión>`
 }
 
 export function armarMensajes(c, mensajes, hoy, hilo) {
@@ -200,7 +205,7 @@ Cómo se responde:
 ${REGLA_PEDIDOS.replace(/^- /gm, '  · ')}
 - Los pedidos van en "pedidos", del agente que lo haría (como mucho 3 por respuesta; lista vacía si no hay).
 
-Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}],"pedidos":[{"agente":"<id exacto>","titulo":"...","detalle":"qué haría, para qué y cuándo","tipo":"codigo o tarea"}]}`
+Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}],"pedidos":[{"agente":"<id exacto>","titulo":"...","detalle":"qué haría, para qué y cuándo","tipo":"codigo, tarea o reunion","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión)"]}]}`
 }
 
 // Los mensajes de los agentes vuelven al modelo como "Nombre: texto" para que sepa quién dijo qué.
@@ -232,19 +237,30 @@ export function leerSolicitudes(texto, idsValidos) {
   const lista = Array.isArray(datos?.pedidos) ? datos.pedidos : Array.isArray(datos?.solicitudes) ? datos.solicitudes : []
   return limpiarSolicitudes(lista, idsValidos)
 }
-export function accionDePedido(agente, tipo) {
+const ID_AGENTE = /^(trabajadores|up|pdg|sistemas|admin):[a-z_]{1,40}$/
+export const hoyBA = (ahora = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ahora))
+// extra: { fecha, asistentes, titulo } para las reuniones. La fecha no puede ser antes de hoy (si no viene, es hoy) y
+// el que la pide siempre está convocado.
+export function accionDePedido(agente, tipo, extra = {}, hoy = hoyBA()) {
+  if (/reuni[oó]n/i.test(String(tipo ?? ''))) {
+    const f = String(extra.fecha ?? '').trim()
+    const fecha = /^\d{4}-\d{2}-\d{2}$/.test(f) && !Number.isNaN(Date.parse(`${f}T12:00:00Z`)) && f >= hoy ? f : hoy
+    const lista = Array.isArray(extra.asistentes) ? extra.asistentes : String(extra.asistentes ?? '').split(',')
+    const asistentes = [...new Set([agente, ...lista.map(x => String(x).trim())])].filter(x => ID_AGENTE.test(x)).slice(0, 24)
+    return { tipo: 'reunion', fecha, asistentes, tema: String(extra.titulo ?? '').slice(0, 200) }
+  }
   if (/codigo|código|sistemas/i.test(String(tipo ?? ''))) return { tipo: 'programar' }
   const area = partirId(agente)?.equipo ?? 'trabajadores'
   return { tipo: 'tarea', area, responsable: agente, supervisor: SUPERVISORES[area] }
 }
 const PIDE_CLAVES = /\b(token|clave|contraseña|password|api[ _-]?key|secret|credencial)/i
-export function limpiarSolicitudes(lista, idsValidos, max = 3) {
+export function limpiarSolicitudes(lista, idsValidos, max = 3, hoy = hoyBA()) {
   const validos = new Set(idsValidos)
   return lista
-    .map(r => ({ agente: String(r?.agente ?? ''), titulo: String(r?.titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, 200), detalle: String(r?.detalle ?? '').trim().slice(0, 4000), tipo: r?.tipo }))
+    .map(r => ({ agente: String(r?.agente ?? ''), titulo: String(r?.titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, 200), detalle: String(r?.detalle ?? '').trim().slice(0, 4000), tipo: r?.tipo, fecha: r?.fecha, asistentes: r?.asistentes }))
     .filter(r => validos.has(r.agente) && r.titulo.length >= 3 && !PIDE_CLAVES.test(`${r.titulo} ${r.detalle}`))
     .slice(0, max)
-    .map(({ tipo, ...r }) => ({ ...r, accion: accionDePedido(r.agente, tipo) }))
+    .map(({ tipo, fecha, asistentes, ...r }) => ({ ...r, accion: accionDePedido(r.agente, tipo, { fecha, asistentes, titulo: r.titulo }, hoy) }))
 }
 // En la charla de a uno, cada pedido viene en una línea «PEDIDO: título | detalle | codigo o tarea» (también se acepta
 // SOLICITUD:): se sacan del texto.
@@ -252,8 +268,8 @@ const LINEA_PEDIDO = /^\s*\**\s*(PEDIDO|SOLICITUD)\s*:/i
 export function extraerSolicitudes(texto, id) {
   const lineas = String(texto ?? '').split('\n')
   const crudos = lineas.filter(l => LINEA_PEDIDO.test(l)).map(l => {
-    const [titulo, detalle = '', tipo = ''] = l.replace(LINEA_PEDIDO, '').replace(/\*+\s*$/, '').split('|')
-    return { agente: id, titulo, detalle, tipo }
+    const [titulo, detalle = '', tipo = '', fecha = '', asistentes = ''] = l.replace(LINEA_PEDIDO, '').replace(/\*+\s*$/, '').split('|')
+    return { agente: id, titulo, detalle, tipo, fecha, asistentes }
   })
   return { texto: lineas.filter(l => !LINEA_PEDIDO.test(l)).join('\n').trim(), solicitudes: limpiarSolicitudes(crudos, [id], 2) }
 }
@@ -289,10 +305,11 @@ Reglas:
 - Nada repetido con los pedidos que ya están en el hilo ni con lo ya decidido. Nada inventado: si citás un dato, que
   esté en las fichas.
 - Cada propuesta: título corto y detalle con qué harían, para qué y cuándo. tipo: "codigo" si la app tiene que hacer algo
-  que hoy no hace (Sistemas lo programa al aprobarse), "tarea" si alcanza con lo que ya hacen.
+  que hoy no hace (Sistemas lo programa al aprobarse), "tarea" si alcanza con lo que ya hacen, "reunion" si proponen
+  juntarse (con fecha y convocados).
 - ${NO_CLAVES}
 
-Respondé SOLO con JSON: {"propuestas":[{"agente":"<id exacto>","titulo":"...","detalle":"...","tipo":"codigo o tarea"}]}`
+Respondé SOLO con JSON: {"propuestas":[{"agente":"<id exacto>","titulo":"...","detalle":"...","tipo":"codigo, tarea o reunion","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión)"]}]}`
 }
 export function leerPropuestas(texto, idsValidos) {
   const d = (() => {

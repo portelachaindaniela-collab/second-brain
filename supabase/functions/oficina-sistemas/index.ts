@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validarPedido, accionValida, notaResultado, notaCalendario, filasCalendario, issueDelPedido, notaProgramar, tareaDelPedido, MOTIVO_FRENO, REPO, WORKFLOW_DISENADOR, ETIQUETA } from "./logic.mjs";
+import { validarPedido, accionValida, notaResultado, notaCalendario, filasCalendario, issueDelPedido, notaProgramar, tareaDelPedido, notaReunion, MOTIVO_FRENO, REPO, WORKFLOW_DISENADOR, ETIQUETA } from "./logic.mjs";
 
 // Sistemas: aprueba y ejecuta un pedido con acción: programar (lo abre en GitHub para que Claude escriba el código),
 // tarea (queda en el Archivo a cargo del supervisor del área), el de Noruega cuando el Diseñador se trabó (frenar piezas) o el
@@ -82,6 +82,12 @@ Deno.serve(async (req: Request) => {
     // Queda aprobado (en marcha) hasta que Daniela mergee el PR y lo marque hecho; si no se pudo abrir, la nota dice qué falta.
     await db.from("oficina_solicitudes").update({ nota }).eq("id", s.id);
     return json({ ok: true, nota, issue: r.url ?? null });
+  }
+
+  if (s.accion.tipo === "reunion") {
+    const nota = notaReunion(s.accion);
+    await db.from("oficina_solicitudes").update({ nota }).eq("id", s.id);
+    return json({ ok: true, nota });
   }
 
   if (s.accion.tipo === "tarea") {

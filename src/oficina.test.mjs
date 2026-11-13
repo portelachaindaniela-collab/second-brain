@@ -243,3 +243,41 @@ test('propuestas del día: una vez por día; recomendación según el tipo de pe
   assert.match(recomendacion({ titulo: 'Calendario', accion: { tipo: 'tarea' } }), /tarea en el Archivo/)
   assert.match(recomendacion({ titulo: 'Necesito el token de X', accion: { tipo: 'programar' } }), /Riesgo alto/)
 })
+
+test('calendario de la oficina: reuniones, agendadas, por aprobar y vencimientos, en la grilla del mes', async () => {
+  const { eventosOficina, mesOficina, mesVecino, reunionesAgendadas } = await import('./oficina.mjs')
+  const solicitudes = [
+    { id: 1, estado: 'aprobada', titulo: 'Ver el plan', accion: { tipo: 'reunion', fecha: '2026-11-20', asistentes: ['up:noruega'], tema: 'Plan de enero' } },
+    { id: 2, estado: 'pendiente', titulo: 'Campaña', accion: { tipo: 'reunion', fecha: '2026-11-21', asistentes: ['pdg:marketing'], tema: 'Campaña PDG' } },
+    { id: 3, estado: 'hecha', titulo: 'Vieja', accion: { tipo: 'reunion', fecha: '2026-11-02', asistentes: ['up:noruega'] } },
+    { id: 4, estado: 'aprobada', titulo: 'Código', accion: { tipo: 'programar' } },
+  ]
+  const ev = eventosOficina({
+    actas: [{ id: 9, fin: '2026-11-12T23:30:00Z', titulo: 'Plan de redes' }],
+    tareas: [{ id: 5, tarea: 'Calendario de enero', vence: '2026-11-20', estado: 'pendiente' }, { id: 6, tarea: 'Lista', vence: '2026-11-10', estado: 'hecha' }],
+    solicitudes,
+  })
+  assert.deepEqual(ev.map(e => [e.fecha, e.tipo]), [['2026-11-10', 'hecha'], ['2026-11-12', 'reunion'], ['2026-11-20', 'agendada'], ['2026-11-20', 'vence'], ['2026-11-21', 'propuesta']])
+  assert.deepEqual(reunionesAgendadas(solicitudes).map(x => x.id), [1])
+  const m = mesOficina('2026-11', ev, '2026-11-13')
+  assert.equal(m.nombre, 'Noviembre de 2026')
+  assert.equal(m.semanas[0].findIndex(c => c), 6, 'el 1 de noviembre de 2026 es domingo')
+  const d20 = m.semanas.flat().find(c => c?.dia === 20)
+  assert.equal(d20.eventos.length, 2)
+  assert.equal(m.semanas.flat().find(c => c?.dia === 13).hoy, true)
+  assert.ok(m.semanas.every(s => s.length === 7))
+  assert.equal(mesVecino('2026-12', 1), '2027-01')
+  assert.equal(mesVecino('2026-01', -1), '2025-12')
+})
+
+test('Te toca: la reunión agendada aparece el día que toca, para convocarla con su tema', async () => {
+  const { armarOficina } = await import('./oficina.mjs')
+  const base = { trabajadores: [], corridasPor: {}, upCorridas: [], chequeo: null, piezas: [], pdgAgentes: [], pdgTrabajos: [], pdgCuentas: [], admin: [], conexiones: [], operador: [], tareas: [], actas: [], hoy: '2026-11-20' }
+  const solicitudes = [{ id: 1, agente: 'up:noruega', estado: 'aprobada', titulo: 'Ver el plan', detalle: 'Les muestro el avance', accion: { tipo: 'reunion', fecha: '2026-11-20', asistentes: ['up:noruega', 'up:planificador', 'pdg:fantasma'], tema: 'Plan de enero' } },
+    { id: 2, agente: 'up:noruega', estado: 'aprobada', titulo: 'Más adelante', accion: { tipo: 'reunion', fecha: '2026-11-25', asistentes: ['up:noruega'], tema: 'Otra' } }]
+  const { pendientes } = armarOficina({ ...base, solicitudes }, Date.parse('2026-11-20T15:00:00Z'))
+  const r = pendientes.filter(p => p.reunion)
+  assert.equal(r.length, 1)
+  assert.match(r[0].texto, /^Hoy: reunión «Plan de enero», la pidió Noruega\./)
+  assert.deepEqual(r[0].reunion, { asistentes: ['up:noruega', 'up:planificador'], solicitud: 1, tema: 'Plan de enero', detalle: 'Les muestro el avance', pidio: 'up:noruega' })
+})

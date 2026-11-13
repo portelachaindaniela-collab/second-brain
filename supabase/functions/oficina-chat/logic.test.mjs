@@ -197,3 +197,16 @@ test('contexto: Femina cuenta sus vueltas y lo que encontró; habla en femenino'
   assert.match(c.registro.join('\n'), /prospecto \(sin revisar\): Boca Juniors/)
   assert.match(sis(c, 'hoy'), /Sos mujer/)
 })
+
+test('reuniones: un agente pide juntarse con fecha y convocados; conoce el plantel', async () => {
+  const { accionDePedido, extraerSolicitudes, leerSolicitudes, textoHilo } = await import('./logic.mjs')
+  const a = accionDePedido('up:noruega', 'reunion', { fecha: '2026-11-20', asistentes: ['up:planificador', 'pdg:marketing', 'nadie', 'up:noruega'], titulo: 'Calendario de enero' }, '2026-11-13')
+  assert.deepEqual(a, { tipo: 'reunion', fecha: '2026-11-20', asistentes: ['up:noruega', 'up:planificador', 'pdg:marketing'], tema: 'Calendario de enero' })
+  assert.equal(accionDePedido('up:noruega', 'reunión', { fecha: '2026-11-01' }, '2026-11-13').fecha, '2026-11-13', 'una fecha pasada se corre a hoy')
+  const e = extraerSolicitudes('Armemos una reunión.\nPEDIDO: Mostrar el plan de enero | les cuento el avance | reunion | 2026-11-20 | up:planificador, pdg:marketing', 'up:noruega')
+  assert.equal(e.solicitudes[0].accion.tipo, 'reunion')
+  assert.deepEqual(e.solicitudes[0].accion.asistentes, ['up:noruega', 'up:planificador', 'pdg:marketing'])
+  const r = leerSolicitudes(JSON.stringify({ pedidos: [{ agente: 'up:noruega', titulo: 'Ver métricas juntos', tipo: 'reunion', fecha: '2099-01-02', asistentes: ['pdg:marketing'] }] }), ['up:noruega'])
+  assert.equal(r[0].accion.fecha, '2099-01-02')
+  assert.match(textoHilo({ plantel: [{ id: 'up:noruega', nombre: 'Noruega' }] }), /Noruega \(up:noruega\)/)
+})

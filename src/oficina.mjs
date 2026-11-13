@@ -320,6 +320,13 @@ export function armarOficina(d, ahora) {
     const equipo = [...new Set([sup.id, ...lista.map(t => t.responsable)])].filter(id => agentes.some(a => a.id === id))
     pendientes.push({ nivel: 'aviso', texto: `${sup.nombre.split(' (')[0]} pide una reunión para mostrarte ${acta?.titulo ? `«${acta.titulo}»` : 'el proyecto'}: su equipo terminó ${plural(lista.length, 'tarea', 'tareas')}.`, donde: 'Oficina', agente: sup.id, reunion: { asistentes: equipo, tareas: lista.map(t => t.id) } })
   }
+  // Reuniones que pidió un agente y aprobaste: el día que toca (o si quedó atrasada), aparece para convocarla.
+  for (const x of reunionesAgendadas(d.solicitudes ?? []).filter(x => x.accion.fecha <= hoy)) {
+    const quien = agentes.find(a => a.id === x.agente)
+    const asistentes = x.accion.asistentes.filter(id => agentes.some(a => a.id === id))
+    pendientes.push({ nivel: 'aviso', texto: `${x.accion.fecha < hoy ? 'Quedó pendiente' : 'Hoy'}: reunión «${x.accion.tema || x.titulo}», la pidió ${quien ? quien.nombre.split(' (')[0] : x.agente}.`, donde: 'Oficina › Calendario', agente: quien?.id,
+      reunion: { asistentes, solicitud: x.id, tema: x.accion.tema || x.titulo, detalle: x.detalle, pidio: x.agente } })
+  }
   const porAprobar = (d.solicitudes ?? []).filter(x => x.estado === 'pendiente').length
   if (porAprobar) pendientes.push({ nivel: 'aviso', texto: `Sistemas: ${plural(porAprobar, 'pedido espera', 'pedidos esperan')} tu aprobación`, donde: 'Oficina › Sistemas' })
   for (const a of agentes) if (a.equipo === 'admin' && a.estado === 'error') pendientes.push({ nivel: 'error', texto: `${a.nombre}: ${a.ahora}`, donde: 'Oficina › Administración', agente: a.id })
@@ -336,6 +343,49 @@ export function contarEstados(agentes) {
   const r = { total: agentes.length, trabajando: 0, libre: 0, error: 0, pausado: 0, nuevo: 0 }
   for (const a of agentes) r[a.estado] = (r[a.estado] ?? 0) + 1
   return r
+}
+
+// ---------- Calendario de la oficina ----------
+// Las reuniones que pidió un agente y Daniela aprobó, todavía sin hacer.
+export function reunionesAgendadas(solicitudes = []) {
+  return solicitudes.filter(x => x.accion?.tipo === 'reunion' && x.estado === 'aprobada' && /^\d{4}-\d{2}-\d{2}$/.test(x.accion.fecha ?? ''))
+}
+// Todo lo que pasa en la oficina por día: las reuniones que se hicieron (actas), las agendadas, las que esperan tu OK y
+// las fechas límite de las tareas. { fecha: 'AAAA-MM-DD', tipo: 'reunion' | 'agendada' | 'propuesta' | 'vence' | 'hecha', texto, id }
+export function eventosOficina({ actas = [], tareas = [], solicitudes = [] } = {}) {
+  const lista = []
+  for (const a of actas) if (a.fin) lista.push({ fecha: hoyAR(Date.parse(a.fin)), tipo: 'reunion', texto: a.titulo || 'Reunión', id: `acta-${a.id}` })
+  for (const x of solicitudes) {
+    if (x.accion?.tipo !== 'reunion' || !/^\d{4}-\d{2}-\d{2}$/.test(x.accion.fecha ?? '')) continue
+    if (x.estado === 'aprobada') lista.push({ fecha: x.accion.fecha, tipo: 'agendada', texto: x.accion.tema || x.titulo, id: `pedido-${x.id}` })
+    else if (x.estado === 'pendiente') lista.push({ fecha: x.accion.fecha, tipo: 'propuesta', texto: `${x.accion.tema || x.titulo} (espera tu OK)`, id: `pedido-${x.id}` })
+  }
+  for (const t of tareas) if (t.vence) lista.push({ fecha: t.vence, tipo: t.estado === 'hecha' ? 'hecha' : 'vence', texto: t.tarea, id: `tarea-${t.id}` })
+  const orden = { reunion: 0, agendada: 1, propuesta: 2, vence: 3, hecha: 4 }
+  return lista.sort((a, b) => a.fecha.localeCompare(b.fecha) || orden[a.tipo] - orden[b.tipo])
+}
+// La grilla de un mes (semanas de lunes a domingo) con los eventos de cada día. mes: 'AAAA-MM'.
+export function mesOficina(mes, eventos = [], hoy = hoyAR()) {
+  const [a, m] = mes.split('-').map(Number)
+  const primero = new Date(Date.UTC(a, m - 1, 1))
+  const dias = new Date(Date.UTC(a, m, 0)).getUTCDate()
+  const corrimiento = (primero.getUTCDay() + 6) % 7 // lunes = 0
+  const celdas = []
+  for (let i = 0; i < corrimiento; i++) celdas.push(null)
+  for (let d = 1; d <= dias; d++) {
+    const fecha = `${mes}-${String(d).padStart(2, '0')}`
+    celdas.push({ dia: d, fecha, hoy: fecha === hoy, pasado: fecha < hoy, eventos: eventos.filter(e => e.fecha === fecha) })
+  }
+  while (celdas.length % 7) celdas.push(null)
+  const semanas = []
+  for (let i = 0; i < celdas.length; i += 7) semanas.push(celdas.slice(i, i + 7))
+  const nombre = primero.toLocaleDateString('es-AR', { timeZone: 'UTC', month: 'long', year: 'numeric' })
+  return { mes, nombre: nombre.charAt(0).toUpperCase() + nombre.slice(1), semanas }
+}
+export function mesVecino(mes, delta) {
+  const [a, m] = mes.split('-').map(Number)
+  const d = new Date(Date.UTC(a, m - 1 + delta, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
 // Hoy en Buenos Aires, 'AAAA-MM-DD'.

@@ -2,16 +2,17 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
-import { crearSala, crearOficina, crearEscritorio, crearPuestoMesa, crearDireccion, vaciarMateriales, vidrioVentana, COLORES } from '../oficina3d/mundo.js'
+import { crearSala, crearOficina, crearEscritorio, crearPuestoMesa, crearDireccion, crearPizarron, texturaPizarron, dibujarPizarron, vaciarMateriales, vidrioVentana, COLORES } from '../oficina3d/mundo.js'
 import { crearPersonaje, posar, liberar } from '../oficina3d/personaje.js'
 import { crearRoberta, moverRoberta } from '../oficina3d/roberta.js'
 import {
   lugares, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, rutinas, camino, largo, puntoEn, momentoRutina, variante, agujas, alturaPiso,
   ACCESORIOS, bebidaDe, luzDelDia, VELOCIDAD, PISO, asientosReunion, alPasillo, haciaPasillo, caminoReunion, asientosEspera,
   caminoEspera, caminoTurno, caminoVueltaTurno, DANIELA, DANIELA_SALA, DANIELA_OFICINA, asientosOficina, caminoOficina, VISITA, ROBERTA,
+  PIZARRONES,
 } from '../oficinaPlano.mjs'
 import { obstaculos, grilla, buscarCamino } from '../oficinaCaminar.mjs'
-import { ESTADOS } from '../oficina.mjs'
+import { ESTADOS, mesOficina, hoyAR } from '../oficina.mjs'
 import './Oficina3D.css'
 
 // La Oficina en 3D (three.js), con jerarquía de la entrada al fondo: Administración (las tareas programadas en una
@@ -31,6 +32,7 @@ const CAMARA_SALA = { pos: new THREE.Vector3(9.1, 4.9, 23.0), target: new THREE.
 const CAMARA_OFICINA = { pos: new THREE.Vector3(42.6, 3.9, 6.5), target: new THREE.Vector3(40.3, 0.9, 3.0), fov: 52 }
 const CAMARA_DESPACHO = { pos: new THREE.Vector3(37.25, 1.92, 1.05), target: new THREE.Vector3(36.5, 1.12, 4.7), fov: 46 }
 const nombreCorto = n => String(n).split(' (')[0]
+const PIZARRON = '__pizarron__' // lo que devuelve el click sobre un pizarrón (en vez del id de un agente)
 // Al costado de la silla de Daniela, del lado libre: por ahí se levanta y se vuelve a sentar.
 const COSTADO_SILLA = { x: DANIELA.sentado.x + 1.7, y: DANIELA.sentado.y }
 const reducido = () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
@@ -59,15 +61,24 @@ function etiqueta(clase, texto, alClic) {
 //   inicio, vuelta, turnos: { [id]: { llamado, fin } } }. hablando: id del que habla en la reunión.
 // pantallaCompleta: la vista tipo videollamada (la arma Oficina.jsx con children encima de la escena).
 export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, hablando = null, alPlanificar, alVolvieron,
-  volverDaniela = 0, alMoverDaniela, pantallaCompleta = false, reloj = Date.now, children }) {
+  volverDaniela = 0, alMoverDaniela, pantallaCompleta = false, reloj = Date.now, calendario = [], alTocarPizarron = null, children }) {
   const marco = useRef(null)
+  const pizarron = useRef(null) // la textura del calendario que comparten los pizarrones
   const escenario = useRef(null)
   const datos = useRef(null)
-  datos.current ??= { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj }
+  datos.current ??= { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, calendario }
   // Cada render deja a mano lo último: el cuadro de animación lo lee sin rearmar la escena.
   useEffect(() => {
-    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj }
+    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, alTocarPizarron, calendario }
   })
+  // Los pizarrones muestran el mes actual con lo que pasa en la oficina: se redibujan cuando cambia el calendario.
+  const firmaCalendario = calendario.map(e => `${e.id}${e.tipo}${e.fecha}`).join('|')
+  useEffect(() => {
+    if (!pizarron.current) return
+    const hoy = hoyAR()
+    dibujarPizarron(pizarron.current, mesOficina(hoy.slice(0, 7), calendario, hoy))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firmaCalendario])
   // La escena se arma de nuevo solo si cambia quiénes están (no cuando cambia su estado).
   const firma = agentes.map(a => a.id).join('|')
 
@@ -140,6 +151,16 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     // Lugares y actores.
     const actores = new Map()
     const clicables = []
+    // Los pizarrones con rueditas: el calendario de la oficina. Tocarlos lleva al calendario de abajo.
+    const texPizarron = texturaPizarron()
+    pizarron.current = texPizarron
+    { const hoy = hoyAR(); dibujarPizarron(texPizarron, mesOficina(hoy.slice(0, 7), datos.current.calendario ?? [], hoy)) }
+    for (const p of PIZARRONES) {
+      const pz = crearPizarron(p, texPizarron)
+      pz.traverse(m => { m.userData.agenteId = PIZARRON })
+      escena.add(pz)
+      clicables.push(pz)
+    }
     const todosLosLugares = []
     const construidas = new Set()
     let luzMaria = null
@@ -275,6 +296,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       if (!bajada || Math.hypot(ev.clientX - bajada.x, ev.clientY - bajada.y) > 6) return
       const id = agenteBajo(ev)
       clearTimeout(clicPendiente)
+      if (id === PIZARRON) { datos.current.alTocarPizarron?.(); return }
       // Se espera un instante por si es un doble click (ese mueve a Daniela, no abre el panel).
       if (id) clicPendiente = setTimeout(() => datos.current.abrir(id), 260)
     }
@@ -718,6 +740,8 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       renderer.domElement.removeEventListener('dblclick', alDobleClic)
       controles.dispose()
       liberar(escena)
+      texPizarron.dispose()
+      pizarron.current = null
       vaciarMateriales()
       renderer.dispose()
       renderer.domElement.remove()

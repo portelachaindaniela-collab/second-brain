@@ -79,3 +79,25 @@ test('de su oficina al centro sale por el pasillo junto a la sala de espera (sin
   assert.ok(c && caminable(c))
   assert.ok(largo(c) < 30, `largo ${largo(c)}`)
 })
+
+test('pizarrones con rueditas: no pisan muebles y dejan pasar al balcón y por el pasillo', async () => {
+  const { PIZARRONES, huellaPizarron, MUEBLES_DIRECCION, LIVING, RINCON_TABLONES, PASILLO } = await import('./oficinaPlano.mjs')
+  const sola = obstaculos(todos, 7, 5, 5).filter(o => !PIZARRONES.some(p => { const h = huellaPizarron(p); return o.x0 === h.x0 && o.y1 === h.y1 }))
+  const choca = (h, o) => h.x0 < o.x1 && h.x1 > o.x0 && h.y0 < o.y1 && h.y1 > o.y0
+  for (const p of PIZARRONES) {
+    const h = huellaPizarron(p)
+    assert.ok(!sola.some(o => choca(h, o)), `${p.id} no se superpone con nada`)
+  }
+  const [pasillo, oficina] = PIZARRONES.map(huellaPizarron)
+  assert.ok(pasillo.y0 > LIVING.sillonEste.y1 && pasillo.y1 < RINCON_TABLONES.macetones[1][1] - 0.4, 'el del pasillo queda entre el living y el rincón de PDG')
+  assert.ok(oficina.x0 > MUEBLES_DIRECCION.sillon.x1 + 0.6 && oficina.x1 < DANIELA.escritorio.x - 1.15 - 1.2, 'el de Daniela, entre el sillón y su escritorio')
+  // Del escritorio de Daniela al sillón de la tele (pasa por delante del pizarrón).
+  const sillon = buscarCamino(g, salida, { x: MUEBLES_DIRECCION.sillon.x1 + 0.4, y: 4.0 })
+  assert.ok(sillon && caminable(sillon), 'llega al sillón')
+  // Del escritorio de Daniela a la puerta del balcón (por detrás del pizarrón) y por el pasillo hasta el rincón de PDG.
+  const B = MUEBLES_DIRECCION.balcon
+  const balcon = buscarCamino(g, salida, { x: 44.75, y: (B.puerta.y0 + B.puerta.y1) / 2 })
+  assert.ok(balcon && caminable(balcon), 'llega a la puerta del balcón')
+  const rincon = buscarCamino(g, { x: 36, y: PASILLO }, { x: RINCON_TABLONES.mesa.x + 1.2, y: 16.2 })
+  assert.ok(rincon && caminable(rincon), 'por el pasillo llega al rincón de PDG')
+})

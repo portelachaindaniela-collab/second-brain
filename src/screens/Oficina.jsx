@@ -2,7 +2,7 @@ import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, use
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -192,6 +192,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const [pestana, setPestana] = useState('ahora')
   const [charlas, setCharlas] = useState({})
   const elegido = agentes.find(a => a.id === elegidoId) || null
+  const eventos = useMemo(() => eventosOficina({ actas, tareas, solicitudes }), [actas, tareas, solicitudes])
   const cuenta = contarEstados(agentes)
   const abrir = (id, p = 'ahora') => { setElegidoId(id); setPestana(p) }
   const [tres] = useState(hayWebGL)
@@ -213,12 +214,18 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     const i = setInterval(() => setReloj(Date.now()), 1000)
     return () => clearInterval(i)
   }, [activa])
-  const convocar = (asistentes, modo) => {
+  const convocar = (asistentes, modo, tema = null) => {
     setConvocando(false)
     setElegidoId(null)
     setLlegadas(null)
-    setReunion({ id: Date.now(), modo, estado: 'convocada', asistentes, inicio: Date.now(), turnos: {} })
+    setReunion({ id: Date.now(), modo, estado: 'convocada', asistentes, inicio: Date.now(), turnos: {}, tema })
   }
+  // «Responder» un mensaje: abre la charla con ese agente, que arranca con lo que te pidió.
+  const responder = x => {
+    setCharlas(c => ({ ...c, [x.agente]: [...(c[x.agente] ?? []), { role: 'assistant', content: `Te pedí permiso para «${x.titulo}».${x.detalle ? ` ${x.detalle}` : ''}` }] }))
+    abrir(x.agente, 'charla')
+  }
+  const verCalendario = useCallback(() => document.getElementById('oficina-calendario')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), [])
   const empezar = useCallback(async () => {
     // Antes de empezar se vuelve a leer todo: vienen con su información más actualizada.
     setReunion(r => (r && r.estado === 'convocada' ? { ...r, estado: 'preparando' } : r))
@@ -291,7 +298,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
             ? <SiFalla respaldo={sin3D}><Suspense fallback={<p className="oficina-sin-3d">Abriendo la oficina…</p>}>
               <Oficina3D agentes={agentes} elegidoId={elegidoId} abrir={abrir} reunion={reunion} hablando={hablando}
                 alPlanificar={alPlanificar} alVolvieron={alVolvieron} volverDaniela={volverDaniela} alMoverDaniela={setLejos}
-                pantallaCompleta={enCurso} reloj={relojLuz}>{superpuesto}</Oficina3D>
+                pantallaCompleta={enCurso} reloj={relojLuz} calendario={eventos} alTocarPizarron={verCalendario}>{superpuesto}</Oficina3D>
             </Suspense></SiFalla>
             : sin3D}
           {tres && <div className="oficina-ayuda">
@@ -318,8 +325,11 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
           </li>)}</ul>
           : <p className="tenue">Nada pendiente: los agentes no te necesitan por ahora.</p>}
       </Bloque>
-      <Bloque titulo={`Sistemas${solicitudes.filter(x => x.estado === 'pendiente').length ? ` · ${solicitudes.filter(x => x.estado === 'pendiente').length} para aprobar` : ''}`}>
-        {cargando ? <p className="tenue">Revisando…</p> : <Sistemas solicitudes={solicitudes} agentes={agentes} decidir={decidir} ahora={ahora} />}
+      <Bloque titulo={`Mensajes${solicitudes.filter(x => x.estado === 'pendiente').length ? ` · ${solicitudes.filter(x => x.estado === 'pendiente').length} para aprobar` : ''}`}>
+        {cargando ? <p className="tenue">Revisando…</p> : <Mensajes solicitudes={solicitudes} agentes={agentes} decidir={decidir} responder={responder} ahora={ahora} />}
+      </Bloque>
+      <Bloque titulo="Calendario de la oficina" ancho="completo">
+        <div id="oficina-calendario">{cargando ? <p className="tenue">Revisando…</p> : <CalendarioOficina eventos={eventos} ahora={ahora} />}</div>
       </Bloque>
       <Bloque titulo="Archivo de la oficina">
         {cargando ? <p className="tenue">Revisando…</p> : <Archivo actas={actas} tareas={tareas} agentes={agentes} escribiendo={escribiendoActa} cambiarTarea={cambiarTarea} ahora={ahora} />}
@@ -329,7 +339,11 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
       </Bloque>
     </Bloques>
     {convocando && <ConvocarReunion agentes={agentes} preseleccion={convocando.asistentes ?? null} cerrar={() => setConvocando(false)}
-      alConvocar={(ids, modo) => { if (convocando.tareas) marcarPresentada(convocando.tareas).catch(() => {}); convocar(ids, modo) }} />}
+      alConvocar={(ids, modo) => {
+        if (convocando.tareas) marcarPresentada(convocando.tareas).catch(() => {})
+        if (convocando.solicitud) decidir(convocando.solicitud, 'hecha', 'Convocada.').catch(() => {})
+        convocar(ids, modo, convocando.tema ? { tema: convocando.tema, detalle: convocando.detalle, pidio: convocando.pidio } : null)
+      }} />}
     {elegido && <PanelAgente key={elegido.id} agente={elegido} pestana={pestana} setPestana={setPestana} ahora={ahora} cerrar={() => setElegidoId(null)}
       charla={charlas[elegido.id] ?? []} setCharla={m => setCharlas(c => ({ ...c, [elegido.id]: typeof m === 'function' ? m(c[elegido.id] ?? []) : m }))} hablar={hablar} />}
   </div>
@@ -357,47 +371,104 @@ function SonidoOficina() {
 // ---------- Sistemas ----------
 // Los pedidos que María y Noruega derivan. Ninguno avanza sin vos: lo aprobás, lo rechazás o, cuando ya está hecho,
 // lo cerrás. La nota de Sistemas explica qué implica cada uno.
-const TEXTO_APROBAR = { programar: 'Aprobar: que Sistemas lo programe', tarea: 'Aprobar', cargar_calendario_up: 'Aprobar y cargarlo' }
+const TEXTO_APROBAR = { programar: 'Aprobar: que Sistemas lo programe', tarea: 'Aprobar', reunion: 'Aprobar y agendarla', cargar_calendario_up: 'Aprobar y cargarlo' }
 // Las notas de Sistemas traen el link del pedido en GitHub: que se pueda abrir.
 function ConLinks({ texto }) {
   return String(texto).split(/(https:\/\/\S+)/).map((parte, i) => (/^https:\/\//.test(parte)
     ? <a key={i} href={parte} target="_blank" rel="noreferrer">{parte.replace(/^https:\/\/github\.com\/[^/]+\/[^/]+\//, '')}</a>
     : parte))
 }
-const ESTADO_SOLICITUD = { pendiente: 'Esperando tu aprobación', aprobada: 'Aprobado', rechazada: 'Rechazado', hecha: 'Hecho' }
-function Sistemas({ solicitudes, agentes, decidir, ahora }) {
+// Los mensajes de la oficina: cada pedido llega como un mensaje del agente, con la recomendación de la Mesa de entrada,
+// tu respuesta y lo que hizo Sistemas, como una conversación. Podés aprobar, rechazar o responderle (abre la charla).
+const ETIQUETA_PEDIDO = { programar: 'necesita código', tarea: 'tarea', reunion: 'reunión', cargar_calendario_up: 'calendario de UP', frenar_pieza: 'frenar una publicación' }
+function fechaReunion(f) { return new Date(`${f}T12:00:00Z`).toLocaleDateString('es-AR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }) }
+function Mensajes({ solicitudes, agentes, decidir, responder, ahora }) {
   const [ocupado, setOcupado] = useState(null)
   const [error, setError] = useState('')
-  const [verTodas, setVerTodas] = useState(false)
-  const quien = id => nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)
-  const pendientes = solicitudes.filter(x => x.estado === 'pendiente' || x.estado === 'aprobada')
-  const lista = verTodas ? solicitudes : pendientes
+  const [verTodos, setVerTodos] = useState(false)
+  const fin = useRef(null)
+  const agente = id => agentes.find(a => a.id === id)
+  const abiertos = solicitudes.filter(x => x.estado === 'pendiente' || x.estado === 'aprobada')
+  // Como en un chat: lo más viejo arriba y lo nuevo abajo.
+  const lista = [...(verTodos ? solicitudes : abiertos)].sort((a, b) => Date.parse(a.creada) - Date.parse(b.creada))
+  useEffect(() => { const el = fin.current?.parentElement; if (el) el.scrollTop = el.scrollHeight }, [lista.length])
   const accion = async (x, estado) => {
     setOcupado(x.id); setError('')
     try { await decidir(x.id, estado, x.nota, x.accion) } catch (e) { setError(`No se pudo guardar: ${e.message}`) }
     setOcupado(null)
   }
   return <>
-    <p className="tenue">Acá te piden permiso los agentes: lo que les pediste, lo que proponen y lo que salió de las reuniones. Nada se hace sin tu aprobación; lo que necesita código lo programa Sistemas.</p>
+    <p className="tenue">Te escriben los agentes: lo que les pediste, lo que proponen y las reuniones que quieren armar. Nada se hace sin tu permiso; lo que necesita código lo programa Sistemas.</p>
     {error && <p role="alert" className="feedback-error">{error}</p>}
-    {lista.length ? <ul className="oficina-sistemas">{lista.map(x => <li key={x.id} className={`estado-${x.estado}`}>
-      <div className="oficina-sistemas-cabeza">
-        <strong>{x.titulo}</strong>
-        <span className="tenue">{x.origen === 'propuesta' ? 'Propuesta de ' : ''}{quien(x.agente)} · {haceCuanto(x.creada, ahora)} · {ESTADO_SOLICITUD[x.estado]}{x.accion?.tipo === 'programar' ? ' · necesita código' : ''}</span>
+    {lista.length ? <div className="oficina-mensajes" role="log" aria-label="Mensajes de los agentes">{lista.map(x => {
+      const a = agente(x.agente)
+      const tipo = x.accion?.tipo
+      return <div key={x.id} className={`oficina-hilo estado-${x.estado}`}>
+        <div className="oficina-msj">
+          {a ? <Avatar agente={a} /> : <span className="oficina-avatar-vacio" aria-hidden="true" />}
+          <div className="oficina-msj-burbuja">
+            <span className="oficina-msj-quien">{a ? nombreCorto(a.nombre) : x.agente} · {haceCuanto(x.creada, ahora)}{x.origen === 'propuesta' ? ' · propuesta' : ''}{ETIQUETA_PEDIDO[tipo] ? ` · ${ETIQUETA_PEDIDO[tipo]}` : ''}</span>
+            <p><strong>{tipo === 'reunion' ? 'Quiero armar una reunión: ' : x.origen === 'propuesta' ? 'Te propongo: ' : 'Te pido permiso: '}{x.titulo}</strong></p>
+            {x.detalle && <p className="oficina-msj-detalle">{x.detalle}</p>}
+            {tipo === 'reunion' && <p className="oficina-msj-detalle">📅 {fechaReunion(x.accion.fecha)} · {x.accion.asistentes.map(id => nombreCorto(agente(id)?.nombre ?? id)).join(', ')}</p>}
+          </div>
+        </div>
+        {x.estado === 'pendiente' && <div className="oficina-msj oficina-msj-mesa">
+          <div className={`oficina-msj-burbuja${riesgoDe(x) === 'alto' ? ' riesgo-alto' : ''}`}><span className="oficina-msj-quien">Mesa de entrada</span><p>{recomendacion(x)}</p></div>
+        </div>}
+        {x.decidida && <div className="oficina-msj oficina-msj-yo">
+          <div className="oficina-msj-burbuja"><span className="oficina-msj-quien">Vos · {haceCuanto(x.decidida, ahora)}</span><p>{x.estado === 'rechazada' ? 'No, por ahora no.' : 'Dale, aprobado.'}</p></div>
+        </div>}
+        {x.nota && <div className="oficina-msj oficina-msj-mesa">
+          <div className="oficina-msj-burbuja"><span className="oficina-msj-quien">Sistemas</span><p><ConLinks texto={x.nota} /></p></div>
+        </div>}
+        <div className="oficina-sistemas-acciones">
+          {x.estado === 'pendiente' && <>
+            <button type="button" className="btn btn-sm btn-primary" disabled={ocupado === x.id} onClick={() => accion(x, 'aprobada')}>{TEXTO_APROBAR[tipo] ?? (x.accion ? 'Aprobar y hacerlo' : 'Aprobar')}</button>
+            <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'rechazada')}>Rechazar</button>
+          </>}
+          {a && !a.sinCharla && <button type="button" className="btn btn-sm" onClick={() => responder(x)}>Responder</button>}
+          {x.estado === 'aprobada' && tipo !== 'reunion' && <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'hecha')}>Marcar hecho</button>}
+        </div>
       </div>
-      {x.detalle && <p className="oficina-sistemas-detalle">{x.detalle}</p>}
-      {x.nota && <p className="oficina-sistemas-nota"><ConLinks texto={x.nota} /></p>}
-      {x.estado === 'pendiente' && <p className={`oficina-sistemas-reco${riesgoDe(x) === 'alto' ? ' riesgo-alto' : ''}`}><strong>Mesa de entrada:</strong> {recomendacion(x)}</p>}
-      <div className="oficina-sistemas-acciones">
-        {x.estado === 'pendiente' && <>
-          <button type="button" className="btn btn-sm btn-primary" disabled={ocupado === x.id} onClick={() => accion(x, 'aprobada')}>{TEXTO_APROBAR[x.accion?.tipo] ?? (x.accion ? 'Aprobar y hacerlo' : 'Aprobar')}</button>
-          <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'rechazada')}>Rechazar</button>
-        </>}
-        {x.estado === 'aprobada' && <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'hecha')}>Marcar hecho</button>}
-      </div>
-    </li>)}</ul> : <p className="tenue">No hay pedidos abiertos.</p>}
-    {solicitudes.length > pendientes.length && <button type="button" className="btn btn-sm" onClick={() => setVerTodas(v => !v)}>{verTodas ? 'Ver solo los abiertos' : `Ver todos (${solicitudes.length})`}</button>}
+    })}<span ref={fin} /></div> : <p className="tenue">No hay mensajes abiertos.</p>}
+    {solicitudes.length > abiertos.length && <button type="button" className="btn btn-sm" onClick={() => setVerTodos(v => !v)}>{verTodos ? 'Ver solo los abiertos' : `Ver todos (${solicitudes.length})`}</button>}
   </>
+}
+
+// ---------- Calendario ----------
+// El calendario interno de la oficina: reuniones que se hicieron, las agendadas, las que esperan tu OK y las fechas
+// límite de las tareas. Es lo mismo que muestran los pizarrones de la oficina 3D.
+const TIPO_EVENTO = { reunion: 'Reunión', agendada: 'Reunión agendada', propuesta: 'Reunión por aprobar', vence: 'Vence', hecha: 'Hecha' }
+function CalendarioOficina({ eventos, ahora }) {
+  const hoy = hoyAR(ahora)
+  const [mes, setMes] = useState(hoy.slice(0, 7))
+  const [dia, setDia] = useState(hoy)
+  const grilla = mesOficina(mes, eventos, hoy)
+  const delDia = eventos.filter(e => e.fecha === dia)
+  return <div className="oficina-cal">
+    <div className="oficina-cal-cabeza">
+      <button type="button" className="btn btn-sm" aria-label="Mes anterior" onClick={() => setMes(m => mesVecino(m, -1))}>‹</button>
+      <strong>{grilla.nombre}</strong>
+      <button type="button" className="btn btn-sm" aria-label="Mes siguiente" onClick={() => setMes(m => mesVecino(m, 1))}>›</button>
+      {mes !== hoy.slice(0, 7) && <button type="button" className="btn btn-sm" onClick={() => { setMes(hoy.slice(0, 7)); setDia(hoy) }}>Hoy</button>}
+      <span className="oficina-cal-leyenda">{['reunion', 'agendada', 'propuesta', 'vence'].map(t => <span key={t}><i className={`tipo-${t}`} />{TIPO_EVENTO[t]}</span>)}</span>
+    </div>
+    <div className="oficina-cal-grilla" role="grid" aria-label={grilla.nombre}>
+      {['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].map(d => <span key={d} className="oficina-cal-dsem" role="columnheader">{d}</span>)}
+      {grilla.semanas.flat().map((c, i) => c
+        ? <button key={c.fecha} type="button" role="gridcell" aria-selected={c.fecha === dia} className={`oficina-cal-dia${c.hoy ? ' es-hoy' : ''}${c.pasado ? ' pasado' : ''}${c.fecha === dia ? ' elegido' : ''}`} onClick={() => setDia(c.fecha)}>
+          <span className="oficina-cal-num">{c.dia}</span>
+          {c.eventos.slice(0, 3).map(e => <span key={e.id} className={`oficina-cal-ev tipo-${e.tipo}`}>{e.texto}</span>)}
+          {c.eventos.length > 3 && <span className="oficina-cal-mas">+{c.eventos.length - 3}</span>}
+        </button>
+        : <span key={`v${i}`} className="oficina-cal-vacio" />)}
+    </div>
+    <div className="oficina-cal-detalle">
+      <strong>{new Date(`${dia}T12:00:00Z`).toLocaleDateString('es-AR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })}</strong>
+      {delDia.length ? <ul>{delDia.map(e => <li key={e.id}><i className={`tipo-${e.tipo}`} />{TIPO_EVENTO[e.tipo]}: {e.texto}</li>)}</ul> : <p className="tenue">Nada ese día.</p>}
+    </div>
+  </div>
 }
 
 // ---------- Actas ----------
