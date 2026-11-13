@@ -202,8 +202,7 @@
 .oficina-cal-cabeza strong { min-width: 10rem; text-align: center; }
 .oficina-cal-leyenda { display: flex; gap: var(--esp-12); flex-wrap: wrap; margin-left: auto; font-size: var(--letra-12); color: var(--gray-500, inherit); }
 .oficina-cal-leyenda span, .oficina-cal-detalle li { display: inline-flex; align-items: center; gap: 6px; }
-.oficina-cal i, .oficina-cal-ev { --c: var(--gray-200); }
-.oficina-cal i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex-shrink: 0; }
+.oficina-cal i { width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--gray-200)); flex-shrink: 0; }
 .tipo-reunion { --c: var(--id-azul); }
 .tipo-agendada { --c: var(--green-600); }
 .tipo-propuesta { --c: var(--amber-600); }
@@ -216,14 +215,15 @@
 .oficina-cal-dia.es-hoy { border-color: var(--accent); }
 .oficina-cal-dia.elegido { outline: 2px solid var(--accent); outline-offset: -2px; }
 .oficina-cal-num { font-size: var(--letra-12); font-weight: 700; }
-.oficina-cal-ev { display: block; font-size: 11px; line-height: 1.3; padding: 1px 4px; border-radius: 3px; border-left: 3px solid var(--c); background: var(--surface-inset); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oficina-cal-ev { display: block; font-size: 11px; line-height: 1.3; padding: 1px 4px; border-radius: 3px; border-left: 3px solid var(--c, var(--gray-200)); background: var(--surface-inset); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .oficina-cal-mas { font-size: 11px; color: var(--gray-500, inherit); }
 .oficina-cal-vacio { min-height: 5.2rem; }
 .oficina-cal-detalle { margin-top: var(--esp-12); font-size: var(--letra-13); }
-.oficina-cal-detalle strong { text-transform: capitalize; }
+.oficina-cal-detalle strong { display: inline-block; }
+.oficina-cal-detalle strong::first-letter { text-transform: uppercase; }
 .oficina-cal-detalle ul { list-style: none; padding: 0; margin: var(--esp-4) 0 0; display: flex; flex-direction: column; gap: 4px; }
 @media (max-width: 640px) {
   .oficina-cal-dia, .oficina-cal-vacio { min-height: 2.6rem; }
-  .oficina-cal-ev { font-size: 0; padding: 0; height: 4px; border-left: 0; background: var(--c); }
+  .oficina-cal-ev { font-size: 0; padding: 0; height: 4px; border-left: 0; background: var(--c, var(--gray-200)); }
   .oficina-msj { max-width: 100%; }
 }
