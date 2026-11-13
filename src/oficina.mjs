@@ -191,6 +191,9 @@ export function riesgoDe(solicitud) {
 }
 // La recomendación de la Mesa de entrada para un pedido pendiente.
 export function recomendacion(solicitud) {
+  if (riesgoDe(solicitud) === 'alto') return 'Riesgo alto: pide accesos, permisos o claves. Recomiendo rechazar salvo que sepas para qué hace falta.'
+  if (solicitud.accion?.tipo === 'programar') return 'Necesita código: si lo aprobás, Sistemas lo abre en GitHub y Claude lo programa. Te queda un PR para revisar; nada se publica sin tu OK.'
+  if (solicitud.accion?.tipo === 'tarea') return 'No necesita código: si lo aprobás, queda como tarea en el Archivo y su supervisor la sigue en las reuniones.'
   if (solicitud.accion?.tipo === 'frenar_pieza') return 'Recomiendo aprobar: frena una publicación que podría salir mal; después se revisa con calma.'
   return riesgoDe(solicitud) === 'alto'
     ? 'Riesgo alto: pide accesos, permisos o claves. Recomiendo rechazar salvo que sepas para qué hace falta.'
@@ -204,7 +207,7 @@ export function agentesSistemas({ solicitudes = [], conexiones = [], operador = 
   const pendientes = solicitudes.filter(x => x.estado === 'pendiente')
   const riesgosos = pendientes.filter(x => riesgoDe(x) === 'alto').length
   const mesa = {
-    ...base('mesa_entrada', 'Mesa de entrada', 'Ordena los pedidos para Sistemas', 'Recibe lo que derivan María y Noruega, marca los riesgosos (accesos, permisos, claves) y te los presenta con una recomendación. No aprueba nada: decidís vos.', ['Pedidos a Sistemas']),
+    ...base('mesa_entrada', 'Mesa de entrada', 'Ordena los pedidos de permiso', 'Recibe lo que te piden los agentes (en reuniones, charlas y propuestas del día), marca los riesgosos y te los presenta con una recomendación. No aprueba nada: decidís vos. Lo que necesita código, al aprobarlo lo programa Sistemas.', ['Pedidos de permiso', 'GitHub (Claude programa lo aprobado)']),
     estado: pendientes.length ? 'trabajando' : 'libre',
     ultima: ms(solicitudes[0]?.creada),
     ahora: pendientes.length ? `${plural(pendientes.length, 'pedido espera', 'pedidos esperan')} tu aprobación${riesgosos ? ` (${plural(riesgosos, 'riesgoso', 'riesgosos')})` : ''}` : 'No hay pedidos esperando.',
@@ -243,6 +246,12 @@ export function agentesSistemas({ solicitudes = [], conexiones = [], operador = 
     conProblemas,
   }
   return [mesa, guardian, op]
+}
+
+// Las propuestas del día se piden una vez por día: si todavía no hay ninguna de hoy (hora de Buenos Aires).
+export function tocanPropuestas(solicitudes = [], ahora = Date.now()) {
+  const inicio = Date.parse(`${hoyAR(ahora)}T00:00:00-03:00`)
+  return !solicitudes.some(x => x.origen === 'propuesta' && Date.parse(x.creada) >= inicio)
 }
 
 // ---------- Lo que te toca ----------

@@ -83,23 +83,52 @@ test('reunión: lee las respuestas aunque vengan con texto alrededor y descarta 
   assert.deepEqual(leerRespuestas('no es json', ['up:redactor']), [])
 })
 
-test('Sistemas: solo María y Noruega derivan pedidos, y solo si están en la reunión', async () => {
-  const { leerSolicitudes, extraerSolicitud, reglaSistemas } = await import('./logic.mjs')
-  const crudo = JSON.stringify({ respuestas: [], solicitudes: [
-    { agente: 'up:noruega', titulo: 'Revisar la tarea del Publicador', detalle: 'falló 3 veces' },
-    { agente: 'up:redactor', titulo: 'Quiero tokens', detalle: 'x' },
-    { agente: 'trabajadores:maria', titulo: 'Algo', detalle: 'no vino' },
-    { agente: 'up:noruega', titulo: 'ok', detalle: 'título muy corto' },
+test('pedidos: cualquiera de los presentes pide permiso; código va a Sistemas, lo demás es su tarea', async () => {
+  const { leerSolicitudes, extraerSolicitudes } = await import('./logic.mjs')
+  const crudo = JSON.stringify({ respuestas: [], pedidos: [
+    { agente: 'up:planificador', titulo: 'Calendario de enero 2027', detalle: 'armo los temas de enero', tipo: 'tarea' },
+    { agente: 'trabajadores:canillita', titulo: 'Leer el sitio de Olé femenino', detalle: 'sumar su RSS', tipo: 'codigo' },
+    { agente: 'up:redactor', titulo: 'Quiero el token de LinkedIn', detalle: 'x', tipo: 'tarea' },
+    { agente: 'pdg:demo', titulo: 'No vino a la reunión', detalle: 'x' },
+    { agente: 'up:planificador', titulo: 'ok', detalle: 'título muy corto' },
   ] })
-  const r = leerSolicitudes(crudo, ['up:noruega', 'up:redactor'])
-  assert.deepEqual(r.map(s => s.titulo), ['Revisar la tarea del Publicador'])
+  const r = leerSolicitudes(crudo, ['up:planificador', 'trabajadores:canillita', 'up:redactor'])
+  assert.deepEqual(r.map(s => s.titulo), ['Calendario de enero 2027', 'Leer el sitio de Olé femenino'])
+  assert.deepEqual(r[0].accion, { tipo: 'tarea', area: 'up', responsable: 'up:planificador', supervisor: 'up:noruega' })
+  assert.deepEqual(r[1].accion, { tipo: 'programar' })
   assert.deepEqual(leerSolicitudes('sin json', ['up:noruega']), [])
-  const e = extraerSolicitud('Te cuento lo que pasó.\nSOLICITUD: Revisar el cron | se trabó dos veces', 'trabajadores:maria')
-  assert.equal(e.texto, 'Te cuento lo que pasó.')
-  assert.deepEqual(e.solicitud, { agente: 'trabajadores:maria', titulo: 'Revisar el cron', detalle: 'se trabó dos veces' })
-  assert.equal(extraerSolicitud('SOLICITUD: Dame acceso | ya', 'up:redactor').solicitud, null)
-  assert.match(reglaSistemas('up:redactor'), /No pidan accesos/)
-  assert.match(reglaSistemas('up:noruega'), /SOLICITUD:/)
+  // Las respuestas viejas («solicitudes») se siguen leyendo.
+  assert.equal(leerSolicitudes(JSON.stringify({ solicitudes: [{ agente: 'up:noruega', titulo: 'Revisar el Publicador' }] }), ['up:noruega']).length, 1)
+  const e = extraerSolicitudes('Dale, lo armo.\nPEDIDO: Calendario de enero | temas por semana | tarea\nPEDIDO: Pantalla de métricas | ver alcance por red | codigo', 'up:planificador')
+  assert.equal(e.texto, 'Dale, lo armo.')
+  assert.deepEqual(e.solicitudes.map(x => [x.titulo, x.accion.tipo]), [['Calendario de enero', 'tarea'], ['Pantalla de métricas', 'programar']])
+  assert.equal(extraerSolicitudes('SOLICITUD: Dame la clave de X | ya', 'up:redactor').solicitudes.length, 0)
+})
+
+test('hilo: actas, tareas y pedidos entran en la charla, la reunión, las propuestas y el acta', async () => {
+  const { textoHilo, sistema, sistemaReunion, sistemaPropuestas, mensajesActa } = await import('./logic.mjs')
+  const hilo = {
+    actas: [{ fin: '2026-11-12T15:00:00Z', titulo: 'Plan de enero 2027', resumen: 'Se armó el plan de redes.', plan: { decisiones: ['Tres posts por semana'] } }],
+    tareas: [{ tarea: 'Calendario de enero cargado', area: 'up', responsable: 'up:planificador', vence: '2026-12-27', estado: 'pendiente' }],
+    pedidos: [{ agente: 'trabajadores:canillita', titulo: 'Leer Olé femenino', estado: 'pendiente' }],
+  }
+  const t = textoHilo(hilo)
+  assert.match(t, /«Plan de enero 2027»: Se armó el plan de redes\. Decidido: Tres posts por semana\./)
+  assert.match(t, /Calendario de enero cargado \(up, la hace up:planificador, pendiente, vence 2026-12-27\)/)
+  assert.match(t, /«Leer Olé femenino» de trabajadores:canillita: esperando tu permiso/)
+  assert.match(textoHilo(), /primer día/)
+  const ficha = id => ({ id, nombre: 'X', rol: 'r', descripcion: 'd', herramientas: [], registro: [] })
+  assert.match(sistema(ficha('up:planificador'), 'hoy', hilo), /Plan de enero 2027[\s\S]*PEDIDO: <título corto>/)
+  assert.match(sistemaReunion([{ id: 'up:planificador', c: ficha('up:planificador') }], 'hoy', hilo), /Plan de enero 2027[\s\S]*"pedidos":/)
+  assert.match(sistemaPropuestas([{ id: 'up:planificador', c: ficha('up:planificador') }], 'hoy', hilo), /Leer Olé femenino[\s\S]*"propuestas":/)
+  assert.match(mensajesActa(['X'], [{ de: 'Vos', texto: 'hola' }], '2026-11-13', 'hoy', {}, hilo)[0].content, /sigue el hilo[\s\S]*Plan de enero 2027[\s\S]*seguimiento/)
+})
+
+test('propuestas: del agente que la haría, sin claves y como mucho 5', async () => {
+  const { leerPropuestas } = await import('./logic.mjs')
+  const lista = Array.from({ length: 7 }, (_, i) => ({ agente: 'pdg:marketing', titulo: `Campaña número ${i}`, detalle: 'd', tipo: 'tarea' }))
+  assert.equal(leerPropuestas(JSON.stringify({ propuestas: lista }), ['pdg:marketing']).length, 5)
+  assert.equal(leerPropuestas(JSON.stringify({ propuestas: [{ agente: 'pdg:otro', titulo: 'Algo nuevo' }] }), ['pdg:marketing']).length, 0)
 })
 
 test('género: las mujeres hablan en femenino (en la charla y en la reunión)', async () => {
@@ -112,13 +141,15 @@ test('género: las mujeres hablan en femenino (en la charla y en la reunión)', 
   assert.match(r, /up:redactor\) — r — varón/)
 })
 
-test('reunión y charla: conversan en contexto y no prometen entregas', async () => {
+test('reunión y charla: conversan en contexto, traen propuestas y no prometen entregas', async () => {
   const { sistema, sistemaReunion } = await import('./logic.mjs')
   const ficha = id => ({ id, nombre: 'X', rol: 'r', descripcion: 'd', herramientas: [], registro: [] })
   const r = sistemaReunion([{ id: 'pdg:marketing', c: ficha('pdg:marketing') }], 'hoy')
   assert.match(r, /Es una conversación/)
-  assert.match(r, /ni prometer entregas a futuro/)
+  assert.match(r, /empleados con iniciativa/)
+  assert.match(r, /Nadie promete entregas/)
   assert.match(sistema(ficha('pdg:marketing'), 'hoy'), /No recites tu estado/)
+  assert.match(sistema(ficha('pdg:marketing'), 'hoy'), /Nunca pidas claves/)
 })
 
 test('acta: María arma el plan, las tareas quedan con su supervisor y el calendario se valida', async () => {
@@ -147,6 +178,7 @@ test('acta: María arma el plan, las tareas quedan con su supervisor y el calend
   const pedidos = pedidosDelActa(acta)
   assert.equal(pedidos.length, 2)
   assert.ok(pedidos.every(p => p.agente === 'sistemas:mesa_entrada'))
+  assert.deepEqual(pedidos[0].accion, { tipo: 'programar' })
   assert.equal(pedidos[1].accion.tipo, 'cargar_calendario_up')
   assert.match(pedidos[1].titulo, /2 días \(2027-01-04 a 2027-01-06\)/)
   assert.equal(leerActa('sin json', '2026-11-11'), null)

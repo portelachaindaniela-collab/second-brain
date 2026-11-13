@@ -1,8 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validarPedido, accionValida, notaResultado, notaCalendario, filasCalendario, MOTIVO_FRENO, REPO, WORKFLOW_DISENADOR } from "./logic.mjs";
+import { validarPedido, accionValida, notaResultado, notaCalendario, filasCalendario, issueDelPedido, notaProgramar, tareaDelPedido, MOTIVO_FRENO, REPO, WORKFLOW_DISENADOR, ETIQUETA } from "./logic.mjs";
 
-// Sistemas: aprueba y ejecuta un pedido con acción: el de Noruega cuando el Diseñador se trabó (frenar piezas) o el
+// Sistemas: aprueba y ejecuta un pedido con acción: programar (lo abre en GitHub para que Claude escriba el código),
+// tarea (queda en el Archivo a cargo del supervisor del área), el de Noruega cuando el Diseñador se trabó (frenar piezas) o el
 // de Mesa de entrada para cargar en UP el calendario que salió de una reunión. Solo lo puede
 // pedir la dueña con su sesión: es su aprobación. Frena las piezas (con su sesión, RLS) y cancela la corrida trabada
 // de la Action si hay un token de GitHub con permiso; deja en el pedido una nota con lo que hizo.
@@ -35,6 +36,22 @@ async function cancelarDisenador() {
   }
 }
 
+// Abre el pedido como issue con la etiqueta de Sistemas (la Action de Claude lo toma de ahí).
+async function abrirIssue(s: any) {
+  const token = env.GITHUB_TOKEN;
+  if (!token) return { estado: "sin_token" };
+  const headers = { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "User-Agent": "second-brain-oficina-sistemas", "Content-Type": "application/json" };
+  try {
+    // La etiqueta, por si todavía no existe (si ya está, GitHub responde 422 y sigue).
+    await fetch(`https://api.github.com/repos/${REPO}/labels`, { method: "POST", headers, body: JSON.stringify({ name: ETIQUETA, color: "6d3bff", description: "Pedido aprobado en la Oficina: lo programa Claude" }), signal: AbortSignal.timeout(15000) });
+    const r = await fetch(`https://api.github.com/repos/${REPO}/issues`, { method: "POST", headers, body: JSON.stringify(issueDelPedido(s)), signal: AbortSignal.timeout(15000) });
+    if (r.status !== 201) return { estado: "error", detalle: `GitHub ${r.status}${r.status === 403 || r.status === 404 ? ": el token no tiene permiso para crear issues" : ""}` };
+    return { estado: "abierto", url: (await r.json()).html_url };
+  } catch (e) {
+    return { estado: "error", detalle: (e as Error).message.slice(0, 80) };
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Método no permitido." }, 405);
@@ -49,7 +66,7 @@ Deno.serve(async (req: Request) => {
   const v: any = validarPedido(body);
   if (!v.ok) return json({ error: v.error }, 400);
 
-  const { data: s, error } = await db.from("oficina_solicitudes").select("id,estado,accion").eq("id", v.id).maybeSingle();
+  const { data: s, error } = await db.from("oficina_solicitudes").select("id,estado,accion,agente,titulo,detalle").eq("id", v.id).maybeSingle();
   if (error) return json({ error: error.message }, 500);
   if (!s) return json({ error: "No encontré ese pedido." }, 404);
   if (s.estado !== "pendiente") return json({ error: "Ese pedido ya se decidió." }, 409);
@@ -58,6 +75,23 @@ Deno.serve(async (req: Request) => {
   // La aprobación queda registrada antes de hacer nada.
   const aprobado = await db.from("oficina_solicitudes").update({ estado: "aprobada", decidida: new Date().toISOString() }).eq("id", s.id).eq("estado", "pendiente").select("id");
   if (aprobado.error || !aprobado.data?.length) return json({ error: "No se pudo aprobar el pedido." }, 409);
+
+  if (s.accion.tipo === "programar") {
+    const r: any = await abrirIssue(s);
+    const nota = notaProgramar(r);
+    // Queda aprobado (en marcha) hasta que Daniela mergee el PR y lo marque hecho; si no se pudo abrir, la nota dice qué falta.
+    await db.from("oficina_solicitudes").update({ nota }).eq("id", s.id);
+    return json({ ok: true, nota, issue: r.url ?? null });
+  }
+
+  if (s.accion.tipo === "tarea") {
+    const t = tareaDelPedido(s);
+    const { error: eT } = await db.from("oficina_tareas").insert(t);
+    const quien = t.responsable.split(":")[1].replace(/_/g, " ");
+    const nota = eT ? `Aprobado, pero no pude anotar la tarea: ${eT.message}` : `Aprobado: quedó como tarea de ${quien} en el Archivo, y su supervisor la sigue en las reuniones.`;
+    await db.from("oficina_solicitudes").update({ estado: eT ? "aprobada" : "hecha", nota }).eq("id", s.id);
+    return json({ ok: true, nota });
+  }
 
   // Cargar en el calendario de UP los días que armó María en el acta (con la sesión de Daniela; no pisa días cargados).
   if (s.accion.tipo === "cargar_calendario_up") {

@@ -2,7 +2,7 @@ import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, use
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -88,6 +88,15 @@ export default function Oficina() {
   }, [])
 
   useEffect(() => { recargar() }, [recargar])
+  // La primera vez del día, los equipos traen sus propuestas (entran como pedidos de permiso en Sistemas).
+  const propuestasPedidas = useRef(false)
+  useEffect(() => {
+    if (!datos || propuestasPedidas.current || !tocanPropuestas(datos.solicitudes, Date.now())) return
+    propuestasPedidas.current = true
+    supabase.functions.invoke('oficina-chat', { body: { propuestas: true } })
+      .then(({ data }) => { if (data?.propuestas?.length) recargar() })
+      .catch(() => { /* sin propuestas hoy: no frena la oficina */ })
+  }, [datos, recargar])
   // Una corrida que empieza o termina mueve a su agente: se vuelve a leer (agrupando los cambios seguidos).
   useEffect(() => {
     const programar = () => { clearTimeout(espera.current); espera.current = setTimeout(recargar, 1500) }
@@ -144,8 +153,8 @@ async function cambiarTarea(id, estado) {
   const { error } = await supabase.from('oficina_tareas').update({ estado, actualizada: new Date().toISOString() }).eq('id', id)
   if (error) throw new Error(error.message)
 }
-// Si en la charla María o Noruega derivaron un pedido a Sistemas, se avisa en su respuesta y se vuelve a leer.
-const avisoPedido = s => ` (Lo derivé a Sistemas: «${s.titulo}». Queda esperando tu aprobación.)`
+// Si en la charla un agente pidió permiso para algo, se avisa en su respuesta y se vuelve a leer.
+const avisoPedido = s => ` (Te pedí permiso: «${s.titulo}». Lo aprobás en Sistemas.)`
 function conAviso(hablarFn, recargar) {
   return async (...args) => {
     const r = await hablarFn(...args)
@@ -348,6 +357,13 @@ function SonidoOficina() {
 // ---------- Sistemas ----------
 // Los pedidos que María y Noruega derivan. Ninguno avanza sin vos: lo aprobás, lo rechazás o, cuando ya está hecho,
 // lo cerrás. La nota de Sistemas explica qué implica cada uno.
+const TEXTO_APROBAR = { programar: 'Aprobar: que Sistemas lo programe', tarea: 'Aprobar', cargar_calendario_up: 'Aprobar y cargarlo' }
+// Las notas de Sistemas traen el link del pedido en GitHub: que se pueda abrir.
+function ConLinks({ texto }) {
+  return String(texto).split(/(https:\/\/\S+)/).map((parte, i) => (/^https:\/\//.test(parte)
+    ? <a key={i} href={parte} target="_blank" rel="noreferrer">{parte.replace(/^https:\/\/github\.com\/[^/]+\/[^/]+\//, '')}</a>
+    : parte))
+}
 const ESTADO_SOLICITUD = { pendiente: 'Esperando tu aprobación', aprobada: 'Aprobado', rechazada: 'Rechazado', hecha: 'Hecho' }
 function Sistemas({ solicitudes, agentes, decidir, ahora }) {
   const [ocupado, setOcupado] = useState(null)
@@ -362,19 +378,19 @@ function Sistemas({ solicitudes, agentes, decidir, ahora }) {
     setOcupado(null)
   }
   return <>
-    <p className="tenue">María y Noruega derivan acá lo que necesitan. Nada se hace sin tu aprobación.</p>
+    <p className="tenue">Acá te piden permiso los agentes: lo que les pediste, lo que proponen y lo que salió de las reuniones. Nada se hace sin tu aprobación; lo que necesita código lo programa Sistemas.</p>
     {error && <p role="alert" className="feedback-error">{error}</p>}
     {lista.length ? <ul className="oficina-sistemas">{lista.map(x => <li key={x.id} className={`estado-${x.estado}`}>
       <div className="oficina-sistemas-cabeza">
         <strong>{x.titulo}</strong>
-        <span className="tenue">{quien(x.agente)} · {haceCuanto(x.creada, ahora)} · {ESTADO_SOLICITUD[x.estado]}</span>
+        <span className="tenue">{x.origen === 'propuesta' ? 'Propuesta de ' : ''}{quien(x.agente)} · {haceCuanto(x.creada, ahora)} · {ESTADO_SOLICITUD[x.estado]}{x.accion?.tipo === 'programar' ? ' · necesita código' : ''}</span>
       </div>
       {x.detalle && <p className="oficina-sistemas-detalle">{x.detalle}</p>}
-      {x.nota && <p className="oficina-sistemas-nota">{x.nota}</p>}
+      {x.nota && <p className="oficina-sistemas-nota"><ConLinks texto={x.nota} /></p>}
       {x.estado === 'pendiente' && <p className={`oficina-sistemas-reco${riesgoDe(x) === 'alto' ? ' riesgo-alto' : ''}`}><strong>Mesa de entrada:</strong> {recomendacion(x)}</p>}
       <div className="oficina-sistemas-acciones">
         {x.estado === 'pendiente' && <>
-          <button type="button" className="btn btn-sm btn-primary" disabled={ocupado === x.id} onClick={() => accion(x, 'aprobada')}>{x.accion ? 'Aprobar y hacerlo' : 'Aprobar'}</button>
+          <button type="button" className="btn btn-sm btn-primary" disabled={ocupado === x.id} onClick={() => accion(x, 'aprobada')}>{TEXTO_APROBAR[x.accion?.tipo] ?? (x.accion ? 'Aprobar y hacerlo' : 'Aprobar')}</button>
           <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'rechazada')}>Rechazar</button>
         </>}
         {x.estado === 'aprobada' && <button type="button" className="btn btn-sm" disabled={ocupado === x.id} onClick={() => accion(x, 'hecha')}>Marcar hecho</button>}
@@ -421,10 +437,11 @@ function Archivo({ actas, tareas, agentes, escribiendo, cambiarTarea, ahora }) {
           </button>
           {abierta === a.id && <div className="oficina-acta">
             <p>{a.resumen}</p>
+            {a.plan?.seguimiento?.length > 0 && <><p className="oficina-archivo-titulo">Lo que venía de antes</p><ul>{a.plan.seguimiento.map((d, i) => <li key={i}>{d}</li>)}</ul></>}
             {a.plan?.decisiones?.length > 0 && <><p className="oficina-archivo-titulo">Decisiones</p><ul>{a.plan.decisiones.map((d, i) => <li key={i}>{d}</li>)}</ul></>}
             {deEsta.length > 0 && <><p className="oficina-archivo-titulo">Tareas</p><ul className="oficina-tareas-plan">{deEsta.map(filaTarea)}</ul></>}
             {a.plan?.calendario?.length > 0 && <p className="tenue">Calendario: {a.plan.calendario.length} días ({fechaCorta(a.plan.calendario[0].fecha)} a {fechaCorta(a.plan.calendario.at(-1).fecha)}). Sistemas lo carga en UP cuando lo aprobás.</p>}
-            {a.plan?.sistemas?.length > 0 && <p className="tenue">Pedidos para Sistemas: {a.plan.sistemas.map(x => x.titulo).join('; ')}.</p>}
+            {a.plan?.sistemas?.length > 0 && <p className="tenue">Para programar (Sistemas, cuando lo aprobás): {a.plan.sistemas.map(x => x.titulo).join('; ')}.</p>}
             <p className="tenue">Vinieron: {a.asistentes.map(quien).join(', ')}.</p>
             {a.mensajes.length > 0 && <details><summary>Conversación</summary><ol>{a.mensajes.map((m, i) => <li key={i}><strong>{m.de}:</strong> {m.texto}</li>)}</ol></details>}
           </div>}

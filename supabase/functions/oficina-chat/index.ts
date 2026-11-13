@@ -1,10 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitud, validarActa, mensajesActa, leerActa, pedidosDelActa } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
-// Oficina: hablar con un agente. La app manda { agente: 'up:redactor', mensajes } (charla con uno) o
+// Oficina: hablar con un agente. Todas las charlas y reuniones leen el hilo de la oficina (actas, tareas y pedidos), y lo
+// que los agentes quieren hacer entra como pedido de permiso para Daniela. { propuestas: true }: las del día. La app manda { agente: 'up:redactor', mensajes } (charla con uno) o
 // { reunion: true, asistentes: [...], mensajes } (reunión con todos los que vinieron: responde con
 // { respuestas: [{ agente, texto }] }). Lee los datos con la sesión de la dueña (RLS, nunca con permisos de servicio)
 // y responde con la IA. Lo único que escribe: los pedidos que María o Noruega le derivan a Sistemas, que entran
@@ -17,6 +18,16 @@ const env = Deno.env.toObject();
 const TZ = "America/Argentina/Buenos_Aires";
 const hoyLargo = () => new Intl.DateTimeFormat("es-AR", { timeZone: TZ, weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date());
 const hoyISO = () => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
+// El hilo de la oficina: las últimas actas, las tareas abiertas y los pedidos recientes (lo leen todos).
+async function leerHilo(db: any) {
+  const [a, t, p] = await Promise.all([
+    db.from("oficina_actas").select("id,fin,titulo,resumen,plan").order("fin", { ascending: false }).limit(5),
+    db.from("oficina_tareas").select("tarea,area,responsable,vence,estado").neq("estado", "hecha").order("vence", { ascending: true, nullsFirst: false }).limit(12),
+    db.from("oficina_solicitudes").select("agente,titulo,estado,origen,creada").order("creada", { ascending: false }).limit(10),
+  ]);
+  return { actas: a.data || [], tareas: t.data || [], pedidos: p.data || [] };
+}
 
 // Las tareas de los planes que tiene alguien (las suyas y, si es supervisor, las de su equipo), sin terminar.
 async function tareasDe(db: any, id: string) {
@@ -91,11 +102,11 @@ async function leerDatosBase(db: any, equipo: string, clave: string) {
   return { agente: a.data, trabajos: t.data || [] };
 }
 
-// Guarda los pedidos a Sistemas (pendientes) y devuelve los que quedaron guardados.
-async function derivar(db: any, solicitudes: any[]) {
+// Guarda los pedidos de permiso (pendientes hasta que Daniela decida) y devuelve los que quedaron guardados.
+async function derivar(db: any, solicitudes: any[], origen = "agente") {
   if (!solicitudes.length) return [];
-  const { data, error } = await db.from("oficina_solicitudes").insert(solicitudes.map((s: any) => ({ agente: s.agente, titulo: s.titulo, detalle: s.detalle }))).select("id,agente,titulo");
-  if (error) { console.error("oficina-chat: no se pudo guardar el pedido a Sistemas", error.message); return []; }
+  const { data, error } = await db.from("oficina_solicitudes").insert(solicitudes.map((s: any) => ({ agente: s.agente, titulo: s.titulo, detalle: s.detalle, accion: s.accion ?? null, origen }))).select("id,agente,titulo");
+  if (error) { console.error("oficina-chat: no se pudo guardar el pedido", error.message); return []; }
   return data || [];
 }
 
@@ -105,17 +116,18 @@ async function reunion(db: any, body: any) {
   if (!v.ok) return json({ error: v.error }, 400);
   const provs = proveedores(env);
   if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
-  let participantes: any[];
+  let participantes: any[], hilo: any;
   try {
+    hilo = await leerHilo(db);
     participantes = (await Promise.all(v.asistentes.map(async (a: any) => ({ id: a.id, c: contexto(a.equipo, a.clave, await leerDatos(db, a.equipo, a.clave)) }))))
       .filter((p: any) => p.c);
   } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
   if (!participantes.length) return json({ error: "No encontré a los asistentes." }, 404);
   try {
-    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: mensajesReunion(participantes, v.mensajes, hoyLargo()), temperature: 0.5, max_tokens: 1400 }, { timeoutMs: 90000 }));
+    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: mensajesReunion(participantes, v.mensajes, hoyLargo(), hilo), temperature: 0.5, max_tokens: 1400 }, { timeoutMs: 90000 }));
     const respuestas = leerRespuestas((resultado as any)?.content, participantes.map((p: any) => p.id));
     if (!respuestas.length) return json({ error: "Nadie respondió. Probá preguntar de nuevo, o nombrá a alguien." }, 502);
-    const solicitudes = await derivar(db, leerSolicitudes((resultado as any)?.content, participantes.map((p: any) => p.id)));
+    const solicitudes = await derivar(db, leerSolicitudes((resultado as any)?.content, participantes.map((p: any) => p.id)), "reunion");
     return json({ respuestas, solicitudes, ia });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
@@ -130,17 +142,19 @@ async function acta(db: any, body: any) {
   if (!v.ok) return json({ error: v.error }, 400);
   const provs = proveedores(env);
   if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
-  let leida: any;
+  let leida: any, anterior: number | null = null;
   try {
-    const gente = await equipos(db);
-    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: mensajesActa(v.nombres, v.mensajes, hoyISO(), hoyLargo(), gente), temperature: 0.3, max_tokens: 6000 }, { timeoutMs: 120000 }));
+    const [gente, hilo] = await Promise.all([equipos(db), leerHilo(db)]);
+    anterior = hilo.actas[0]?.id ?? null;
+    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: mensajesActa(v.nombres, v.mensajes, hoyISO(), hoyLargo(), gente, hilo), temperature: 0.3, max_tokens: 6000 }, { timeoutMs: 120000 }));
     leida = leerActa((resultado as any)?.content, hoyISO(), gente);
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
     return json({ error: (e as Error).message }, 500);
   }
   if (!leida) return json({ error: "María no pudo armar el acta. Se guarda igual la conversación." }, 502);
-  const plan = { decisiones: leida.decisiones, tareas: leida.tareas, sistemas: leida.sistemas, calendario: leida.calendario };
+  // El acta queda enganchada a la anterior: así el Archivo se lee como un hilo.
+  const plan = { decisiones: leida.decisiones, seguimiento: leida.seguimiento, tareas: leida.tareas, sistemas: leida.sistemas, calendario: leida.calendario, anterior };
   const fila = await db.from("oficina_actas").insert({ modo: v.modo, inicio: v.inicio, asistentes: v.asistentes.map((a: any) => a.id), mensajes: v.mensajes, resumen: leida.resumen, titulo: leida.titulo, plan }).select("id").single();
   if (fila.error) return json({ error: `No se pudo guardar el acta: ${fila.error.message}` }, 500);
   const actaId = fila.data.id;
@@ -156,6 +170,34 @@ async function acta(db: any, body: any) {
   return json({ id: actaId, titulo: leida.titulo, tareas: leida.tareas.length, pedidos: pedidos.length });
 }
 
+// Propuestas del día: la primera vez que Daniela abre la Oficina en el día, los equipos traen propuestas (una sola vez
+// por día; si ya hay, no se repite).
+async function propuestas(db: any) {
+  const desde = new Date(`${hoyISO()}T00:00:00-03:00`).toISOString();
+  const { data: ya } = await db.from("oficina_solicitudes").select("id").eq("origen", "propuesta").gte("creada", desde).limit(1);
+  if (ya?.length) return json({ ya: true, propuestas: [] });
+  const provs = proveedores(env);
+  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
+  let participantes: any[], hilo: any;
+  try {
+    const gente = await equipos(db);
+    hilo = await leerHilo(db);
+    const ids = [...gente.trabajadores, ...gente.up.filter((g: any) => ["up:noruega", "up:planificador"].includes(g.id)), ...gente.pdg].map((g: any) => g.id).slice(0, 24);
+    participantes = (await Promise.all(ids.map(async (id: string) => {
+      const [equipo, clave] = id.split(":");
+      return { id, c: contexto(equipo, clave, await leerDatos(db, equipo, clave)) };
+    }))).filter((p: any) => p.c);
+  } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
+  try {
+    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaPropuestas(participantes, hoyLargo(), hilo) }, { role: "user", content: "Buen día. ¿Qué proponen hoy?" }], temperature: 0.6, max_tokens: 2500 }, { timeoutMs: 90000 }));
+    const guardadas = await derivar(db, leerPropuestas((resultado as any)?.content, participantes.map((p: any) => p.id)), "propuesta");
+    return json({ propuestas: guardadas });
+  } catch (e) {
+    if (e instanceof ErrorIA) return json({ error: e.message }, 502);
+    return json({ error: (e as Error).message }, 500);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Método no permitido." }, 405);
@@ -169,21 +211,22 @@ Deno.serve(async (req: Request) => {
   try { body = await req.json(); } catch { return json({ error: "Cuerpo inválido." }, 400); }
   if (body?.acta) return await acta(db, body);
   if (body?.reunion) return await reunion(db, body);
+  if (body?.propuestas) return await propuestas(db);
   const v: any = validar(body);
   if (!v.ok) return json({ error: v.error }, 400);
   const provs = proveedores(env);
   if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
 
-  let datos;
-  try { datos = await leerDatos(db, v.equipo, v.clave); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
+  let datos, hilo;
+  try { [datos, hilo] = await Promise.all([leerDatos(db, v.equipo, v.clave), leerHilo(db)]); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
   const c = contexto(v.equipo, v.clave, datos);
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
 
   try {
-    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, v.mensajes, hoyLargo()), temperature: 0.4, max_tokens: 900 }));
-    const { texto, solicitud } = extraerSolicitud(String((resultado as any)?.content ?? ""), `${v.equipo}:${v.clave}`);
+    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, v.mensajes, hoyLargo(), hilo), temperature: 0.4, max_tokens: 900 }));
+    const { texto, solicitudes: pedidos } = extraerSolicitudes(String((resultado as any)?.content ?? ""), `${v.equipo}:${v.clave}`);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);
-    const solicitudes = await derivar(db, solicitud ? [solicitud] : []);
+    const solicitudes = await derivar(db, pedidos);
     return json({ texto, solicitudes, ia });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);

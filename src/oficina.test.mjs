@@ -231,3 +231,15 @@ test('agentesPdg: Femina toma su estado de sus vueltas y lista lo que encontró'
   assert.equal(agentesPdg(agentes, [], ahora, { corridas: [{ estado: 'error', iniciada_at: '2026-11-12T11:23:00Z', error: 'sin IA' }] })[1].estado, 'error')
   assert.equal(agentesPdg(agentes, [], ahora)[1].estado, 'nuevo')
 })
+
+test('propuestas del día: una vez por día; recomendación según el tipo de pedido', async () => {
+  const { tocanPropuestas, recomendacion } = await import('./oficina.mjs')
+  const ahora = Date.parse('2026-11-13T15:00:00Z') // 12:00 en Buenos Aires
+  assert.equal(tocanPropuestas([], ahora), true)
+  assert.equal(tocanPropuestas([{ origen: 'propuesta', creada: '2026-11-13T04:00:00Z' }], ahora), false)
+  assert.equal(tocanPropuestas([{ origen: 'propuesta', creada: '2026-11-13T02:00:00Z' }], ahora), true, 'la de anoche (antes de las 0 de Buenos Aires) no cuenta')
+  assert.equal(tocanPropuestas([{ origen: 'reunion', creada: '2026-11-13T14:00:00Z' }], ahora), true)
+  assert.match(recomendacion({ titulo: 'Pantalla de métricas', accion: { tipo: 'programar' } }), /Claude lo programa/)
+  assert.match(recomendacion({ titulo: 'Calendario', accion: { tipo: 'tarea' } }), /tarea en el Archivo/)
+  assert.match(recomendacion({ titulo: 'Necesito el token de X', accion: { tipo: 'programar' } }), /Riesgo alto/)
+})

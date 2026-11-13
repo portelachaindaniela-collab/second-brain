@@ -13,7 +13,49 @@ export function validarPedido(body) {
 export function accionValida(accion) {
   if (accion?.tipo === 'frenar_pieza') return Array.isArray(accion.piezas) && accion.piezas.every(p => typeof p === 'string' && p.length <= 64)
   if (accion?.tipo === 'cargar_calendario_up') return diasValidos(accion.dias).length > 0 && diasValidos(accion.dias).length === accion.dias.length
+  if (accion?.tipo === 'programar') return true
+  if (accion?.tipo === 'tarea') return AREAS.includes(accion.area) && ID.test(accion.responsable ?? '') && ID.test(accion.supervisor ?? '')
   return false
+}
+const AREAS = ['trabajadores', 'up', 'pdg', 'sistemas', 'admin']
+const ID = /^(trabajadores|up|pdg|sistemas|admin):[a-z_]{1,40}$/
+
+// ---------- Programar (Sistemas) ----------
+// Al aprobarse un pedido de código, Sistemas lo abre como issue en GitHub con la etiqueta «sistemas»: la Action
+// «Sistemas · Claude programa» lo toma, escribe el código y deja una rama lista para el PR. Nada se publica sin que
+// Daniela revise y apruebe el PR.
+export const ETIQUETA = 'sistemas'
+export function issueDelPedido(s) {
+  return {
+    title: `Sistemas: ${String(s.titulo).slice(0, 180)}`,
+    labels: [ETIQUETA],
+    body: [
+      `Pedido #${s.id} de la Oficina, aprobado por Daniela. Lo pidió \`${s.agente}\`.`,
+      '',
+      '## Qué hay que hacer',
+      String(s.detalle || s.titulo),
+      '',
+      '## Cómo trabajar',
+      '- Leé `CLAUDE.md` antes de empezar y mirá el código que vas a tocar: cambios mínimos, sin tocar lo que no hace falta.',
+      '- Antes de terminar corré `node --test src/*.test.mjs supabase/functions/*/*.test.mjs`, `npx oxlint` y `npx vite build`.',
+      '- Dejá el cambio en una rama y el link para abrir el PR contra `master`. No mergees: Daniela lo revisa.',
+      '- Si hace falta una migración o una Edge Function, dejalas en el repo y explicá en el PR cómo aplicarlas (desde acá no hay acceso a Supabase).',
+      '- Nunca pongas claves ni tokens en el código. Si el pedido no se puede hacer o no está claro, explicalo en un comentario en vez de inventar.',
+    ].join('\n'),
+  }
+}
+export function notaProgramar({ estado, url, detalle }) {
+  if (estado === 'abierto') return `Sistemas lo abrió en GitHub y Claude lo está programando: ${url} . Cuando termine te deja el PR para revisar; nada se publica sin que lo apruebes.`
+  if (estado === 'sin_token') return 'Aprobado, pero Sistemas no pudo abrirlo en GitHub: falta configurar un token de GitHub con permiso para crear issues (GITHUB_TOKEN en las funciones de Supabase).'
+  return `Aprobado, pero Sistemas no pudo abrirlo en GitHub (${detalle}).`
+}
+
+// ---------- Tarea ----------
+// Lo que no necesita código queda como tarea del agente que lo pidió, a cargo del supervisor de su área (se ve en el
+// Archivo y la sigue en las reuniones).
+export function tareaDelPedido(s) {
+  const texto = `${s.titulo}${s.detalle ? `: ${s.detalle}` : ''}`.replace(/\s+/g, ' ').trim().slice(0, 500)
+  return { tarea: texto, area: s.accion.area, responsable: s.accion.responsable, supervisor: s.accion.supervisor }
 }
 
 // Los días de un calendario para UP (los arma María en el acta): fecha, tema, redes y formato de Instagram.
