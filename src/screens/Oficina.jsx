@@ -325,17 +325,18 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
           </li>)}</ul>
           : <p className="tenue">Nada pendiente: los agentes no te necesitan por ahora.</p>}
       </Bloque>
-      <Bloque titulo={`Mensajes${solicitudes.filter(x => x.estado === 'pendiente').length ? ` · ${solicitudes.filter(x => x.estado === 'pendiente').length} para aprobar` : ''}`}>
+      <Bloque titulo="Trabajando ahora">
+        {cargando ? <p className="tenue">Revisando…</p> : <ActividadAhora agentes={agentes} abrir={abrir} />}
+      </Bloque>
+      {/* Mensajes a todo el ancho: la tabla de pedidos necesita lugar para sus columnas y los botones. */}
+      <Bloque titulo={`Mensajes${solicitudes.filter(x => x.estado === 'pendiente').length ? ` · ${solicitudes.filter(x => x.estado === 'pendiente').length} para aprobar` : ''}`} ancho="completo">
         {cargando ? <p className="tenue">Revisando…</p> : <Mensajes solicitudes={solicitudes} agentes={agentes} decidir={decidir} responder={responder} ahora={ahora} />}
       </Bloque>
       <Bloque titulo="Calendario de la oficina" ancho="completo">
         <div id="oficina-calendario">{cargando ? <p className="tenue">Revisando…</p> : <CalendarioOficina eventos={eventos} ahora={ahora} />}</div>
       </Bloque>
-      <Bloque titulo="Archivo de la oficina">
+      <Bloque titulo="Archivo de la oficina" ancho="completo">
         {cargando ? <p className="tenue">Revisando…</p> : <Archivo actas={actas} tareas={tareas} agentes={agentes} escribiendo={escribiendoActa} cambiarTarea={cambiarTarea} ahora={ahora} />}
-      </Bloque>
-      <Bloque titulo="Trabajando ahora">
-        {cargando ? <p className="tenue">Revisando…</p> : <ActividadAhora agentes={agentes} abrir={abrir} />}
       </Bloque>
     </Bloques>
     {convocando && <ConvocarReunion agentes={agentes} preseleccion={convocando.asistentes ?? null} cerrar={() => setConvocando(false)}

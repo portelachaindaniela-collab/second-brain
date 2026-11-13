@@ -217,7 +217,7 @@
 
 
 /* Pedidos como un libro de Excel: tabla por hoja y pestañas por agente abajo. */
-.oficina-libro { border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; }
+.oficina-libro { border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; container-type: inline-size; }
 .oficina-hoja { max-height: 22rem; overflow: auto; }
 .oficina-planilla { width: 100%; border-collapse: collapse; font-size: var(--letra-13); }
 .oficina-planilla th { position: sticky; top: 0; z-index: 1; background: var(--surface-inset); text-align: left; font-weight: 600; font-size: var(--letra-12); color: var(--gray-500, inherit); padding: 6px 8px; border-bottom: 1px solid var(--gray-200); }
@@ -240,8 +240,10 @@
 .oficina-estado-pedido.estado-aprobada { color: var(--green-600); }
 .oficina-planilla-detalle td { cursor: default; background: var(--surface-inset); padding: var(--esp-8) var(--esp-12); }
 .oficina-planilla-detalle p { margin: 0 0 var(--esp-4); overflow-wrap: anywhere; }
-.oficina-pestanas { display: flex; overflow-x: auto; border-top: 1px solid var(--gray-200); background: var(--surface-inset); }
-.oficina-pestanas button { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 0; border-right: 1px solid var(--gray-200); background: none; color: var(--gray-500, inherit); font: inherit; font-size: var(--letra-12); cursor: pointer; }
+.oficina-pestanas { display: flex; flex-wrap: wrap; border-top: 1px solid var(--gray-200); background: var(--surface-inset); }
+.oficina-pestanas button { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 0; border-right: 1px solid var(--gray-200); border-bottom: 1px solid var(--gray-200); background: none; color: var(--gray-500, inherit); font: inherit; font-size: var(--letra-12); cursor: pointer; }
 .oficina-pestanas button.activa { background: var(--surface-raised); color: inherit; font-weight: 600; box-shadow: inset 0 2px 0 var(--accent); }
 .oficina-pestana-num { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-size: 11px; font-weight: 700; text-align: center; }
-@media (max-width: 640px) { .oficina-planilla .col-tipo, .oficina-planilla .col-fecha { display: none; } }
+/* Según el ancho del bloque (no de la pantalla): angosto, se esconden fecha y tipo; los botones quedan siempre. */
+@container (max-width: 560px) { .oficina-planilla .col-tipo, .oficina-planilla .col-fecha { display: none; } }
+@container (max-width: 400px) { .oficina-planilla .col-estado { display: none; } }
