@@ -194,6 +194,7 @@
 .tipo-reunion { --c: var(--id-azul); }
 .tipo-agendada { --c: var(--green-600); }
 .tipo-propuesta { --c: var(--amber-600); }
+.tipo-interna { --c: var(--id-violeta); }
 .tipo-vence { --c: var(--red-600); }
 .tipo-hecha { --c: var(--gray-200); }
 .oficina-cal-grilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
@@ -259,3 +260,7 @@
 .o3-encuentro-quien .oficina-avatar { width: 26px; height: 26px; }
 .o3-encuentro-riesgo { color: var(--red-600); font-size: var(--letra-12); }
 .o3-encuentro-botones { display: flex; flex-wrap: wrap; gap: var(--esp-8); margin-top: var(--esp-8); }
+
+/* Reunión interna: el cartel con lo último que se dijo. */
+.o3-interna { max-width: min(380px, calc(100% - 20px)); }
+.o3-interna-linea { line-height: 1.4; }

@@ -2,7 +2,7 @@ import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, u
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -46,7 +46,7 @@ async function cargarOficina() {
     if (error) { errores.push(`${nombre}: ${error.message}`); return vacio }
     return data ?? vacio
   }
-  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, tareas, conexiones, operador, feminaCorridas, feminaHallazgos] = await Promise.all([
+  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, tareas, conexiones, operador, feminaCorridas, feminaHallazgos, reuniones] = await Promise.all([
     leer('trabajadores', supabase.from('trabajadores').select('*').order('id'), []),
     leer('salud del sistema', supabase.rpc('salud_sistema'), null),
     leer('corridas de UP', supabase.from('up_corridas').select('estado,error,pasos,iniciado_at').order('iniciado_at', { ascending: false }).limit(15), []),
@@ -63,6 +63,7 @@ async function cargarOficina() {
     leer('tareas programadas', supabase.rpc('oficina_operador'), []),
     leer('vueltas de Femina', supabase.from('pdg_femina_corridas').select('estado,iniciada_at,resumen,error').order('iniciada_at', { ascending: false }).limit(8), []),
     leer('lo que encontró Femina', supabase.from('pdg_hallazgos').select('tipo,titulo,estado,created_at').eq('estado', 'nuevo').order('created_at', { ascending: false }).limit(60), []),
+    leer('reuniones internas', supabase.from('oficina_reuniones').select('id,convoca,asistentes,tema,detalle,fecha,estado,acta_id').order('fecha', { ascending: false }).limit(60), []),
   ])
   const corridasPor = {}
   await Promise.all(trabajadores.map(async t => {
@@ -72,7 +73,7 @@ async function cargarOficina() {
     trabajadores, corridasPor, salud, upCorridas, chequeo, hoy, errores,
     piezas: piezas.map(p => ({ fecha: p.fecha, estado: p.estado, tiene_texto: Boolean(p.texto) })),
     pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin, solicitudes, actas, conexiones, operador, tareas,
-    femina: { corridas: feminaCorridas, hallazgos: feminaHallazgos },
+    femina: { corridas: feminaCorridas, hallazgos: feminaHallazgos }, reuniones,
   }
 }
 
@@ -113,7 +114,7 @@ export default function Oficina() {
   return <OficinaVista cargando={!datos} agentes={oficina?.agentes ?? []} pendientes={oficina?.pendientes ?? []}
     errores={[error, ...(datos?.errores ?? [])].filter(Boolean)} ahora={ahora} hablar={conAviso(hablarConAgente, recargar)}
     hablarReunion={conAviso(hablarEnReunion, recargar)} actualizar={recargar}
-    solicitudes={datos?.solicitudes ?? []} actas={datos?.actas ?? []} decidir={async (id, estado, nota, accion) => { await decidirSolicitud(id, estado, nota, accion); await recargar() }}
+    solicitudes={datos?.solicitudes ?? []} actas={datos?.actas ?? []} reuniones={datos?.reuniones ?? []} decidir={async (id, estado, nota, accion) => { await decidirSolicitud(id, estado, nota, accion); await recargar() }}
     tareas={datos?.tareas ?? []} cambiarTarea={async (id, estado) => { await cambiarTarea(id, estado); await recargar() }}
     marcarPresentada={async ids => { await marcarPresentada(ids); await recargar() }}
     guardarActa={async acta => { try { await guardarActa(acta) } finally { await recargar() } }} />
@@ -155,13 +156,16 @@ async function cambiarTarea(id, estado) {
 }
 // Si en la charla un agente pidió permiso para algo, se avisa en su respuesta y se vuelve a leer.
 const avisoPedido = s => ` (Te pedí permiso: «${s.titulo}». Lo aprobás en Sistemas.)`
+const avisoInterna = r => ` (Agendé una reunión interna en la sala: «${r.tema}», el ${new Date(`${r.fecha}T12:00:00Z`).toLocaleDateString('es-AR', { timeZone: 'UTC', day: 'numeric', month: 'long' })}.)`
 function conAviso(hablarFn, recargar) {
   return async (...args) => {
     const r = await hablarFn(...args)
-    if (!r.solicitudes?.length) return r.valor
+    const internas = r.internas ?? []
+    if (!r.solicitudes?.length && !internas.length) return r.valor
     recargar()
-    if (typeof r.valor === 'string') return r.valor + r.solicitudes.map(avisoPedido).join('')
-    return r.valor.map(x => ({ ...x, texto: x.texto + r.solicitudes.filter(s => s.agente === x.agente).map(avisoPedido).join('') }))
+    const avisos = id => [...r.solicitudes.filter(s => !id || s.agente === id).map(avisoPedido), ...internas.filter(x => !id || x.convoca === id).map(avisoInterna)].join('')
+    if (typeof r.valor === 'string') return r.valor + avisos(null)
+    return r.valor.map(x => ({ ...x, texto: x.texto + avisos(x.agente) }))
   }
 }
 
@@ -172,7 +176,7 @@ async function hablarEnReunion(asistentes, mensajes) {
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
   if (error || !respuesta?.respuestas?.length) throw new Error(respuesta?.error || 'Nadie pudo responder. Probá de nuevo.')
-  return { valor: respuesta.respuestas, solicitudes: respuesta.solicitudes ?? [] }
+  return { valor: respuesta.respuestas, solicitudes: respuesta.solicitudes ?? [], internas: respuesta.internas ?? [] }
 }
 
 async function hablarConAgente(agente, mensajes) {
@@ -181,18 +185,19 @@ async function hablarConAgente(agente, mensajes) {
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
   if (error || !respuesta?.texto) throw new Error(respuesta?.error || 'No pude hablar con el agente. Probá de nuevo.')
-  return { valor: respuesta.texto, solicitudes: respuesta.solicitudes ?? [] }
+  return { valor: respuesta.texto, solicitudes: respuesta.solicitudes ?? [], internas: respuesta.internas ?? [] }
 }
 
 // ---------- Vista ----------
 // reloj: de dónde sale la hora para la luz del día (en la app, la actual; se puede cambiar para probar).
 export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now,
-  solicitudes = [], actas = [], tareas = [], decidir = async () => {}, cambiarTarea = async () => {}, marcarPresentada = async () => {}, guardarActa = async () => {} }) {
+  solicitudes = [], actas = [], tareas = [], reuniones = [], decidir = async () => {}, cambiarTarea = async () => {}, marcarPresentada = async () => {}, guardarActa = async () => {},
+  correrInterna = correrReunionInterna }) {
   const [elegidoId, setElegidoId] = useState(null)
   const [pestana, setPestana] = useState('ahora')
   const [charlas, setCharlas] = useState({})
   const elegido = agentes.find(a => a.id === elegidoId) || null
-  const eventos = useMemo(() => eventosOficina({ actas, tareas, solicitudes }), [actas, tareas, solicitudes])
+  const eventos = useMemo(() => eventosOficina({ actas, tareas, solicitudes, reuniones }), [actas, tareas, solicitudes, reuniones])
   // Encuentros a pie: el agente cercano que tiene algo para vos te lo dice (lo que dejás para después no se repite).
   const [cercanos, setCercanos] = useState([])
   const [despues, setDespues] = useState(() => new Set())
@@ -272,6 +277,49 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     if (prox) turnos[prox] = { llamado: Date.now() }
     return { ...r, turnos }
   })
+  // ---------- Reunión interna ----------
+  // Cuando toca una reunión interna (los agentes entre ellos), los convocados caminan a la sala, la IA escribe la charla
+  // y se va mostrando quién habla; al final María deja el acta en el Archivo y cada uno vuelve a su lugar.
+  // interna: { id, reunionId, propia, modo: 'sala', estado: 'convocada' | 'volviendo', inicio, vuelta, asistentes, tema,
+  //   convoca, fase: 'llegando' | 'charlando' | 'lista' | 'error', mensajes, vistos, error }
+  const [interna, setInterna] = useState(null)
+  const internasIntentadas = useRef(new Set())
+  useEffect(() => {
+    if (cargando || reunion || interna) return
+    const r = internaQueToca(reuniones, hoyAR(Date.now()))
+    if (!r || internasIntentadas.current.has(r.id)) return
+    internasIntentadas.current.add(r.id)
+    const asistentes = r.asistentes.filter(id => agentes.some(a => a.id === id && a.estado !== 'pausado'))
+    if (asistentes.length < 2) return
+    setInterna({ id: `interna-${r.id}`, reunionId: r.id, propia: true, modo: 'sala', estado: 'convocada', inicio: Date.now(), asistentes, tema: r.tema, convoca: r.convoca, fase: 'llegando', mensajes: [], vistos: 0 })
+    correrInterna(r.id)
+      .then(res => setInterna(x => (x?.reunionId === r.id ? { ...x, mensajes: res.mensajes ?? [], acta: res.acta } : x)))
+      .catch(e => setInterna(x => (x?.reunionId === r.id ? { ...x, fase: 'error', error: e.message } : x)))
+  }, [cargando, reunion, interna, reuniones, agentes, correrInterna])
+  // Les da tiempo a llegar a la sala y después muestra la charla de a una intervención.
+  useEffect(() => {
+    if (!interna || interna.estado === 'volviendo') return
+    const i = setInterval(() => setInterna(x => {
+      if (!x || x.estado === 'volviendo') return x
+      const ya = Date.now() - x.inicio
+      if (x.fase === 'error') return ya > 15000 ? { ...x, estado: 'volviendo', vuelta: Date.now() } : x
+      if (!x.mensajes.length || ya < LLEGAR_INTERNA_MS) return x
+      if (x.vistos < x.mensajes.length) return { ...x, fase: 'charlando', vistos: x.vistos + 1 }
+      return { ...x, fase: 'lista', estado: 'volviendo', vuelta: Date.now() }
+    }), 4500)
+    return () => clearInterval(i)
+  }, [interna?.id, interna?.estado]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (interna?.estado !== 'volviendo') return
+    if (interna.fase === 'lista') actualizar()
+    // Si la escena no avisa que volvieron (por ejemplo, sin 3D), se cierra sola.
+    const id = interna.id
+    const t = setTimeout(() => setInterna(x => (x?.id === id ? null : x)), 90000)
+    return () => clearTimeout(t)
+  }, [interna?.id, interna?.estado]) // eslint-disable-line react-hooks/exhaustive-deps
+  const alTerminoInterna = useCallback(id => setInterna(x => (x?.id === id ? null : x)), [])
+  const hablaInterna = interna?.fase === 'charlando' ? interna.mensajes[interna.vistos - 1]?.agente ?? null : null
+
   const alPlanificar = useCallback((id, ll) => setReunion(r => { if (r?.id === id) setLlegadas(ll); return r }), [])
   const alVolvieron = useCallback(id => setReunion(r => (r?.id === id ? null : r)), [])
   const enCurso = reunion?.estado === 'en_curso'
@@ -300,9 +348,11 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
         {cargando ? <p className="empty-state">Abriendo la oficina…</p> : <>
           {tres
             ? <SiFalla respaldo={sin3D}><Suspense fallback={<p className="oficina-sin-3d">Abriendo la oficina…</p>}>
-              <Oficina3D agentes={agentes} elegidoId={elegidoId} abrir={abrir} reunion={reunion} hablando={hablando}
+              <Oficina3D agentes={agentes} elegidoId={elegidoId} abrir={abrir} reunion={reunion} hablando={hablando ?? hablaInterna}
+                reunionInterna={interna} alTerminoInterna={alTerminoInterna}
                 alPlanificar={alPlanificar} alVolvieron={alVolvieron} volverDaniela={volverDaniela} alMoverDaniela={setLejos}
                 pantallaCompleta={enCurso} reloj={relojLuz} calendario={eventos} alTocarPizarron={verCalendario} alCruzarse={setCercanos}>
+                {!superpuesto && interna && <AvisoInterna interna={interna} agentes={agentes} />}
                 {superpuesto ?? (encuentro && !elegido && <Encuentro key={encuentro.clave} encuentro={encuentro} agente={agentes.find(a => a.id === encuentro.id)} decidir={decidir}
                   responder={responder} hablar={id => abrir(id, 'charla')} despues={() => setDespues(d => new Set(d).add(encuentro.clave))} />)}
               </Oficina3D>
@@ -463,6 +513,31 @@ function Mensajes({ solicitudes, agentes, decidir, responder, ahora }) {
   </>
 }
 
+// El cartel de una reunión interna: quiénes están, de qué hablan y lo último que se dijo (con la charla entera a mano).
+const LLEGAR_INTERNA_MS = 20000
+function AvisoInterna({ interna, agentes }) {
+  const [verTodo, setVerTodo] = useState(false)
+  const nombre = id => nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)
+  const dichos = interna.mensajes.slice(0, interna.vistos)
+  const estado = interna.fase === 'error' ? `No se pudo hacer la reunión: ${interna.error}. Se vuelve a intentar la próxima vez que abras la Oficina.`
+    : interna.fase === 'lista' ? 'Terminaron. María dejó el acta en el Archivo y lo que decidieron te llega como pedidos.'
+      : dichos.length ? null : 'Van llegando a la sala…'
+  return <div className="reunion-aviso o3-interna" role="status" aria-live="polite">
+    <p><strong>Reunión interna</strong> · «{interna.tema}» · la convocó {nombre(interna.convoca)}</p>
+    <p className="tenue">{interna.asistentes.map(nombre).join(', ')}</p>
+    {estado && <p>{estado}</p>}
+    {(verTodo ? dichos : dichos.slice(-2)).map((m, i) => <p key={i} className="o3-interna-linea"><strong>{nombre(m.agente)}:</strong> {m.texto}</p>)}
+    {dichos.length > 2 && <button type="button" className="btn btn-sm" onClick={() => setVerTodo(v => !v)}>{verTodo ? 'Ver menos' : 'Ver toda la charla'}</button>}
+  </div>
+}
+async function correrReunionInterna(id) {
+  const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { reunion_interna: id } })
+  let r = data
+  if (error?.context) { try { r = await error.context.json() } catch { /* queda el error de conexión */ } }
+  if (error || !r?.mensajes) throw new Error(r?.error || 'no respondió')
+  return r
+}
+
 // Lo que te dice un agente cuando pasás caminando cerca: su pedido (con aprobar o rechazar ahí mismo) o un aviso.
 function Encuentro({ encuentro, agente, decidir, responder, hablar, despues }) {
   const [ocupado, setOcupado] = useState(false)
@@ -492,7 +567,7 @@ function Encuentro({ encuentro, agente, decidir, responder, hablar, despues }) {
 // ---------- Calendario ----------
 // El calendario interno de la oficina: reuniones que se hicieron, las agendadas, las que esperan tu OK y las fechas
 // límite de las tareas. Es lo mismo que muestran los pizarrones de la oficina 3D.
-const TIPO_EVENTO = { reunion: 'Reunión', agendada: 'Reunión agendada', propuesta: 'Reunión por aprobar', vence: 'Vence', hecha: 'Hecha' }
+const TIPO_EVENTO = { reunion: 'Reunión', agendada: 'Reunión agendada', interna: 'Reunión interna', propuesta: 'Reunión por aprobar', vence: 'Vence', hecha: 'Hecha' }
 function CalendarioOficina({ eventos, ahora }) {
   const hoy = hoyAR(ahora)
   const [mes, setMes] = useState(hoy.slice(0, 7))
@@ -505,7 +580,7 @@ function CalendarioOficina({ eventos, ahora }) {
       <strong>{grilla.nombre}</strong>
       <button type="button" className="btn btn-sm" aria-label="Mes siguiente" onClick={() => setMes(m => mesVecino(m, 1))}>›</button>
       {mes !== hoy.slice(0, 7) && <button type="button" className="btn btn-sm" onClick={() => { setMes(hoy.slice(0, 7)); setDia(hoy) }}>Hoy</button>}
-      <span className="oficina-cal-leyenda">{['reunion', 'agendada', 'propuesta', 'vence'].map(t => <span key={t}><i className={`tipo-${t}`} />{TIPO_EVENTO[t]}</span>)}</span>
+      <span className="oficina-cal-leyenda">{['reunion', 'agendada', 'interna', 'propuesta', 'vence'].map(t => <span key={t}><i className={`tipo-${t}`} />{TIPO_EVENTO[t]}</span>)}</span>
     </div>
     <div className="oficina-cal-grilla" role="grid" aria-label={grilla.nombre}>
       {['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].map(d => <span key={d} className="oficina-cal-dsem" role="columnheader">{d}</span>)}
@@ -556,7 +631,7 @@ function Archivo({ actas, tareas, agentes, escribiendo, cambiarTarea, ahora }) {
         const deEsta = tareas.filter(t => t.acta_id === a.id)
         return <li key={a.id}>
           <button type="button" className="oficina-acta-cabeza" aria-expanded={abierta === a.id} onClick={() => setAbierta(v => (v === a.id ? null : a.id))}>
-            <strong>{a.titulo && a.titulo !== 'Reunión' ? a.titulo : { sala: 'Reunión en la sala', oficina: 'Reunión en tu oficina', turnos: 'Turnos en tu oficina' }[a.modo] ?? 'Reunión'}</strong>
+            <strong>{a.titulo && a.titulo !== 'Reunión' ? a.titulo : { sala: 'Reunión en la sala', oficina: 'Reunión en tu oficina', turnos: 'Turnos en tu oficina', interna: 'Reunión interna' }[a.modo] ?? 'Reunión'}</strong>{a.modo === 'interna' && <span className="tenue"> · entre ellos, sin vos</span>}
             <span className="tenue">{new Date(a.fin).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {a.asistentes.length} participantes{deEsta.length ? ` · ${deEsta.length} tareas` : ''}</span>
           </button>
           {abierta === a.id && <div className="oficina-acta">

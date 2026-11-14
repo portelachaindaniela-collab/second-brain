@@ -210,3 +210,23 @@ test('reuniones: un agente pide juntarse con fecha y convocados; conoce el plant
   assert.equal(r[0].accion.fecha, '2099-01-02')
   assert.match(textoHilo({ plantel: [{ id: 'up:noruega', nombre: 'Noruega' }] }), /Noruega \(up:noruega\)/)
 })
+
+test('reuniones internas: se agendan sin pedir permiso, solo entre agentes que conversan', async () => {
+  const { accionDePedido, separarInternas, leerSolicitudes, sistemaReunionInterna, leerConversacion, validarActa } = await import('./logic.mjs')
+  const a = accionDePedido('up:noruega', 'reunion_interna', { fecha: '2026-11-20', asistentes: ['up:planificador', 'sistemas:operador', 'pdg:marketing'], titulo: 'Repartir el calendario' }, '2026-11-14')
+  assert.deepEqual(a, { tipo: 'reunion_interna', fecha: '2026-11-20', asistentes: ['up:noruega', 'up:planificador', 'pdg:marketing'], tema: 'Repartir el calendario' })
+  const pedidos = leerSolicitudes(JSON.stringify({ pedidos: [
+    { agente: 'up:noruega', titulo: 'Repartir el calendario', detalle: 'Coordinar quién hace qué', tipo: 'reunion_interna', fecha: '2026-11-20', asistentes: ['up:planificador'] },
+    { agente: 'up:noruega', titulo: 'Pantalla de métricas', tipo: 'codigo' },
+    { agente: 'up:noruega', titulo: 'Sola no se puede', tipo: 'reunion_interna', asistentes: [] },
+  ] }), ['up:noruega'])
+  const { internas, solicitudes } = separarInternas(pedidos)
+  assert.deepEqual(internas, [{ convoca: 'up:noruega', asistentes: ['up:noruega', 'up:planificador'], tema: 'Repartir el calendario', detalle: 'Coordinar quién hace qué', fecha: '2026-11-20' }])
+  assert.deepEqual(solicitudes.map(x => x.titulo), ['Pantalla de métricas'], 'una reunión de uno solo no se agenda')
+  const ficha = id => ({ id, nombre: id === 'up:noruega' ? 'Noruega' : 'Planificador', rol: 'r', descripcion: 'd', herramientas: [], registro: [] })
+  const prompt = sistemaReunionInterna([{ id: 'up:noruega', c: ficha('up:noruega') }, { id: 'up:planificador', c: ficha('up:planificador') }], { convoca: 'up:noruega', tema: 'Repartir el calendario', detalle: '' }, 'hoy', {})
+  assert.match(prompt, /sin Daniela[\s\S]*Noruega los convocó para hablar de «Repartir el calendario»[\s\S]*"mensajes"/)
+  const conv = leerConversacion(JSON.stringify({ mensajes: [{ agente: 'up:noruega', texto: 'Arranco yo.' }, { agente: 'pdg:otro', texto: 'No estoy' }, { agente: 'up:planificador', texto: '' }] }), ['up:noruega', 'up:planificador'])
+  assert.deepEqual(conv, [{ agente: 'up:noruega', texto: 'Arranco yo.' }])
+  assert.equal(validarActa({ asistentes: ['up:noruega'], mensajes: [{ de: 'Noruega', texto: 'hola' }], modo: 'interna', inicio: '2026-11-14T10:00:00Z' }).ok, true)
+})

@@ -389,6 +389,12 @@ export function contarEstados(agentes) {
   return r
 }
 
+// ---------- Reuniones internas ----------
+// La próxima reunión interna que toca hacer (los agentes se juntan entre ellos): la más vieja agendada para hoy o antes.
+export function internaQueToca(reuniones = [], hoy = hoyAR()) {
+  return reuniones.filter(r => r.estado === 'agendada' && r.fecha <= hoy).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id)[0] ?? null
+}
+
 // ---------- Calendario de la oficina ----------
 // Las reuniones que pidió un agente y Daniela aprobó, todavía sin hacer.
 export function reunionesAgendadas(solicitudes = []) {
@@ -396,8 +402,9 @@ export function reunionesAgendadas(solicitudes = []) {
 }
 // Todo lo que pasa en la oficina por día: las reuniones que se hicieron (actas), las agendadas, las que esperan tu OK y
 // las fechas límite de las tareas. { fecha: 'AAAA-MM-DD', tipo: 'reunion' | 'agendada' | 'propuesta' | 'vence' | 'hecha', texto, id }
-export function eventosOficina({ actas = [], tareas = [], solicitudes = [] } = {}) {
+export function eventosOficina({ actas = [], tareas = [], solicitudes = [], reuniones = [] } = {}) {
   const lista = []
+  for (const r of reuniones) if (r.estado === 'agendada' || r.estado === 'en_curso') lista.push({ fecha: r.fecha, tipo: 'interna', texto: `${r.tema} (entre ellos)`, id: `interna-${r.id}` })
   for (const a of actas) if (a.fin) lista.push({ fecha: hoyAR(Date.parse(a.fin)), tipo: 'reunion', texto: a.titulo || 'Reunión', id: `acta-${a.id}` })
   for (const x of solicitudes) {
     if (x.accion?.tipo !== 'reunion' || !/^\d{4}-\d{2}-\d{2}$/.test(x.accion.fecha ?? '')) continue
@@ -405,7 +412,7 @@ export function eventosOficina({ actas = [], tareas = [], solicitudes = [] } = {
     else if (x.estado === 'pendiente') lista.push({ fecha: x.accion.fecha, tipo: 'propuesta', texto: `${x.accion.tema || x.titulo} (espera tu OK)`, id: `pedido-${x.id}` })
   }
   for (const t of tareas) if (t.vence) lista.push({ fecha: t.vence, tipo: t.estado === 'hecha' ? 'hecha' : 'vence', texto: t.tarea, id: `tarea-${t.id}` })
-  const orden = { reunion: 0, agendada: 1, propuesta: 2, vence: 3, hecha: 4 }
+  const orden = { reunion: 0, agendada: 1, interna: 2, propuesta: 3, vence: 4, hecha: 5 }
   return lista.sort((a, b) => a.fecha.localeCompare(b.fecha) || orden[a.tipo] - orden[b.tipo])
 }
 // La grilla de un mes (semanas de lunes a domingo) con los eventos de cada día. mes: 'AAAA-MM'.
