@@ -397,7 +397,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       botonAPie.setAttribute('aria-pressed', String(activo))
       contenedor.classList.toggle('o3-apie', activo)
       renderer.domElement.style.touchAction = activo ? 'none' : 'pan-y'
-      // Las paredes son bajas (vista de casita): a la altura de los ojos se ve un cielo claro con bruma, no el fondo oscuro.
+      // A la altura de los ojos se ve un cielo claro con bruma, no el fondo oscuro.
       escena.background = activo ? FONDO_APIE : null
       escena.fog = activo ? BRUMA_APIE : null
       if (activo) {

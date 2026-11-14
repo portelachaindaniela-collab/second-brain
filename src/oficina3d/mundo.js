@@ -424,9 +424,8 @@ export function crearOficina(o) {
   g.position.set(0, alturaPiso(o.x0 + 0.1, o.y0 + 0.1), o.y0)
   const D = o.y1 - o.y0
   const altoTabique = 2.1
-  // Las oficinas de la fila del medio tienen paredes bajas (tipo casa de muñecas): así no tapan a la de al lado ni a
-  // quien camina por el corredor de atrás. La fila del fondo (María) va contra la pared del edificio.
-  const altoMuro = o.y0 > 0 ? 1.2 : altoTabique
+  // Todas las paredes van altas (a Daniela le marean menos que las bajas).
+  const altoMuro = altoTabique
   const estilo = estiloDe(o.id)
   const acento = mat(estilo.pared)
   {
@@ -522,7 +521,7 @@ export function crearSala(mesas) {
   g.add(caja(X0, W, 0, EJECUTIVO.tarima, EJECUTIVO.y0, EJECUTIVO.y1, mat('#d9c3a2'), { sombra: false }))
   g.add(caja(X0, W, 0, EJECUTIVO.tarima / 2, EJECUTIVO.y1, EJECUTIVO.y1 + 0.25, mat('#c9b18c'), { sombra: false }))
   // La pared del fondo de la fila de oficinas de los trabajadores (da al corredor de la fila ejecutiva).
-  g.add(caja(OFICINAS.x0, OFICINAS.x1, 0, 1.2, OFICINAS.y0 - 0.08, OFICINAS.y0, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(caja(OFICINAS.x0, OFICINAS.x1, 0, 2.1, OFICINAS.y0 - 0.08, OFICINAS.y0, mat(COLORES.tabique), { r: 0.02 }))
 
   // Reloj con la hora real, en la pared izquierda (cafetería).
   const reloj = new THREE.Group()
@@ -618,12 +617,12 @@ export function crearSala(mesas) {
   g.add(alfombra(Z.sistemas.x0 + 0.3, Z.sistemas.x1 - 0.3, Z.sistemas.y0 + 0.4, Z.sistemas.y1 - 0.9, COLORES.grisClaro))
   tablonMesa(g, mesas.sistemas)
 
-  // El Archivo: paredes bajas, frente de vidrio con puerta al pasillo, estanterías con biblioratos y cajas y un cartel.
+  // El Archivo: paredes altas, frente de vidrio con puerta al pasillo, estanterías con biblioratos y cajas y un cartel.
   const AR = ARCHIVO
   g.add(caja(AR.x0, AR.x1, 0, 0.02, AR.y0, AR.y1, mat(COLORES.amarilloClaro), { sombra: false }))
-  g.add(caja(AR.x0, AR.x1, 0, 1.3, AR.y0 - 0.04, AR.y0 + 0.04, mat(COLORES.tabique), { r: 0.02 }))
-  g.add(caja(AR.x0, AR.x1, 0, 1.3, AR.y1 - 0.04, AR.y1 + 0.04, mat(COLORES.tabique), { r: 0.02 }))
-  g.add(caja(AR.x0 - 0.04, AR.x0 + 0.04, 0, 1.3, AR.y0, AR.y1, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(caja(AR.x0, AR.x1, 0, 2.1, AR.y0 - 0.04, AR.y0 + 0.04, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(caja(AR.x0, AR.x1, 0, 2.1, AR.y1 - 0.04, AR.y1 + 0.04, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(caja(AR.x0 - 0.04, AR.x0 + 0.04, 0, 2.1, AR.y0, AR.y1, mat(COLORES.tabique), { r: 0.02 }))
   g.add(vidriera(AR.y0, AR.y1, AR.x1, 'z', 2.1, [AR.puerta.y0, AR.puerta.y1]))
   const tonosArchivo = ['#3f6b8f', '#b0332b', '#c9a24a', '#5c3f2c', '#6f8f5a', '#2c2a28', '#d9a441', '#7f98a8']
   AR.estantes.forEach((e, k) => {
