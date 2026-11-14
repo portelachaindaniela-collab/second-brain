@@ -120,7 +120,8 @@ function textoHiloBase(hilo = {}) {
 // (abre el pedido en GitHub y Claude escribe el código); si no, al aprobarse queda como tarea del que lo pidió.
 const NO_CLAVES = 'Nunca pidas claves, tokens, contraseñas ni accesos: eso no se pide por acá.'
 export const REGLA_PEDIDOS = `- Sos parte del equipo, no un buscador: si Daniela te pide que hagas algo, o se te ocurre algo concreto que convendría hacer en tu área (un calendario, un sitio nuevo para leer, una cuenta para PDG, una mejora de la app), no lo das por hecho ni lo prometés: le pedís permiso con un pedido. Contá qué harías, para qué y cuándo.
-- Si hace falta juntarse (para mostrar algo, decidir entre varios o arrancar un proyecto), pedí una reunión: con la fecha, a quiénes convocás (ids del plantel) y el tema. Daniela la aprueba y queda en el calendario de la oficina.
+- Si hace falta juntarse con Daniela (para mostrarle algo o que decida), pedí una reunión: con la fecha, a quiénes convocás (ids del plantel) y el tema. Daniela la aprueba y queda en el calendario de la oficina.
+- Si tenés que coordinar con otros agentes sin Daniela (repartir trabajo, revisar algo entre ustedes, ponerse de acuerdo), convocá una reunión interna: con la fecha, a quiénes (ids del plantel) y el tema. No necesita permiso: se hace en la sala, María escribe el acta y lo que decidan le llega a Daniela para aprobar.
 - Si para hacerlo la app tiene que hacer algo que hoy no hace (una pantalla, un agente o un trabajador nuevo, leer un sitio nuevo, una automatización), el pedido es de código: Sistemas lo programa cuando Daniela lo aprueba. Describí qué tendría que hacer la app, con qué datos y qué se vería. Si alcanza con lo que ya hacés, el pedido es una tarea tuya.
 - ${NO_CLAVES}`
 
@@ -144,7 +145,7 @@ Cómo responder:
 - Si algo falló, explicá qué dice el registro y qué podría revisar ella.
 - ${generoDe(c.id) === 'f' ? 'Sos mujer: hablá de vos en femenino (por ejemplo «estoy lista», «quedé pausada»).' : 'Hablá de vos en masculino.'}
 ${REGLA_PEDIDOS}
-- Para pedir permiso, terminá tu respuesta con una línea aparte por pedido (como mucho 2): PEDIDO: <título corto> | <qué harías, para qué y cuándo> | <codigo, tarea o reunion> | <fecha AAAA-MM-DD, solo si es reunión> | <ids de los convocados separados por coma, solo si es reunión>`
+- Para pedir permiso, terminá tu respuesta con una línea aparte por pedido (como mucho 2): PEDIDO: <título corto> | <qué harías, para qué y cuándo> | <codigo, tarea, reunion o reunion_interna> | <fecha AAAA-MM-DD, solo si es reunión> | <ids de los convocados separados por coma, solo si es reunión>`
 }
 
 export function armarMensajes(c, mensajes, hoy, hilo) {
@@ -205,7 +206,7 @@ Cómo se responde:
 ${REGLA_PEDIDOS.replace(/^- /gm, '  · ')}
 - Los pedidos van en "pedidos", del agente que lo haría (como mucho 3 por respuesta; lista vacía si no hay).
 
-Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}],"pedidos":[{"agente":"<id exacto>","titulo":"...","detalle":"qué haría, para qué y cuándo","tipo":"codigo, tarea o reunion","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión)"]}]}`
+Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}],"pedidos":[{"agente":"<id exacto>","titulo":"...","detalle":"qué haría, para qué y cuándo","tipo":"codigo, tarea, reunion o reunion_interna","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión)"]}]}`
 }
 
 // Los mensajes de los agentes vuelven al modelo como "Nombre: texto" para que sepa quién dijo qué.
@@ -242,6 +243,10 @@ export const hoyBA = (ahora = Date.now()) => new Intl.DateTimeFormat('en-CA', { 
 // extra: { fecha, asistentes, titulo } para las reuniones. La fecha no puede ser antes de hoy (si no viene, es hoy) y
 // el que la pide siempre está convocado.
 export function accionDePedido(agente, tipo, extra = {}, hoy = hoyBA()) {
+  if (/reuni[oó]n/i.test(String(tipo ?? '')) && /interna/i.test(String(tipo ?? ''))) {
+    const r = accionDePedido(agente, 'reunion', extra, hoy)
+    return { ...r, tipo: 'reunion_interna', asistentes: r.asistentes.filter(x => partirId(x)).slice(0, 12) }
+  }
   if (/reuni[oó]n/i.test(String(tipo ?? ''))) {
     const f = String(extra.fecha ?? '').trim()
     const fecha = /^\d{4}-\d{2}-\d{2}$/.test(f) && !Number.isNaN(Date.parse(`${f}T12:00:00Z`)) && f >= hoy ? f : hoy
@@ -306,10 +311,10 @@ Reglas:
   esté en las fichas.
 - Cada propuesta: título corto y detalle con qué harían, para qué y cuándo. tipo: "codigo" si la app tiene que hacer algo
   que hoy no hace (Sistemas lo programa al aprobarse), "tarea" si alcanza con lo que ya hacen, "reunion" si proponen
-  juntarse (con fecha y convocados).
+  juntarse con Daniela, "reunion_interna" si se juntan entre ellos para coordinar (con fecha y convocados).
 - ${NO_CLAVES}
 
-Respondé SOLO con JSON: {"propuestas":[{"agente":"<id exacto>","titulo":"...","detalle":"...","tipo":"codigo, tarea o reunion","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión)"]}]}`
+Respondé SOLO con JSON: {"propuestas":[{"agente":"<id exacto>","titulo":"...","detalle":"...","tipo":"codigo, tarea, reunion o reunion_interna","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión)"]}]}`
 }
 export function leerPropuestas(texto, idsValidos) {
   const d = (() => {
@@ -319,6 +324,58 @@ export function leerPropuestas(texto, idsValidos) {
     try { return JSON.parse(crudo.slice(desde, hasta + 1)) } catch { return null }
   })()
   return limpiarSolicitudes(Array.isArray(d?.propuestas) ? d.propuestas : [], idsValidos, MAX_PROPUESTAS)
+}
+
+// ---------- Reunión interna ----------
+// Los agentes se juntan entre ellos, sin Daniela: la IA escribe la conversación entera (cada uno desde su área, con lo
+// que sabe) y después María escribe el acta como en cualquier reunión. Nada se ejecuta: lo que decidan queda como
+// pedidos para Daniela.
+// Separa los pedidos: las reuniones internas no piden permiso (van a su tabla); el resto, a los pedidos de Daniela.
+export function separarInternas(pedidos = []) {
+  const internas = [], solicitudes = []
+  for (const p of pedidos) {
+    if (p.accion?.tipo === 'reunion_interna') { if (p.accion.asistentes.length >= 2) internas.push({ convoca: p.agente, asistentes: p.accion.asistentes, tema: p.accion.tema || p.titulo, detalle: String(p.detalle ?? '').slice(0, 2000), fecha: p.accion.fecha }) }
+    else solicitudes.push(p)
+  }
+  return { internas, solicitudes }
+}
+export const MIN_TURNOS_INTERNA = 6
+export function sistemaReunionInterna(participantes, reunion, hoy, hilo) {
+  const fichas = participantes.map(({ id, c }) => [
+    `### ${c.nombre} (id: ${id}) — ${c.rol} — ${generoDe(id) === 'f' ? 'mujer' : 'varón'}`,
+    `Qué hace: ${recortar(c.descripcion, 300)}`,
+    ...(c.registro.length ? c.registro.slice(0, MAX_REGISTRO_REUNION).map(l => recortar(l, 220)) : ['(sin registro)']),
+  ].join('\n')).join('\n\n')
+  const convoca = participantes.find(p => p.id === reunion.convoca)?.c.nombre ?? reunion.convoca
+  return `Es una reunión interna en la sala de la Oficina de agentes del Second Brain de Daniela, sin Daniela. Hoy es ${hoy}.
+${convoca} los convocó para hablar de «${reunion.tema}».${reunion.detalle ? ` Contexto: ${recortar(reunion.detalle, 600)}` : ''}
+
+Lo que viene pasando en la oficina:
+${textoHilo(hilo)}
+
+Participantes y lo que sabe cada uno (es TODO lo que saben; no inventen fechas, cifras ni resultados):
+
+${fichas}
+
+Escribí la reunión completa, como una reunión de trabajo de verdad:
+- Abre ${convoca} planteando el tema. Después hablan los demás, cada uno desde su área, en primera persona, en español
+  rioplatense, natural y concreto; se responden entre ellos, discuten y llegan a acuerdos: quién hace qué y para cuándo.
+- Entre ${MIN_TURNOS_INTERNA} y 14 intervenciones, de 1 a 3 oraciones cada una. Cada uno habla de sí en su género.
+- Nadie ejecuta nada ni promete entregas: lo que haya que hacer queda como propuesta para Daniela (ella lo aprueba
+  después). Nadie pide claves, tokens ni accesos.
+
+Respondé SOLO con JSON: {"mensajes":[{"agente":"<id exacto de la lista>","texto":"..."}]}`
+}
+export function leerConversacion(texto, idsValidos) {
+  const crudo = String(texto ?? '')
+  const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
+  let d = null
+  if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
+  const validos = new Set(idsValidos)
+  return (Array.isArray(d?.mensajes) ? d.mensajes : [])
+    .map(m => ({ agente: String(m?.agente ?? ''), texto: String(m?.texto ?? '').trim().slice(0, 1000) }))
+    .filter(m => validos.has(m.agente) && m.texto)
+    .slice(0, 16)
 }
 
 // ---------- Acta ----------
@@ -333,7 +390,7 @@ export function validarActa(body) {
   const mensajes = (Array.isArray(body?.mensajes) ? body.mensajes : []).slice(-60)
     .map(m => ({ de: String(m?.de ?? '').slice(0, 80), texto: String(m?.texto ?? '').slice(0, MAX_CARACTERES).trim() }))
     .filter(m => m.de && m.texto)
-  const modo = ['sala', 'oficina', 'turnos'].includes(body?.modo) ? body.modo : null
+  const modo = ['sala', 'oficina', 'turnos', 'interna'].includes(body?.modo) ? body.modo : null
   const inicio = Date.parse(body?.inicio)
   const nombres = (Array.isArray(body?.nombres) ? body.nombres : []).slice(0, 30).map(n => String(n ?? '').slice(0, 80)).filter(Boolean)
   if (!mensajes.length) return { ok: false, error: 'La reunión no tiene conversación.' }

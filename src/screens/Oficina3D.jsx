@@ -63,7 +63,8 @@ function etiqueta(clase, texto, alClic) {
 //   inicio, vuelta, turnos: { [id]: { llamado, fin } } }. hablando: id del que habla en la reunión.
 // pantallaCompleta: la vista tipo videollamada (la arma Oficina.jsx con children encima de la escena).
 export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, hablando = null, alPlanificar, alVolvieron,
-  volverDaniela = 0, alMoverDaniela, pantallaCompleta = false, reloj = Date.now, calendario = [], alTocarPizarron = null, alCruzarse = null, children }) {
+  volverDaniela = 0, alMoverDaniela, pantallaCompleta = false, reloj = Date.now, calendario = [], alTocarPizarron = null, alCruzarse = null,
+  reunionInterna = null, alTerminoInterna = null, children }) {
   const marco = useRef(null)
   const pizarron = useRef(null) // la textura del calendario que comparten los pizarrones
   const escenario = useRef(null)
@@ -71,7 +72,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
   datos.current ??= { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, calendario }
   // Cada render deja a mano lo último: el cuadro de animación lo lee sin rearmar la escena.
   useEffect(() => {
-    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, alTocarPizarron, calendario, alCruzarse }
+    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, alTocarPizarron, calendario, alCruzarse, reunionInterna, alTerminoInterna }
   })
   // Los pizarrones muestran el mes actual con lo que pasa en la oficina: se redibujan cuando cambia el calendario.
   const firmaCalendario = calendario.map(e => `${e.id}${e.tipo}${e.fecha}`).join('|')
@@ -539,12 +540,13 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       const D = datos.current
       const { agentes: lista, elegidoId: elegido, rut } = D
       // Cuando corre la cadena de UP (dos o más de sus agentes trabajando), se juntan solos en la sala de reuniones;
-      // cuando terminan, vuelven a sus puestos. Si Daniela convoca una reunión, manda la suya.
+      // cuando terminan, vuelven a sus puestos. Si Daniela convoca una reunión, manda la suya; si los agentes tienen una
+      // reunión interna (entre ellos, sin Daniela), esa va antes que la de UP.
       const upTrabajando = lista.filter(a => a.equipo === 'up' && a.estado === 'trabajando').map(a => a.id)
-      if (D.reunion) reunionUp = null
+      if (D.reunion || D.reunionInterna) reunionUp = null
       else if (!reunionUp && upTrabajando.length >= 2 && !sinMovimiento) reunionUp = { id: `up-${Date.now()}`, propia: true, modo: 'sala', estado: 'convocada', inicio: Date.now(), asistentes: upTrabajando }
       else if (reunionUp && reunionUp.estado !== 'volviendo' && upTrabajando.length < 2) reunionUp = { ...reunionUp, estado: 'volviendo', vuelta: Date.now() }
-      const R = D.reunion ?? reunionUp
+      const R = D.reunion ?? D.reunionInterna ?? reunionUp
       if (t - ultimaLuz > 2) { aplicarLuz(); ultimaLuz = t }
       if (R && (!plan || plan.id !== R.id)) plan = planificar(R, t)
       if (!R && plan) plan = null
@@ -596,7 +598,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
               pose = s.pose
               pos = { x: s.x, y: s.pose === 'sentado' ? 0.08 : 0, z: s.y }
               giro = R.estado === 'en_curso' && R.modo === 'sala' ? Math.atan2(camaraReunion.x - s.x, camaraReunion.z - s.y) : s.mira
-              habla = R.estado === 'en_curso' && D.hablando === id
+              habla = (R.estado === 'en_curso' || R.propia) && D.hablando === id
               if (R.modo === 'turnos') numero = pr.numero
             }
           }
@@ -648,7 +650,12 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         if (id === elegido) { aro.visible = aLaVista; aro.position.set(pos.x, 0.03 + alturaPiso(pos.x, pos.z), pos.z) }
       }
       if (!elegido || !actores.has(elegido)) aro.visible = false
-      if (todosVolvieron && plan && !plan.avisado) { plan.avisado = true; if (R.propia) reunionUp = null; else D.alVolvieron?.(R.id) }
+      if (todosVolvieron && plan && !plan.avisado) {
+        plan.avisado = true
+        if (R.id === D.reunionInterna?.id) D.alTerminoInterna?.(R.id)
+        else if (R.propia) reunionUp = null
+        else D.alVolvieron?.(R.id)
+      }
 
       // Daniela: camina por su ruta; en una reunión por turnos la esperan sentada en su escritorio.
       if (D.volverDaniela !== daniela.volverVisto) { daniela.volverVisto = D.volverDaniela; volverAlEscritorio() }

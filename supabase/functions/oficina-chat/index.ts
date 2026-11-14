@@ -1,12 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
 // Oficina: hablar con los agentes. La app manda { agente: 'up:redactor', mensajes } (charla con uno),
 // { reunion: true, asistentes: [...], mensajes } (reunión: responde con { respuestas: [{ agente, texto }] }),
-// { acta: true, ... } (María escribe el acta) o { propuestas: true } (las propuestas del día). Todas leen el hilo de la
+// { acta: true, ... } (María escribe el acta), { propuestas: true } (las propuestas del día) o { reunion_interna: id }
+// (los agentes se juntan entre ellos y María escribe el acta). Todas leen el hilo de la
 // oficina (actas, tareas, pedidos y el plantel). Lee con la sesión de la dueña (RLS, nunca con permisos de servicio).
 // Lo que escribe: los pedidos de permiso de los agentes (entran pendientes, la base no deja crearlos de otra forma,
 // hasta que Daniela decide) y el acta de cada reunión con sus tareas.
@@ -104,12 +105,20 @@ async function leerDatosBase(db: any, equipo: string, clave: string) {
   return { agente: a.data, trabajos: t.data || [] };
 }
 
-// Guarda los pedidos de permiso (pendientes hasta que Daniela decida) y devuelve los que quedaron guardados.
-async function derivar(db: any, solicitudes: any[], origen = "agente") {
-  if (!solicitudes.length) return [];
-  const { data, error } = await db.from("oficina_solicitudes").insert(solicitudes.map((s: any) => ({ agente: s.agente, titulo: s.titulo, detalle: s.detalle, accion: s.accion ?? null, origen }))).select("id,agente,titulo");
-  if (error) { console.error("oficina-chat: no se pudo guardar el pedido", error.message); return []; }
-  return data || [];
+// Guarda los pedidos de permiso (pendientes hasta que Daniela decida) y agenda las reuniones internas (esas no piden
+// permiso). Devuelve lo que quedó guardado.
+async function derivar(db: any, pedidos: any[], origen = "agente") {
+  const { internas, solicitudes } = separarInternas(pedidos);
+  let guardadas: any[] = [], agendadas: any[] = [];
+  if (solicitudes.length) {
+    const { data, error } = await db.from("oficina_solicitudes").insert(solicitudes.map((s: any) => ({ agente: s.agente, titulo: s.titulo, detalle: s.detalle, accion: s.accion ?? null, origen }))).select("id,agente,titulo");
+    if (error) console.error("oficina-chat: no se pudo guardar el pedido", error.message); else guardadas = data || [];
+  }
+  if (internas.length) {
+    const { data, error } = await db.from("oficina_reuniones").insert(internas).select("id,convoca,tema,fecha,asistentes");
+    if (error) console.error("oficina-chat: no se pudo agendar la reunión interna", error.message); else agendadas = data || [];
+  }
+  return { solicitudes: guardadas, internas: agendadas };
 }
 
 // Reunión: una sola llamada a la IA con la ficha de cada asistente; responden los que tengan algo que decir.
@@ -129,8 +138,8 @@ async function reunion(db: any, body: any) {
     const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: mensajesReunion(participantes, v.mensajes, hoyLargo(), hilo), temperature: 0.5, max_tokens: 1400 }, { timeoutMs: 90000 }));
     const respuestas = leerRespuestas((resultado as any)?.content, participantes.map((p: any) => p.id));
     if (!respuestas.length) return json({ error: "Nadie respondió. Probá preguntar de nuevo, o nombrá a alguien." }, 502);
-    const solicitudes = await derivar(db, leerSolicitudes((resultado as any)?.content, participantes.map((p: any) => p.id)), "reunion");
-    return json({ respuestas, solicitudes, ia });
+    const { solicitudes, internas } = await derivar(db, leerSolicitudes((resultado as any)?.content, participantes.map((p: any) => p.id)), "reunion");
+    return json({ respuestas, solicitudes, internas, ia });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
     return json({ error: (e as Error).message }, 500);
@@ -142,8 +151,13 @@ async function reunion(db: any, body: any) {
 async function acta(db: any, body: any) {
   const v: any = validarActa(body);
   if (!v.ok) return json({ error: v.error }, 400);
+  const r: any = await escribirActa(db, v);
+  return r.error ? json({ error: r.error }, r.status) : json(r);
+}
+// María escribe el acta de una reunión ya validada (v: lo de validarActa) y la guarda con sus tareas y pedidos.
+async function escribirActa(db: any, v: any) {
   const provs = proveedores(env);
-  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
+  if (!provs.length) return { error: "Falta configurar la IA.", status: 503 };
   let leida: any, anterior: number | null = null;
   try {
     const [gente, hilo] = await Promise.all([equipos(db), leerHilo(db)]);
@@ -151,14 +165,13 @@ async function acta(db: any, body: any) {
     const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: mensajesActa(v.nombres, v.mensajes, hoyISO(), hoyLargo(), gente, hilo), temperature: 0.3, max_tokens: 6000 }, { timeoutMs: 120000 }));
     leida = leerActa((resultado as any)?.content, hoyISO(), gente);
   } catch (e) {
-    if (e instanceof ErrorIA) return json({ error: e.message }, 502);
-    return json({ error: (e as Error).message }, 500);
+    return { error: (e as Error).message, status: e instanceof ErrorIA ? 502 : 500 };
   }
-  if (!leida) return json({ error: "María no pudo armar el acta. Se guarda igual la conversación." }, 502);
+  if (!leida) return { error: "María no pudo armar el acta. Se guarda igual la conversación.", status: 502 };
   // El acta queda enganchada a la anterior: así el Archivo se lee como un hilo.
   const plan = { decisiones: leida.decisiones, seguimiento: leida.seguimiento, tareas: leida.tareas, sistemas: leida.sistemas, calendario: leida.calendario, anterior };
   const fila = await db.from("oficina_actas").insert({ modo: v.modo, inicio: v.inicio, asistentes: v.asistentes.map((a: any) => a.id), mensajes: v.mensajes, resumen: leida.resumen, titulo: leida.titulo, plan }).select("id").single();
-  if (fila.error) return json({ error: `No se pudo guardar el acta: ${fila.error.message}` }, 500);
+  if (fila.error) return { error: `No se pudo guardar el acta: ${fila.error.message}`, status: 500 };
   const actaId = fila.data.id;
   if (leida.tareas.length) {
     const t = await db.from("oficina_tareas").insert(leida.tareas.map((x: any) => ({ ...x, acta_id: actaId })));
@@ -169,7 +182,39 @@ async function acta(db: any, body: any) {
     const p = await db.from("oficina_solicitudes").insert(pedidos.map((x: any) => ({ ...x, origen: "reunion" })));
     if (p.error) console.error("oficina-chat: no se pudieron guardar los pedidos a Sistemas", p.error.message);
   }
-  return json({ id: actaId, titulo: leida.titulo, tareas: leida.tareas.length, pedidos: pedidos.length });
+  return { id: actaId, titulo: leida.titulo, tareas: leida.tareas.length, pedidos: pedidos.length };
+}
+
+// Reunión interna: los convocados se juntan entre ellos (sin Daniela); la IA escribe la conversación y María el acta.
+// Se marca en curso al empezar (así no corre dos veces) y vuelve a agendada si algo falla.
+async function reunionInterna(db: any, id: number) {
+  if (!Number.isInteger(id) || id <= 0) return json({ error: "Falta la reunión." }, 400);
+  const provs = proveedores(env);
+  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
+  const tomada = await db.from("oficina_reuniones").update({ estado: "en_curso" }).eq("id", id).eq("estado", "agendada").select("*").maybeSingle();
+  if (tomada.error) return json({ error: tomada.error.message }, 500);
+  if (!tomada.data) return json({ error: "Esa reunión ya se hizo o no existe." }, 409);
+  const reunion = tomada.data;
+  const volver = async (error: string, status: number) => { await db.from("oficina_reuniones").update({ estado: "agendada" }).eq("id", id); return json({ error }, status); };
+  let participantes: any[], hilo: any, mensajes: any[];
+  try {
+    hilo = await leerHilo(db);
+    participantes = (await Promise.all(reunion.asistentes.map(async (aid: string) => {
+      const [equipo, clave] = aid.split(":");
+      return { id: aid, c: contexto(equipo, clave, await leerDatos(db, equipo, clave)) };
+    }))).filter((p: any) => p.c);
+    if (participantes.length < 2) return await volver("Faltan participantes para la reunión.", 404);
+    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaReunionInterna(participantes, reunion, hoyLargo(), hilo) }, { role: "user", content: "Empiecen." }], temperature: 0.6, max_tokens: 3000 }, { timeoutMs: 120000 }));
+    mensajes = leerConversacion((resultado as any)?.content, participantes.map((p: any) => p.id));
+  } catch (e) { return await volver((e as Error).message, e instanceof ErrorIA ? 502 : 500); }
+  if (mensajes.length < MIN_TURNOS_INTERNA) return await volver("La IA no armó la conversación. Se vuelve a intentar la próxima vez.", 502);
+  const nombre = (aid: string) => participantes.find((p: any) => p.id === aid)?.c.nombre ?? aid;
+  const v: any = validarActa({ asistentes: participantes.map((p: any) => p.id), nombres: participantes.map((p: any) => p.c.nombre), mensajes: mensajes.map(m => ({ de: nombre(m.agente), texto: m.texto })), modo: "interna", inicio: new Date().toISOString() });
+  if (!v.ok) return await volver(v.error, 400);
+  const escrita: any = await escribirActa(db, v);
+  if (escrita.error) return await volver(escrita.error, escrita.status);
+  await db.from("oficina_reuniones").update({ estado: "hecha", acta_id: escrita.id }).eq("id", id);
+  return json({ mensajes, acta: escrita });
 }
 
 // Propuestas del día: la primera vez que Daniela abre la Oficina en el día, los equipos traen propuestas (una sola vez
@@ -192,8 +237,8 @@ async function propuestas(db: any) {
   } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
   try {
     const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaPropuestas(participantes, hoyLargo(), hilo) }, { role: "user", content: "Buen día. ¿Qué proponen hoy?" }], temperature: 0.6, max_tokens: 2500 }, { timeoutMs: 90000 }));
-    const guardadas = await derivar(db, leerPropuestas((resultado as any)?.content, participantes.map((p: any) => p.id)), "propuesta");
-    return json({ propuestas: guardadas });
+    const { solicitudes: guardadas, internas } = await derivar(db, leerPropuestas((resultado as any)?.content, participantes.map((p: any) => p.id)), "propuesta");
+    return json({ propuestas: guardadas, internas });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
     return json({ error: (e as Error).message }, 500);
@@ -214,6 +259,7 @@ Deno.serve(async (req: Request) => {
   if (body?.acta) return await acta(db, body);
   if (body?.reunion) return await reunion(db, body);
   if (body?.propuestas) return await propuestas(db);
+  if (body?.reunion_interna) return await reunionInterna(db, Number(body.reunion_interna));
   const v: any = validar(body);
   if (!v.ok) return json({ error: v.error }, 400);
   const provs = proveedores(env);
@@ -228,8 +274,8 @@ Deno.serve(async (req: Request) => {
     const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, v.mensajes, hoyLargo(), hilo), temperature: 0.4, max_tokens: 900 }));
     const { texto, solicitudes: pedidos } = extraerSolicitudes(String((resultado as any)?.content ?? ""), `${v.equipo}:${v.clave}`);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);
-    const solicitudes = await derivar(db, pedidos);
-    return json({ texto, solicitudes, ia });
+    const { solicitudes, internas } = await derivar(db, pedidos);
+    return json({ texto, solicitudes, internas, ia });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
     return json({ error: (e as Error).message }, 500);

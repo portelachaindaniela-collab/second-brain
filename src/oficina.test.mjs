@@ -317,3 +317,16 @@ test('encuentros a pie: el agente cercano dice lo que tiene para Daniela, una co
   assert.equal(primerEncuentro(['trabajadores:canillita', 'up:investigador', 'up:noruega'], { solicitudes, pendientes }).id, 'up:investigador')
   assert.equal(primerEncuentro([], { solicitudes, pendientes }), null)
 })
+
+test('reuniones internas: cuál toca y cómo se ven en el calendario', async () => {
+  const { internaQueToca, eventosOficina } = await import('./oficina.mjs')
+  const reuniones = [
+    { id: 3, estado: 'agendada', fecha: '2026-11-20', tema: 'Más adelante' },
+    { id: 2, estado: 'agendada', fecha: '2026-11-13', tema: 'Repartir el calendario' },
+    { id: 1, estado: 'hecha', fecha: '2026-11-10', tema: 'Ya hecha' },
+  ]
+  assert.equal(internaQueToca(reuniones, '2026-11-14').id, 2)
+  assert.equal(internaQueToca(reuniones, '2026-11-12'), null)
+  const ev = eventosOficina({ reuniones })
+  assert.deepEqual(ev.map(e => [e.fecha, e.tipo, e.texto]), [['2026-11-13', 'interna', 'Repartir el calendario (entre ellos)'], ['2026-11-20', 'interna', 'Más adelante (entre ellos)']])
+})
