@@ -12,7 +12,7 @@ import {
   PIZARRONES,
 } from '../oficinaPlano.mjs'
 import { obstaculos, grilla, buscarCamino, pasoAPie, ANCHO_CAMINABLE } from '../oficinaCaminar.mjs'
-import { ESTADOS, mesOficina, hoyAR } from '../oficina.mjs'
+import { mesOficina, hoyAR } from '../oficina.mjs'
 import './Oficina3D.css'
 
 // La Oficina en 3D (three.js), con jerarquía de la entrada al fondo: Administración (las tareas programadas en una
@@ -31,7 +31,6 @@ const CAMARA_SALA = { pos: new THREE.Vector3(9.1, 4.9, 23.0), target: new THREE.
 // Reunión en la oficina de Daniela: la cámara mira su mesa de reuniones desde arriba, del lado del vidrio.
 const CAMARA_OFICINA = { pos: new THREE.Vector3(42.6, 3.9, 6.5), target: new THREE.Vector3(40.3, 0.9, 3.0), fov: 52 }
 const CAMARA_DESPACHO = { pos: new THREE.Vector3(37.25, 1.92, 1.05), target: new THREE.Vector3(36.5, 1.12, 4.7), fov: 46 }
-const nombreCorto = n => String(n).split(' (')[0]
 const PIZARRON = '__pizarron__'
 const RADIO_ENCUENTRO = 2.4 // a qué distancia de Daniela un agente se da cuenta de que pasa y le habla
 const FONDO_APIE = new THREE.Color('#e8e2d8')
@@ -187,19 +186,14 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         const p = crearPersonaje({ ropa: colorRopa(a), v: variante(a.id), accesorio: ACCESORIOS[a.id] ?? null })
         escena.add(mueble.grupo, p.grupo)
         for (const o of [mueble.grupo, p.grupo]) { o.traverse(m => { m.userData.agenteId = a.id }); clicables.push(o) }
-        // El nombre sobre el vidrio de su oficina, a la altura de su escritorio (el de enfrente, un poco más arriba para que
-        // no se pisen), o detrás de su silla en el tablón.
-        const cartel = etiqueta(`o3-cartel${lugar.jefa ? ' o3-jefa' : ''}`, lugar.jefa ? `★ ${nombreCorto(a.nombre)}` : nombreCorto(a.nombre), () => datos.current.abrir(a.id))
-        if (lugar.tipo === 'oficina') cartel.position.set(lugar.jefa ? lugar.puerta.x : lugar.escritorio.x, 2.25 + (lugar.mira === Math.PI ? 0.34 : 0) + alturaPiso(lugar.puerta.x, lugar.oficina.y1 - 0.1), lugar.oficina.y1)
-        else cartel.position.set(lugar.sentado.x - Math.sin(lugar.mira) * 0.6, 0.05, lugar.sentado.y - Math.cos(lugar.mira) * 0.6)
-        escena.add(cartel)
+        // Sin carteles con el nombre (tapaban la oficina): a cada agente se lo toca en la escena o en la lista de abajo.
         const burbuja = etiqueta('o3-burbuja', null, () => datos.current.abrir(a.id))
         burbuja.position.set(0, 0.55, 0)
         p.cabeza.add(burbuja)
         const zetas = etiqueta('o3-zetas', 'z z z')
         zetas.position.set(0.25, 0.5, 0)
         p.cabeza.add(zetas)
-        actores.set(a.id, { a, lugar, mueble, p, cartel, burbuja, zetas, bebida: bebidaDe(a.id), fase: (i * 1.7) % 5, camino: null, descansoId: null, desfase: 0, pos: { x: lugar.sentado.x, y: 0, z: lugar.sentado.y } })
+        actores.set(a.id, { a, lugar, mueble, p, burbuja, zetas, bebida: bebidaDe(a.id), fase: (i * 1.7) % 5, camino: null, descansoId: null, desfase: 0, pos: { x: lugar.sentado.x, y: 0, z: lugar.sentado.y } })
       })
     }
 
@@ -651,8 +645,6 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         ac.burbuja.userData.el.textContent = texto
         ac.burbuja.visible = Boolean(tipo)
         ac.zetas.visible = pose === 'dormido'
-        ac.cartel.userData.el.className = `o3-cartel${lugar.jefa ? ' o3-jefa' : ''} estado-${a.estado}${id === elegido ? ' is-elegido' : ''}`
-        ac.cartel.userData.el.title = `${a.nombre}: ${ESTADOS[a.estado]}. ${a.ahora}`
         if (id === elegido) { aro.visible = aLaVista; aro.position.set(pos.x, 0.03 + alturaPiso(pos.x, pos.z), pos.z) }
       }
       if (!elegido || !actores.has(elegido)) aro.visible = false

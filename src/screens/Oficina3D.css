@@ -31,10 +31,6 @@
   color: #2c2a28; background: rgba(255, 250, 243, .9); box-shadow: 0 1px 3px rgba(44, 42, 40, .25);
 }
 .o3-cartel:hover { background: #fff; }
-.o3-cartel.estado-error { color: #c8323f; }
-.o3-cartel.estado-pausado, .o3-cartel.estado-nuevo { color: #8f86a8; }
-.o3-cartel.is-elegido { outline: 2px solid var(--accent); }
-.o3-cartel.o3-jefa { color: #f2d48a; background: #5c3f2c; font-weight: 700; }
 .o3-cartel.o3-yo { color: #2c2a28; background: #d9a441; font-weight: 800; pointer-events: none; }
 .o3-lejos .o3-cartel.o3-yo { display: block; }
 .o3-cartel.o3-roberta { color: #7a4f2c; background: #fbe7cf; pointer-events: none; }
