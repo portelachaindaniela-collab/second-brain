@@ -476,9 +476,10 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   // Si se fue (terminó la visita) sin que la vieras, el aviso se cierra.
   useEffect(() => { if (entrada && visita?.agente !== entrada.agente && entrada.texto) setEntrada(null) }, [entrada, visita])
   const avisoEntrada = entrada?.texto && visita?.agente === entrada.agente && llegoVisita === visita.id && !elegido && !superpuesto ? entrada : null
-  const visitaEscena = golpe ? { id: golpe.golpe, agente: golpe.id, destino: 'puerta' } : visita
+  // Si un agente dijo que viene (o lo llamaste), esa visita va primero: el que golpeaba la puerta espera.
+  const visitaEscena = visita ?? (golpe ? { id: golpe.golpe, agente: golpe.id, destino: 'puerta' } : null)
   // Lo que te dicen en el pasillo (o en tu puerta) queda guardado con lo que contestás: después, en la charla, el agente lo sabe.
-  const enPuerta = !superpuesto && golpe?.llego && !elegido ? golpe : null
+  const enPuerta = !superpuesto && !visita && golpe?.llego && !elegido ? golpe : null
   const visto = enPuerta ?? (!superpuesto && fijo && sigue(fijo) && !elegido && !golpe ? fijo : null)
   const anotados = useRef({})
   useEffect(() => {
