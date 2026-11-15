@@ -2,7 +2,7 @@ import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, u
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, quienEntra, PRIMERA_ENTRADA_MS, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, VISITA_MS, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, quienEntra, PRIMERA_ENTRADA_MS, ELLAS, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, VISITA_MS, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -65,7 +65,7 @@ async function cargarOficina() {
     leer('lo que encontró Femina', supabase.from('pdg_hallazgos').select('tipo,titulo,estado,created_at').eq('estado', 'nuevo').order('created_at', { ascending: false }).limit(60), []),
     leer('reuniones internas', supabase.from('oficina_reuniones').select('id,convoca,asistentes,tema,detalle,fecha,estado,acta_id').order('fecha', { ascending: false }).limit(60), []),
     leer('relaciones entre agentes', supabase.from('oficina_vinculos').select('id,a,b,tipo,historia,desde').order('actualizado', { ascending: false }).limit(100), []),
-    leer('tu pareja', supabase.from('oficina_corazon').select('agente,desde'), []),
+    leer('tu pareja', supabase.from('oficina_corazon').select('agente,desde,estado'), []),
     leer('vida de la oficina', supabase.from('oficina_momentos').select('id,agentes,tipo,lugar,resumen,fecha,hora').gte('fecha', new Date(ahora - 7 * DIA_MS).toISOString().slice(0, 10)).order('fecha', { ascending: false }).limit(60), []),
   ])
   const corridasPor = {}
@@ -214,12 +214,20 @@ async function entrarSola(agente) {
 // reloj: de dónde sale la hora para la luz del día (en la app, la actual; se puede cambiar para probar).
 export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now,
   solicitudes = [], actas = [], tareas = [], reuniones = [], decidir = async () => {}, cambiarTarea = async () => {}, marcarPresentada = async () => {}, guardarActa = async () => {},
-  vinculos = [], momentos = [], corazon = [], correrInterna = correrReunionInterna, entrar = entrarSola, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
+  vinculos = [], momentos = [], corazon = [], cambiarConVosEnBase = cambiarCorazonEnBase, correrInterna = correrReunionInterna, entrar = entrarSola, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
   leerConversacion = leerConversacionDeBase, anotarEnConversacion = anotarEnConversacionDeBase }) {
   const [elegidoId, setElegidoId] = useState(null)
   const [pestana, setPestana] = useState('ahora')
   const [charlas, setCharlas] = useState({})
   const elegido = agentes.find(a => a.id === elegidoId) || null
+  // Lo que sos con Femina, María o Noruega (lo elegís vos; podés con varias). Queda dicho en la charla con ella, así lo sabe.
+  const cambiarConVos = async (id, estado) => {
+    await cambiarConVosEnBase(id, estado)
+    const dicho = estado ? `${TEXTO_CON_VOS[estado]} 💕` : 'Prefiero que volvamos a ser compañeras.'
+    setCharlas(c => ({ ...c, [id]: [...(c[id] ?? []), { role: 'user', content: dicho }] }))
+    anotarEnConversacion(id, dicho).catch(() => { /* igual quedó guardado el estado */ })
+    actualizar()
+  }
   // Visita: si en la charla un agente dice que va a tu oficina, la escena lo hace caminar hasta tu mesa (un rato).
   const [visita, setVisita] = useState(null)
   const finVisita = useRef(null)
@@ -559,7 +567,8 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
         convocar(ids, modo, convocando.tema ? { tema: convocando.tema, detalle: convocando.detalle, pidio: convocando.pidio } : null)
       }} />}
     {elegido && <PanelAgente key={elegido.id} agente={elegido} pestana={pestana} setPestana={setPestana} ahora={ahora} cerrar={() => setElegidoId(null)}
-      venir={venir} deVisita={visita?.agente === elegido.id} pedidos={solicitudes.filter(x => x.agente === elegido.id && x.estado === 'pendiente')} decidir={decidir} anotar={anotarEnConversacion}
+      venir={venir} deVisita={visita?.agente === elegido.id}
+      conVos={corazon.find(x => x.agente === elegido.id)?.estado ?? ''} cambiarConVos={estado => cambiarConVos(elegido.id, estado)} pedidos={solicitudes.filter(x => x.agente === elegido.id && x.estado === 'pendiente')} decidir={decidir} anotar={anotarEnConversacion}
       charla={charlas[elegido.id] ?? []} setCharla={m => setCharlas(c => ({ ...c, [elegido.id]: typeof m === 'function' ? m(c[elegido.id] ?? []) : m }))} hablar={hablar} />}
   </div>
 }
@@ -711,6 +720,15 @@ async function contestarEncuentroEnBase(agente, respuesta) {
   const { error } = await supabase.from('oficina_conversacion').insert({ agente, de: 'daniela', texto: CONTESTO[respuesta] ?? respuesta, lugar: 'pasillo' })
   if (error) throw error
 }
+// Lo que sos con Femina, María o Noruega: '' (compañeras), saliendo, novias, comprometidas o casadas.
+const ESTADOS_CON_VOS = [['', 'Compañeras'], ['saliendo', 'Saliendo'], ['novias', 'Novias'], ['comprometidas', 'Comprometidas'], ['casadas', 'Casadas']]
+const TEXTO_CON_VOS = { saliendo: 'Me gusta que estemos saliendo.', novias: '¿Querés ser mi novia? Para mí ya lo sos.', comprometidas: 'Estamos comprometidas.', casadas: 'Estamos casadas.' }
+async function cambiarCorazonEnBase(agente, estado) {
+  const { error } = estado
+    ? await supabase.from('oficina_corazon').upsert({ agente, estado }, { onConflict: 'owner_id,agente' })
+    : await supabase.from('oficina_corazon').delete().eq('agente', agente)
+  if (error) throw error
+}
 async function anotarEnConversacionDeBase(agente, texto) {
   const { error } = await supabase.from('oficina_conversacion').insert({ agente, de: 'daniela', texto: String(texto).slice(0, 4000), lugar: 'charla' })
   if (error) throw error
@@ -779,7 +797,7 @@ function VidaOficina({ vinculos, momentos, agentes, corazon = [] }) {
     {corazon.length > 0 && <div>
       <p className="oficina-vida-titulo">Con vos</p>
       <ul className="oficina-vida-lista">{corazon.map(x => <li key={x.agente}>
-        <span className="oficina-vinculo vinculo-pareja">❤ Pareja</span><strong>{nombre(x.agente)}</strong>
+        <span className="oficina-vinculo vinculo-pareja">❤ {ESTADOS_CON_VOS.find(([v]) => v === x.estado)?.[1] ?? 'Novias'}</span><strong>{nombre(x.agente)}</strong>
         <span className="tenue"> · desde el {new Date(x.desde).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'long' })}</span>
       </li>)}</ul>
     </div>}
@@ -921,7 +939,7 @@ function Avatar({ agente }) {
 // ---------- Panel del agente ----------
 const PESTANAS = [['ahora', 'Ahora'], ['que', 'Qué hace'], ['tareas', 'Tareas'], ['herramientas', 'Herramientas'], ['charla', 'Conversación']]
 
-function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, setCharla, hablar, venir, deVisita = false, pedidos = [], decidir, anotar }) {
+function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, setCharla, hablar, venir, deVisita = false, pedidos = [], decidir, anotar, conVos = '', cambiarConVos }) {
   const panel = useRef(null)
   // cerrar cambia en cada render: se guarda en una ref para que el efecto corra una sola vez (al abrir el panel)
   // y no le saque el foco al cuadro de la charla cada vez que llega una respuesta.
@@ -959,6 +977,12 @@ function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, se
             anotar?.(a.id, 'Vení a mi oficina.').catch(() => { /* igual va */ })
             setPestana('charla')
           }}>{deVisita ? 'Está en tu oficina' : 'Llamar a mi oficina'}</button>}
+          {ELLAS.includes(a.id) && cambiarConVos && <label className="oficina-con-vos">
+            <span>Con vos</span>
+            <select value={conVos} onChange={e => cambiarConVos(e.target.value)}>
+              {ESTADOS_CON_VOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+            </select>
+          </label>}
         </>}
         {pestana === 'que' && <p className="oficina-descripcion">{a.descripcion || 'Sin descripción cargada.'}</p>}
         {pestana === 'tareas' && (a.tareas.length

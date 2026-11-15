@@ -97,12 +97,13 @@ async function armarAgente(db: any, equipo: string, clave: string) {
   const id = `${equipo}:${clave}`;
   const [datos, hilo, historial, social, corazon] = await Promise.all([
     leerDatos(db, equipo, clave), leerHilo(db), conversacionDe(db, id), vidaDe(db, id),
-    ELLAS.includes(id) ? db.from("oficina_corazon").select("desde").eq("agente", id).maybeSingle() : Promise.resolve({ data: null }),
+    ELLAS.includes(id) ? db.from("oficina_corazon").select("desde,estado").eq("agente", id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   const c: any = contexto(equipo, clave, datos);
   if (c) {
     c.vida = lineasVida(id, social.vinculos, social.momentos, Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
     c.pareja = corazon?.data?.desde ?? null;
+    c.estadoPareja = corazon?.data?.estado ?? null;
   }
   return { c, hilo, historial };
 }
