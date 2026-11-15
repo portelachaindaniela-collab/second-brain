@@ -248,3 +248,25 @@ test('conversación: el agente lee todo lo que habló con Daniela (chat, pasillo
   assert.equal(validar({ agente: 'up:noruega', mensajes: [{ role: 'user', content: 'hola' }] }).lugar, 'charla')
   assert.match(sistema(contexto('up', 'noruega', { chequeos: [] }), 'hoy', {}), /toda tu conversación con Daniela/)
 })
+
+test('reunión interna: si la respuesta llega cortada, se rescatan los turnos completos', async () => {
+  const { leerConversacion } = await import('./logic.mjs')
+  const cortada = '{"mensajes":[{"agente":"pdg:femina","texto":"Hola María, ¿te \\"robo\\" un minuto?"},{"agente":"trabajadores:maria","texto":"Dale."},{"agente":"pdg:femina","texto":"Te quer'
+  const conv = leerConversacion(cortada, ['pdg:femina', 'trabajadores:maria'])
+  assert.deepEqual(conv, [{ agente: 'pdg:femina', texto: 'Hola María, ¿te "robo" un minuto?' }, { agente: 'trabajadores:maria', texto: 'Dale.' }])
+})
+
+test('salidas: charlas fuera de la oficina, sin pedidos y marcadas en la conversación', async () => {
+  const { conHistorial, armarMensajes } = await import('./logic.mjs')
+  const v = validar({ agente: 'up:noruega', mensajes: [{ role: 'user', content: '¿Qué pedís?' }], salida: 'comer' })
+  assert.equal(v.salida, 'comer')
+  assert.equal(validar({ agente: 'up:noruega', mensajes: [{ role: 'user', content: 'hola' }], salida: 'boliche' }).salida, null)
+  const c = contexto('up', 'noruega', { chequeos: [] })
+  const sis = armarMensajes(c, [], 'hoy', {}, 'comer')[0].content
+  assert.match(sis, /salieron a comer/)
+  assert.match(sis, /sin pedir permisos/)
+  assert.doesNotMatch(sis, /PEDIDO:/)
+  assert.doesNotMatch(armarMensajes(c, [], 'hoy', {}, null)[0].content, /salieron a comer/)
+  const m = conHistorial([{ de: 'agente', texto: 'Me encanta la milanesa.', lugar: 'charla', salida: 'comer', creado: '2026-11-15T15:00:00Z' }], [{ role: 'user', content: '¿Te acordás qué comiste?' }])
+  assert.match(m[0].content, /^\[salieron a comer, /)
+})

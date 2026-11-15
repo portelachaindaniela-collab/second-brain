@@ -339,3 +339,12 @@ test('encuentros: «ahora no» lo frena un rato y después el agente te lo vuelv
   assert.equal(primerEncuentro(['up:noruega'], datos, pospuestos(despues, t0 + 60_000)), null)
   assert.equal(primerEncuentro(['up:noruega'], datos, pospuestos(despues, t0 + POSPONER_ENCUENTRO_MS + 1))?.clave, 'p7')
 })
+
+test('visita: si el agente dice que va a tu oficina, camina hasta ahí', async () => {
+  const { vieneATuOficina } = await import('./oficina.mjs')
+  assert.equal(vieneATuOficina('Dale, voy a tu oficina y te lo muestro.'), true)
+  assert.equal(vieneATuOficina('Paso por tu despacho en un rato.'), true)
+  assert.equal(vieneATuOficina('Me acerco a tu escritorio con los números.'), true)
+  assert.equal(vieneATuOficina('Te lo dejo en el Archivo.'), false)
+  assert.equal(vieneATuOficina('La reunión es en la sala.'), false)
+})

@@ -6,7 +6,7 @@ import {
   PISO, ZONAS, PUFS, MESA_REUNION, DANIELA_SALA, LIVING, COCINA, MESA_CHICA_DANIELA, DANIELA_OFICINA, asientosOficina, MESA_CHICA_MARIA, PLANTAS_DANIELA, RINCON_ENTRADA, SALA_SERVIDORES, ARCHIVO, MACETONES, RINCON_TABLONES, EXPENDEDORAS, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, estiloDe, CUADROS_PDG,
   MUEBLES_DIRECCION, ROBERTA, EJECUTIVO, X0, OFICINAS, DIVISOR, ENTRADA, alturaPiso, FONDO_PIZARRON,
 } from '../oficinaPlano.mjs'
-import { texturaCuadro, texturaAlfombra, texturaCamiseta, texturaPosterOasis, texturaPelota } from './cuadros.js'
+import { texturaCuadro, texturaAlfombra, texturaCamiseta, texturaPosterOasis, texturaPelota, texturaPosterPinkFloyd, texturaPosterFrida, texturaPosterJugador } from './cuadros.js'
 export { texturaPizarron, dibujarPizarron } from './cuadros.js'
 
 export const COLORES = {
@@ -25,6 +25,8 @@ export function mat(color, extra = {}) {
   return materiales.get(clave)
 }
 export function vaciarMateriales() { for (const m of materiales.values()) { m.map?.dispose(); m.dispose() } materiales.clear() }
+// Las paredes interiores (tabiques) con un poco de luz propia: se ven claras de día, de noche y en la sombra.
+const TABIQUE_CLARO = { emissive: '#fbf7ef', emissiveIntensity: 0.42 }
 const VIDRIO = () => mat('#cdeff7', { transparent: true, opacity: 0.2, roughness: 0.05, depthWrite: false })
 
 // Caja por sus bordes: x0..x1, y0..y1 (alto), z0..z1. r: redondeo.
@@ -429,9 +431,9 @@ export function crearOficina(o) {
   const estilo = estiloDe(o.id)
   const acento = mat(estilo.pared)
   {
-    g.add(caja(o.x0, o.x0 + 0.08, 0, altoMuro, 0, D, mat(COLORES.tabique), { r: 0.02 }))
-    g.add(caja(o.x1 - 0.08, o.x1, 0, altoMuro, 0, D, mat(COLORES.tabique), { r: 0.02 }))
-    if (o.y0 > 0) g.add(caja(o.x0, o.x1, 0, altoMuro, -0.08, 0, mat(COLORES.tabique), { r: 0.02 }))
+    g.add(caja(o.x0, o.x0 + 0.08, 0, altoMuro, 0, D, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
+    g.add(caja(o.x1 - 0.08, o.x1, 0, altoMuro, 0, D, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
+    if (o.y0 > 0) g.add(caja(o.x0, o.x1, 0, altoMuro, -0.08, 0, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
     g.add(vidriera(o.x0, o.x1, D, 'x', altoTabique, [o.puerta.x - 0.5, o.puerta.x + 0.5]))
     g.add(alfombraConEstilo(o.x0 + 0.3, o.x1 - 0.3, 0.3, D - 0.3, estilo.alfombra))
     g.add(caja(o.x0 + 0.08, o.x1 - 0.08, 0.15, altoMuro, 0.004, 0.012, acento, { sombra: false }))
@@ -520,8 +522,24 @@ export function crearSala(mesas) {
   // La tarima de la fila ejecutiva (María y Daniela) con su escalón.
   g.add(caja(X0, W, 0, EJECUTIVO.tarima, EJECUTIVO.y0, EJECUTIVO.y1, mat('#d9c3a2'), { sombra: false }))
   g.add(caja(X0, W, 0, EJECUTIVO.tarima / 2, EJECUTIVO.y1, EJECUTIVO.y1 + 0.25, mat('#c9b18c'), { sombra: false }))
-  // La pared del fondo de la fila de oficinas de los trabajadores (da al corredor de la fila ejecutiva).
-  g.add(caja(OFICINAS.x0, OFICINAS.x1, 0, 2.1, OFICINAS.y0 - 0.08, OFICINAS.y0, mat(COLORES.tabique), { r: 0.02 }))
+  // La pared del fondo de la fila de oficinas de los trabajadores (da al corredor de la fila ejecutiva), con la galería
+  // de cuadros que eligió Daniela mirando al corredor.
+  g.add(caja(OFICINAS.x0, OFICINAS.x1, 0, 2.1, OFICINAS.y0 - 0.08, OFICINAS.y0, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
+  const galeria = [
+    [texturaPosterOasis(), 1.1, 0.8],
+    [texturaPosterPinkFloyd(), 1.1, 0.8],
+    [texturaPosterFrida(), 0.75, 1.0],
+    [texturaPosterJugador({ titulo: 'CAMPEONES DEL MUNDO', subtitulo: 'JULIÁN ÁLVAREZ · QATAR 2022', tipo: 'argentina', apellido: 'J. ÁLVAREZ', numero: 9, copa: 'mundo' }), 0.75, 1.0],
+    [texturaPosterJugador({ titulo: 'GALLARDO CAMPEÓN', subtitulo: 'RIVER PLATE · LIBERTADORES', tipo: 'river', apellido: 'GALLARDO', numero: 10, copa: 'libertadores', fondo: ['#1d1c1a', '#4a1418'] }), 0.75, 1.0],
+    [texturaPosterJugador({ titulo: 'PABLITO AIMAR', subtitulo: 'SELECCIÓN ARGENTINA', tipo: 'argentina', apellido: 'AIMAR', numero: 16 }), 0.75, 1.0],
+  ]
+  const paso = (OFICINAS.x1 - OFICINAS.x0 - 3) / (galeria.length - 1)
+  galeria.forEach(([tex, w, h], k) => {
+    const c = enmarcado(tex, w, h)
+    c.position.set(OFICINAS.x0 + 1.5 + k * paso, 1.45, OFICINAS.y0 - 0.085)
+    c.rotation.y = Math.PI
+    g.add(c)
+  })
 
   // Reloj con la hora real, en la pared izquierda (cafetería).
   const reloj = new THREE.Group()
@@ -620,9 +638,9 @@ export function crearSala(mesas) {
   // El Archivo: paredes altas, frente de vidrio con puerta al pasillo, estanterías con biblioratos y cajas y un cartel.
   const AR = ARCHIVO
   g.add(caja(AR.x0, AR.x1, 0, 0.02, AR.y0, AR.y1, mat(COLORES.amarilloClaro), { sombra: false }))
-  g.add(caja(AR.x0, AR.x1, 0, 2.1, AR.y0 - 0.04, AR.y0 + 0.04, mat(COLORES.tabique), { r: 0.02 }))
-  g.add(caja(AR.x0, AR.x1, 0, 2.1, AR.y1 - 0.04, AR.y1 + 0.04, mat(COLORES.tabique), { r: 0.02 }))
-  g.add(caja(AR.x0 - 0.04, AR.x0 + 0.04, 0, 2.1, AR.y0, AR.y1, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(caja(AR.x0, AR.x1, 0, 2.1, AR.y0 - 0.04, AR.y0 + 0.04, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
+  g.add(caja(AR.x0, AR.x1, 0, 2.1, AR.y1 - 0.04, AR.y1 + 0.04, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
+  g.add(caja(AR.x0 - 0.04, AR.x0 + 0.04, 0, 2.1, AR.y0, AR.y1, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
   g.add(vidriera(AR.y0, AR.y1, AR.x1, 'z', 2.1, [AR.puerta.y0, AR.puerta.y1]))
   const tonosArchivo = ['#3f6b8f', '#b0332b', '#c9a24a', '#5c3f2c', '#6f8f5a', '#2c2a28', '#d9a441', '#7f98a8']
   AR.estantes.forEach((e, k) => {
@@ -840,7 +858,7 @@ export function crearDireccion() {
   const D = DIRECCION
   const M = MUEBLES_DIRECCION
   g.add(alfombraConEstilo(31.8, 41.8, 1.2, 6.5, { patron: 'borde', colores: ['#f3e6c4', '#c9a24a'] }))
-  g.add(caja(D.x0 - 0.05, D.x0 + 0.05, 0, 2.1, D.y0, D.y1, mat(COLORES.tabique), { r: 0.02 }))
+  g.add(caja(D.x0 - 0.05, D.x0 + 0.05, 0, 2.1, D.y0, D.y1, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
   g.add(vidriera(D.x0, D.x1, D.y1, 'x', 2.1, [D.puerta.x - 0.5, D.puerta.x + 0.5]))
   // Escritorio ejecutivo mirando a la puerta y la silla de las visitas enfrente.
   const escritorio = crearEscritorio(DANIELA.escritorio.x, DANIELA.escritorio.y, DANIELA.mira, { ejecutivo: true })
@@ -887,10 +905,10 @@ export function crearDireccion() {
 
   // Baño privado en el rincón: paredes, puerta entreabierta, inodoro, lavatorio y espejo.
   const Wb = M.bano
-  g.add(caja(Wb.x0, Wb.x1, 0, 2.1, Wb.y0, Wb.y0 + 0.08, mat(COLORES.tabique), { r: 0.02 }))
-  g.add(caja(Wb.x0, Wb.x0 + 0.08, 0, 2.1, Wb.y0, Wb.puerta.y0, mat(COLORES.tabique)))
-  g.add(caja(Wb.x0, Wb.x0 + 0.08, 0, 2.1, Wb.puerta.y1, Wb.y1, mat(COLORES.tabique)))
-  g.add(caja(Wb.x0, Wb.x0 + 0.08, 1.95, 2.1, Wb.puerta.y0, Wb.puerta.y1, mat(COLORES.tabique)))
+  g.add(caja(Wb.x0, Wb.x1, 0, 2.1, Wb.y0, Wb.y0 + 0.08, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
+  g.add(caja(Wb.x0, Wb.x0 + 0.08, 0, 2.1, Wb.y0, Wb.puerta.y0, mat(COLORES.tabique, TABIQUE_CLARO)))
+  g.add(caja(Wb.x0, Wb.x0 + 0.08, 0, 2.1, Wb.puerta.y1, Wb.y1, mat(COLORES.tabique, TABIQUE_CLARO)))
+  g.add(caja(Wb.x0, Wb.x0 + 0.08, 1.95, 2.1, Wb.puerta.y0, Wb.puerta.y1, mat(COLORES.tabique, TABIQUE_CLARO)))
   const puerta = caja(0, 0.05, 0, 1.95, 0, Wb.puerta.y1 - Wb.puerta.y0, mat(COLORES.blanco))
   const bisagra = new THREE.Group()
   bisagra.position.set(Wb.x0, 0, Wb.puerta.y0)

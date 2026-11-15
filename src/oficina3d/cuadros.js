@@ -297,3 +297,114 @@ export function dibujarPizarron(tex, mes) {
   }))
   tex.needsUpdate = true
 }
+
+// ---------- Cuadros del pasillo (los que eligió Daniela) ----------
+// Pink Floyd: el prisma con el haz de luz y el arco iris, sobre negro.
+export function texturaPosterPinkFloyd() {
+  const [c, g] = lienzo(360, 260)
+  g.fillStyle = '#0d0d0f'; g.fillRect(0, 0, 360, 260)
+  g.strokeStyle = '#f4f1ea'; g.lineWidth = 4
+  g.beginPath(); g.moveTo(180, 52); g.lineTo(122, 160); g.lineTo(238, 160); g.closePath(); g.stroke()
+  g.strokeStyle = '#f4f1ea'; g.lineWidth = 3
+  g.beginPath(); g.moveTo(10, 140); g.lineTo(152, 104); g.stroke()
+  ;['#e8423f', '#f39a2b', '#f5d63a', '#3fb878', '#3f8fd6', '#8a5cc7'].forEach((col, i) => {
+    g.strokeStyle = col; g.lineWidth = 6
+    g.beginPath(); g.moveTo(208, 108 + i * 3); g.lineTo(350, 118 + i * 9); g.stroke()
+  })
+  g.fillStyle = '#f4f1ea'; g.textAlign = 'center'; g.textBaseline = 'middle'
+  g.font = '800 30px system-ui, sans-serif'; g.fillText('PINK FLOYD', 180, 206)
+  g.fillStyle = '#9a968e'; g.font = '600 14px system-ui, sans-serif'; g.fillText('LONDON · 1973', 180, 234)
+  return textura(c)
+}
+
+// Frida Kahlo: retrato ilustrado (pelo oscuro, cejas unidas, corona de flores) con fondo de colores.
+export function texturaPosterFrida() {
+  const [c, g] = lienzo(300, 400)
+  const fondo = g.createLinearGradient(0, 0, 0, 400)
+  fondo.addColorStop(0, '#f2c14e'); fondo.addColorStop(1, '#e07a5f')
+  g.fillStyle = fondo; g.fillRect(0, 0, 300, 400)
+  // Hojas de fondo.
+  g.fillStyle = '#2f7d4f'
+  for (const [x, y, a] of [[40, 90, -0.6], [260, 110, 0.6], [30, 250, -0.9], [270, 260, 0.9]]) {
+    g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.ellipse(0, 0, 18, 46, 0, 0, Math.PI * 2); g.fill(); g.restore()
+  }
+  // Hombros y vestido.
+  g.fillStyle = '#1f6f8b'; g.beginPath(); g.ellipse(150, 360, 110, 70, 0, Math.PI, 0); g.fill()
+  // Cuello y cara.
+  g.fillStyle = '#d9a37e'; g.fillRect(132, 236, 36, 50)
+  g.beginPath(); g.ellipse(150, 196, 58, 72, 0, 0, Math.PI * 2); g.fill()
+  // Pelo.
+  g.fillStyle = '#1b1512'
+  g.beginPath(); g.ellipse(150, 140, 66, 36, 0, Math.PI, 0); g.fill()
+  g.fillRect(84, 136, 16, 70); g.fillRect(200, 136, 16, 70)
+  // Corona de flores.
+  ;[['#d7263d', 98, 118], ['#f6ae2d', 124, 100], ['#d7263d', 150, 92], ['#f26419', 176, 100], ['#d7263d', 202, 118]].forEach(([col, x, y]) => {
+    g.fillStyle = col; g.beginPath(); g.arc(x, y, 15, 0, Math.PI * 2); g.fill()
+    g.fillStyle = '#fbe9d0'; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill()
+  })
+  // Cejas unidas, ojos y boca.
+  g.strokeStyle = '#1b1512'; g.lineWidth = 6; g.lineCap = 'round'
+  g.beginPath(); g.moveTo(116, 178); g.quadraticCurveTo(133, 168, 150, 176); g.quadraticCurveTo(167, 168, 184, 178); g.stroke()
+  g.fillStyle = '#1b1512'; g.beginPath(); g.arc(132, 192, 5, 0, Math.PI * 2); g.arc(168, 192, 5, 0, Math.PI * 2); g.fill()
+  g.fillStyle = '#a63d40'; g.beginPath(); g.ellipse(150, 238, 14, 6, 0, 0, Math.PI * 2); g.fill()
+  g.fillStyle = '#1d1c1a'; g.textAlign = 'center'; g.font = '900 28px Georgia, serif'; g.fillText('FRIDA KAHLO', 150, 40)
+  g.font = 'italic 600 16px Georgia, serif'; g.fillText('Viva la vida', 150, 64)
+  return textura(c)
+}
+
+// Copa del Mundo dibujada (dorada, con la base verde).
+function copaDelMundo(g, x, y, s) {
+  g.save(); g.translate(x, y); g.scale(s, s)
+  g.fillStyle = '#2f7d4f'; g.fillRect(-26, 88, 52, 12); g.fillRect(-22, 100, 44, 10)
+  const oro = g.createLinearGradient(-30, 0, 30, 0)
+  oro.addColorStop(0, '#a87b16'); oro.addColorStop(0.5, '#f5d16b'); oro.addColorStop(1, '#a87b16')
+  g.fillStyle = oro
+  g.beginPath(); g.moveTo(-24, 88); g.quadraticCurveTo(-10, 40, -30, 0); g.lineTo(30, 0); g.quadraticCurveTo(10, 40, 24, 88); g.closePath(); g.fill()
+  g.beginPath(); g.arc(0, -12, 26, 0, Math.PI * 2); g.fill()
+  g.restore()
+}
+// Copa Libertadores dibujada (plateada, con la base de madera).
+function copaLibertadores(g, x, y, s) {
+  g.save(); g.translate(x, y); g.scale(s, s)
+  g.fillStyle = '#5a3a22'; g.fillRect(-30, 80, 60, 30)
+  const plata = g.createLinearGradient(-30, 0, 30, 0)
+  plata.addColorStop(0, '#8d9399'); plata.addColorStop(0.5, '#f1f3f5'); plata.addColorStop(1, '#8d9399')
+  g.fillStyle = plata
+  g.beginPath(); g.moveTo(-10, 80); g.lineTo(-6, 30); g.quadraticCurveTo(-34, 20, -30, -20); g.lineTo(30, -20); g.quadraticCurveTo(34, 20, 6, 30); g.lineTo(10, 80); g.closePath(); g.fill()
+  g.fillStyle = '#c9a24a'; g.beginPath(); g.arc(0, -26, 9, 0, Math.PI * 2); g.fill()
+  g.restore()
+}
+// Camiseta de espaldas dibujada dentro de un póster: argentina (bastones celestes) o river (banda roja).
+function camisetaEnPoster(g, x, y, tipo, apellido, numero) {
+  g.save(); g.translate(x, y)
+  g.beginPath()
+  g.moveTo(-45, -88); g.lineTo(-20, -94); g.quadraticCurveTo(0, -82, 20, -94); g.lineTo(45, -88)
+  g.lineTo(98, -54); g.lineTo(80, -10); g.lineTo(62, -18); g.lineTo(62, 92); g.lineTo(-62, 92)
+  g.lineTo(-62, -18); g.lineTo(-80, -10); g.lineTo(-98, -54); g.closePath()
+  g.fillStyle = '#ffffff'; g.fill()
+  g.save(); g.clip()
+  if (tipo === 'argentina') { g.fillStyle = '#75aadb'; for (let k = -90; k < 100; k += 36) g.fillRect(k, -100, 18, 200) }
+  else { g.fillStyle = '#d71920'; g.beginPath(); g.moveTo(-110, -60); g.lineTo(-80, -100); g.lineTo(110, 70); g.lineTo(80, 110); g.closePath(); g.fill() }
+  g.restore()
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'
+  const letras = tipo === 'argentina' ? '#1d2b5a' : '#1d1c1a'
+  g.font = `900 ${apellido.length > 7 ? 18 : 22}px system-ui, sans-serif`
+  g.lineWidth = 4; g.strokeStyle = '#ffffff'; g.strokeText(apellido, 0, -50); g.fillStyle = letras; g.fillText(apellido, 0, -50)
+  g.font = '900 76px system-ui, sans-serif'
+  g.lineWidth = 7; g.strokeText(String(numero), 0, 20); g.fillText(String(numero), 0, 20)
+  g.restore()
+}
+// Póster de jugador: título, camiseta y, si hay, la copa.
+export function texturaPosterJugador({ titulo, subtitulo, tipo, apellido, numero, copa = null, fondo = ['#1d2b5a', '#2b4a8a'] }) {
+  const [c, g] = lienzo(300, 400)
+  const f = g.createLinearGradient(0, 0, 0, 400)
+  f.addColorStop(0, fondo[0]); f.addColorStop(1, fondo[1])
+  g.fillStyle = f; g.fillRect(0, 0, 300, 400)
+  camisetaEnPoster(g, copa ? 118 : 150, 200, tipo, apellido, numero)
+  if (copa === 'mundo') copaDelMundo(g, 236, 214, 0.9)
+  if (copa === 'libertadores') copaLibertadores(g, 238, 214, 0.9)
+  g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle'
+  g.font = `900 ${titulo.length > 16 ? 24 : 30}px system-ui, sans-serif`; g.fillText(titulo, 150, 42)
+  g.fillStyle = '#f5d16b'; g.font = '700 16px system-ui, sans-serif'; g.fillText(subtitulo, 150, 356)
+  return textura(c)
+}

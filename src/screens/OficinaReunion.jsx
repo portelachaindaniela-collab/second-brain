@@ -217,7 +217,7 @@ function Tiempo({ desde, ahora }) {
 }
 
 // Reunión en la sala: ronda de informes y después conversación abierta con todos.
-export function VistaSala({ reunion, agentes, ahora, hablando, setHablando, hablarReunion, terminar }) {
+export function VistaSala({ reunion, agentes, ahora, hablando, setHablando, hablarReunion, terminar, cambiarAsistentes }) {
   const [voz, setVoz] = useState(false)
   const [esperando, setEsperando] = useState(false)
   const [error, setError] = useState('')
@@ -251,6 +251,16 @@ export function VistaSala({ reunion, agentes, ahora, hablando, setHablando, habl
     setEsperando(false)
   }
   const ultimo = charla.mensajes.at(-1)
+  // Sumar o sacar gente en plena reunión: el que se suma camina hasta la sala y saluda; el que sale vuelve a su puesto.
+  const tope = reunion.modo === 'oficina' ? MAX_OFICINA : MAX_ASISTENTES
+  const afuera = agentes.filter(a => !reunion.asistentes.includes(a.id) && a.estado !== 'pausado')
+  const sumar = id => {
+    if (!id || reunion.asistentes.length >= tope) return
+    cambiarAsistentes([...reunion.asistentes, id])
+    const a = agentes.find(x => x.id === id)
+    if (a && conversa(a)) charla.decir([{ de: id, texto: 'Hola, ya me sumo. ¿En qué andan?' }], true)
+  }
+  const sacar = id => { if (reunion.asistentes.length > 1) cambiarAsistentes(reunion.asistentes.filter(x => x !== id)) }
   return <>
     <header className="reunion-barra">
       <strong>{reunion.modo === 'oficina' ? 'Reunión en tu oficina' : 'Reunión en la sala'}</strong>
@@ -261,7 +271,17 @@ export function VistaSala({ reunion, agentes, ahora, hablando, setHablando, habl
       <p className="reunion-gente-titulo">Participantes</p>
       <ul>{asistentes.map(a => <li key={a.id} className={hablando === a.id ? 'habla' : ''}>
         <span className="reunion-punto" />{nombreCorto(a.nombre)} <span className="tenue">· {EQUIPOS[a.equipo].nombre}</span>
+        {cambiarAsistentes && asistentes.length > 1 && <button type="button" className="reunion-sacar" aria-label={`Sacar a ${nombreCorto(a.nombre)} de la reunión`} title="Sacar de la reunión" onClick={() => sacar(a.id)}>×</button>}
       </li>)}</ul>
+      {cambiarAsistentes && afuera.length > 0 && reunion.asistentes.length < tope && <label className="reunion-sumar">
+        <span>Sumar a alguien</span>
+        <select value="" onChange={e => sumar(e.target.value)}>
+          <option value="">Elegí…</option>
+          {Object.keys(EQUIPOS).map(eq => afuera.some(a => a.equipo === eq) && <optgroup key={eq} label={EQUIPOS[eq].nombre}>
+            {afuera.filter(a => a.equipo === eq).map(a => <option key={a.id} value={a.id}>{nombreCorto(a.nombre)}</option>)}
+          </optgroup>)}
+        </select>
+      </label>}
     </aside>
     <section className="reunion-sub">
       {ultimo && <p className="reunion-subtitulo"><strong>{charla.nombre(ultimo.de)}:</strong> {ultimo.texto}</p>}
