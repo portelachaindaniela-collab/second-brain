@@ -305,7 +305,11 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       const hit = rayo.intersectObjects(clicables, true).find(h => h.object.visible)
       return hit?.object.userData.agenteId ?? null
     }
-    const alBajar = ev => { bajada = { x: ev.clientX, y: ev.clientY }; aPie.ultimo = { x: ev.clientX, y: ev.clientY } }
+    // Tocar la escena saca el cursor del chat: si no, las flechas escriben ahí en vez de hacer caminar a Daniela.
+    const alBajar = ev => {
+      bajada = { x: ev.clientX, y: ev.clientY }; aPie.ultimo = { x: ev.clientX, y: ev.clientY }
+      if (escribiendo(document.activeElement)) document.activeElement.blur()
+    }
     // A pie, arrastrar mueve la vista como en Street View (arrastrás la escena: a la derecha, mirás a la izquierda).
     const alArrastrarAPie = ev => {
       if (!aPie.activo || !ev.buttons || !aPie.ultimo) return
