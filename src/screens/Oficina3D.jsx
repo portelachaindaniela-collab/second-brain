@@ -464,8 +464,9 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       const ir = R.modo === 'social' ? caminoSocial : R.modo === 'puerta' ? caminoPuerta : R.modo === 'turnos' ? caminoEspera : R.modo === 'oficina' ? caminoOficina : caminoReunion
       const desde = situacion(ac, datos.current.rut[id], t)
       // El que estaba en tu puerta y le dijiste que pase entra desde ahí, sin volver a su lugar.
-      const ruta = R.desdePuerta ? caminoDesdePuerta(asiento) : ir(desde, asiento)
-      const espera = R.desdePuerta ? 0 : ac.a.estado === 'trabajando' ? 8 + k * 0.4 : k * 0.9
+      const deLaPuerta = Array.isArray(R.desdePuerta) ? R.desdePuerta.includes(id) : Boolean(R.desdePuerta)
+      const ruta = deLaPuerta ? caminoDesdePuerta(asiento) : ir(desde, asiento)
+      const espera = deLaPuerta ? 0 : ac.a.estado === 'trabajando' ? 8 + k * 0.4 : k * 0.9
       const vuelta = ir(alPasillo(ac.lugar), asiento).reverse()
       const turnoIda = R.modo === 'turnos' ? caminoTurno(asiento) : null
       const turnoVuelta = R.modo === 'turnos' ? caminoVueltaTurno(ac.lugar) : null
@@ -567,9 +568,17 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       if (D.reunion || D.reunionInterna) reunionUp = null
       else if (!reunionUp && upTrabajando.length >= 2 && !sinMovimiento) reunionUp = { id: `up-${Date.now()}`, propia: true, modo: 'sala', estado: 'convocada', inicio: Date.now(), asistentes: upTrabajando }
       else if (reunionUp && reunionUp.estado !== 'volviendo' && upTrabajando.length < 2) reunionUp = { ...reunionUp, estado: 'volviendo', vuelta: Date.now() }
-      if (D.visita && !D.reunion && enVisita?.origen !== D.visita.id) enVisita = { id: `visita-${D.visita.id}`, origen: D.visita.id, propia: true, modo: D.visita.destino === 'puerta' ? 'puerta' : 'oficina', desdePuerta: Boolean(D.visita.desdePuerta), estado: 'convocada', inicio: Date.now(), asistentes: [D.visita.agente] }
+      // Visitas a tu oficina: pueden ser varios a la vez; el que se suma camina a una silla libre y el que se va vuelve a su
+      // lugar, sin mover a los demás. El que golpea la puerta es una visita aparte (de a uno).
+      const V = D.visita
+      const modoV = V ? (V.destino === 'puerta' ? 'puerta' : 'oficina') : null
+      const idsV = V ? (V.agentes ?? [V.agente]) : []
+      if (V && !D.reunion) {
+        if (!enVisita || enVisita.estado === 'volviendo' || enVisita.modo !== modoV || (modoV === 'puerta' && enVisita.origen !== V.id)) enVisita = { id: `visita-${V.id}`, origen: V.id, propia: true, modo: modoV, desdePuerta: V.desdePuerta ?? false, estado: 'convocada', inicio: Date.now(), asistentes: idsV }
+        else if (idsV.join() !== enVisita.asistentes.join()) enVisita = { ...enVisita, asistentes: idsV, desdePuerta: V.desdePuerta ?? false }
+      }
       if (D.reunion) enVisita = null
-      else if (enVisita && enVisita.estado !== 'volviendo' && D.visita?.id !== enVisita.origen) enVisita = { ...enVisita, estado: 'volviendo', vuelta: Date.now() }
+      else if (enVisita && enVisita.estado !== 'volviendo' && !V) enVisita = { ...enVisita, estado: 'volviendo', vuelta: Date.now() }
       if (D.social && !D.reunion && enSocial?.origen !== D.social.id) enSocial = { id: `social-${D.social.id}`, origen: D.social.id, propia: true, modo: 'social', tipo: D.social.tipo, estado: 'convocada', inicio: Date.now(), asistentes: D.social.agentes }
       if (D.reunion) enSocial = null
       else if (enSocial && enSocial.estado !== 'volviendo' && D.social?.id !== enSocial.origen) enSocial = { ...enSocial, estado: 'volviendo', vuelta: Date.now() }
@@ -626,7 +635,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
             if (d < pr.largo) caminar({ pts: pr.ruta, d })
             else {
               const s = pr.asiento
-              if (R === enVisita && !pr.llego) { pr.llego = true; D.alLlegoVisita?.(R.origen) }
+              if (R === enVisita && !pr.llego) { pr.llego = true; D.alLlegoVisita?.(R.origen, id) }
               pose = s.pose
               pos = { x: s.x, y: R.modo === 'social' ? s.altura ?? 0 : s.pose === 'sentado' ? 0.08 : 0, z: s.y }
               if (R.modo === 'social') objeto = s.objeto

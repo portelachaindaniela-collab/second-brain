@@ -287,3 +287,22 @@
 .oficina-vinculo.vinculo-amistad { color: #2f9e5e; border-color: rgba(47, 158, 94, .4); }
 .oficina-con-vos { display: flex; align-items: center; gap: var(--esp-8); font-size: var(--letra-13); }
 .oficina-quien-sabe-lista { list-style: none; margin: var(--esp-4) 0 0; padding: 0; max-height: 10rem; overflow-y: auto; font-size: var(--letra-13); }
+
+/* Chats: varias charlas a la vez, cada una en su ventana abajo (como un mensajero). */
+.oficina-chats { position: fixed; z-index: 72; right: var(--esp-16); bottom: 0; display: flex; align-items: flex-end; gap: var(--esp-8); max-width: calc(100vw - 2 * var(--esp-16)); pointer-events: none; }
+.oficina-chats.con-panel { right: calc(min(440px, 100vw) + var(--esp-16)); }
+.oficina-chat { pointer-events: auto; width: 330px; height: min(480px, 75vh); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--gray-300); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; box-shadow: var(--shadow-md); }
+.oficina-chat.is-min { height: auto; width: 200px; }
+.oficina-chat-cabeza { display: flex; align-items: center; gap: var(--esp-4); padding: 6px 8px; border-bottom: 1px solid var(--gray-200); background: var(--surface-inset); border-radius: var(--radius) var(--radius) 0 0; }
+.oficina-chat-nombre { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--esp-8); background: none; border: 0; color: inherit; font: inherit; font-size: var(--letra-13); font-weight: 600; cursor: pointer; text-align: left; }
+.oficina-chat-nombre span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oficina-chat-nombre .oficina-avatar { width: 24px; height: 24px; }
+.oficina-chat-cerrar { background: none; border: 0; color: var(--gray-500); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.oficina-chat-cuerpo { flex: 1; min-height: 0; overflow-y: auto; padding: var(--esp-8) var(--esp-12) 0; font-size: var(--letra-13); display: flex; flex-direction: column; }
+.oficina-chat-cuerpo .oficina-charla-form { bottom: 0; padding-bottom: var(--esp-8); }
+/* Celular: entra uno abierto por vez; los otros quedan minimizados en fila. */
+@media (max-width: 700px) {
+  .oficina-chats, .oficina-chats.con-panel { right: var(--esp-8); left: var(--esp-8); flex-wrap: wrap-reverse; justify-content: flex-end; }
+  .oficina-chat { width: 100%; }
+  .oficina-chat.is-min { width: auto; }
+}

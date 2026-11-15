@@ -503,6 +503,18 @@ export function lePedisQueVenga(texto) {
   const t = String(texto ?? '')
   return LO_LLAMAS.test(t) || SEGUIME.test(t)
 }
+// Varias visitas a la vez: [{ agente, desde, desdePuerta, hasta }]. Si el que ya está vuelve a decir que viene, se queda
+// más rato (no camina de nuevo); si entra desde la puerta, arranca de ahí.
+export function sumarVisita(visitas = [], id, desdePuerta = false, ahora = Date.now()) {
+  const hasta = ahora + VISITA_MS
+  if (visitas.some(v => v.agente === id) && !desdePuerta) return visitas.map(v => (v.agente === id ? { ...v, hasta } : v))
+  return [...visitas.filter(v => v.agente !== id), { agente: id, desde: ahora, desdePuerta, hasta }]
+}
+// Lo que la escena 3D necesita: quiénes vienen (en orden de llegada) y quiénes entran desde la puerta.
+export function escenaDeVisitas(visitas = []) {
+  if (!visitas.length) return null
+  return { id: visitas[0].desde, agentes: visitas.map(v => v.agente), desdePuerta: visitas.filter(v => v.desdePuerta).map(v => v.agente), destino: 'oficina' }
+}
 // «Ya estoy en la puerta», «estoy en tu puerta»: también viene.
 const EN_LA_PUERTA = /(?<!\p{L})estoy (en|frente a|afuera de) (la puerta|tu puerta|tu oficina|tu despacho)(?!\p{L})/iu
 export function vieneATuOficina(texto) {
