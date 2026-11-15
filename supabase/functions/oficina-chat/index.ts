@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, primeroElRespaldo, limpiarMarcas, extraerGrupo, lineasDelGrupo, cumpleDe, validarGeneral, sistemaGeneral, leerGeneral } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, primeroElRespaldo, limpiarMarcas, extraerGrupo, lineasDelGrupo, cumpleDe, conNombres, nombrarVida, validarGeneral, sistemaGeneral, leerGeneral } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
@@ -91,7 +91,7 @@ async function vida(db: any) {
   const cumples = plantel.filter(x => cumpleDe(x.id) === hoy.slice(5)).map(x => x.id);
   try {
     const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaVida(plantel, v.data || [], m.data || [], hoyLargo(), { cumples, publicas: pub, general: g }) }, { role: "user", content: "¿Qué pasa hoy entre ellos?" }], temperature: 0.8, max_tokens: 6000 }, { timeoutMs: 110000 }));
-    const { momentos, vinculos, noticias } = leerVida((resultado as any)?.content, plantel.map(g => g.id));
+    const { momentos, vinculos, noticias } = nombrarVida(leerVida((resultado as any)?.content, plantel.map(g => g.id)), Object.fromEntries(plantel.map(g => [g.id, g.nombre])));
     if (vinculos.length) {
       const r = await db.from("oficina_vinculos").upsert(vinculos.map(x => ({ ...x, actualizado: new Date().toISOString() })), { onConflict: "owner_id,a,b" });
       if (r.error) console.error("oficina-chat: no se pudieron guardar los vínculos", r.error.message);
@@ -132,7 +132,8 @@ async function general(db: any, body: any) {
   const plantel = [...gente.trabajadores, ...gente.up, ...gente.pdg, ...gente.sistemas];
   try {
     const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaGeneral(plantel, g, vin.data || [], pub, hoyLargo(), privadas) }, { role: "user", content: v.texto }], temperature: 0.8, max_tokens: 900 }));
-    const respuestas = leerGeneral((resultado as any)?.content, plantel.map(x => x.id));
+    const nombres = Object.fromEntries(plantel.map(x => [x.id, x.nombre]));
+    const respuestas = leerGeneral((resultado as any)?.content, plantel.map(x => x.id)).map(r => ({ ...r, texto: conNombres(r.texto, nombres) }));
     if (respuestas.length) {
       const r = await db.from("oficina_chat_general").insert(respuestas);
       if (r.error) console.error("oficina-chat: no se pudieron guardar las respuestas del chat", r.error.message);

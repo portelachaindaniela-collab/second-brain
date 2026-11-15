@@ -713,7 +713,8 @@ Armá lo de hoy:
   con otro (tipo amantes, secreto true). Si se descubre, pasa a ser público (secreto false), hay pelea con la pareja
   engañada (baja mucho la afinidad) y puede terminar en ruptura, separación o divorcio, o en reconciliación.
   Que se note en el resumen y que siga lo que venía pasando. Siempre con respeto (sin violencia ni insultos) y nada
-  explícito. Usá solo ids del plantel.
+  explícito. Usá solo ids del plantel en los campos agentes, agente, a, b y autor; en los textos
+  (resumen, historia, charla, noticias) nombrá a cada uno por su nombre, nunca por su id.
 - noticias: entre 2 y ${MAX_NOTICIAS} mensajes que los agentes escriben hoy en el chat de toda la oficina, como en un grupo de
   trabajo: saludos de cumpleaños (si alguien cumple, varios lo saludan), quiénes se pusieron de novios, chismes y rumores,
   celos, una pelea o una infidelidad que se supo, reconciliaciones, planes para salir. autor: el id de quien lo escribe.
@@ -746,6 +747,14 @@ export function leerVida(texto, idsValidos) {
   }).filter(v => v.a !== v.b && validos.has(v.a) && validos.has(v.b) && v.tipo && !vistos.has(`${v.a}|${v.b}`) && vistos.add(`${v.a}|${v.b}`)).slice(0, 6)
   return { momentos, vinculos, noticias: leerMensajesGeneral(d?.noticias, validos, MAX_NOTICIAS) }
 }
+// La IA a veces escribe los ids («up:disenador») en vez de los nombres: se cambian por el nombre (sin lo que va entre paréntesis).
+const ID_EN_TEXTO = /\b(?:trabajadores|up|pdg|sistemas|admin):[a-z_]{1,40}\b/g
+export const conNombres = (texto, nombres = {}) => String(texto ?? '').replace(ID_EN_TEXTO, id => (nombres[id] ? String(nombres[id]).split(' (')[0] : id))
+export const nombrarVida = ({ momentos = [], vinculos = [], noticias = [] }, nombres = {}) => ({
+  momentos: momentos.map(m => ({ ...m, lugar: conNombres(m.lugar, nombres), resumen: conNombres(m.resumen, nombres), charla: m.charla.map(x => ({ ...x, texto: conNombres(x.texto, nombres) })) })),
+  vinculos: vinculos.map(v => ({ ...v, historia: conNombres(v.historia, nombres) })),
+  noticias: noticias.map(n => ({ ...n, texto: conNombres(n.texto, nombres) })),
+})
 const leerMensajesGeneral = (lista, validos, max) => (Array.isArray(lista) ? lista : [])
   .map(n => ({ autor: String(n?.autor ?? n?.agente ?? ''), texto: String(n?.texto ?? '').replace(/\s+/g, ' ').trim().slice(0, 600) }))
   .filter(n => validos.has(n.autor) && n.texto.length >= 2).slice(0, max)
@@ -774,7 +783,7 @@ ${lineasGeneral(general, nombre)}
 Contestan a Daniela 1 a 3 agentes, los que tengan algo que decir (si nombra a alguien, contesta ese). Cada uno en primera
 persona, en español rioplatense, corto (1 o 2 oraciones), con su personalidad y lo que vive en la oficina: pueden bromear,
 chusmear, ponerse celosos o discutir entre ellos, con respeto y nada explícito. Lo privado de Daniela no se dice acá.
-Nadie pide permisos ni claves por este chat.
+Nadie pide permisos ni claves por este chat. En el texto se nombra a la gente por su nombre, nunca por su id.
 
 Respondé SOLO con JSON: {"respuestas":[{"autor":"<id exacto>","texto":"..."}]}`
 }
