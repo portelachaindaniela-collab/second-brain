@@ -2,7 +2,7 @@ import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, u
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, VISITA_MS, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, VISITA_MS, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -442,6 +442,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
                   puerta={visto === enPuerta} responder={responder}
                   contestar={r => { contestar(visto, r); if (visto === enPuerta && r !== 'hablemos') setGolpe(null) }}
                   hablar={id => { if (visto === enPuerta) { setGolpe(null); venir(id, true) } else setFijo(null); abrir(id, 'charla') }}
+                  seguime={id => { if (visto === enPuerta) setGolpe(null); venir(id, visto === enPuerta); abrir(id, 'charla') }}
                   despues={() => { setDespues(d => new Map(d).set(visto.clave, Date.now() + POSPONER_ENCUENTRO_MS)); if (visto === enPuerta) setGolpe(null) }} />)}
               </Oficina3D>
             </Suspense></SiFalla>
@@ -491,7 +492,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
         convocar(ids, modo, convocando.tema ? { tema: convocando.tema, detalle: convocando.detalle, pidio: convocando.pidio } : null)
       }} />}
     {elegido && <PanelAgente key={elegido.id} agente={elegido} pestana={pestana} setPestana={setPestana} ahora={ahora} cerrar={() => setElegidoId(null)}
-      venir={venir} pedidos={solicitudes.filter(x => x.agente === elegido.id && x.estado === 'pendiente')} decidir={decidir} anotar={anotarEnConversacion}
+      venir={venir} deVisita={visita?.agente === elegido.id} pedidos={solicitudes.filter(x => x.agente === elegido.id && x.estado === 'pendiente')} decidir={decidir} anotar={anotarEnConversacion}
       charla={charlas[elegido.id] ?? []} setCharla={m => setCharlas(c => ({ ...c, [elegido.id]: typeof m === 'function' ? m(c[elegido.id] ?? []) : m }))} hablar={hablar} />}
   </div>
 }
@@ -633,7 +634,7 @@ function AvisoInterna({ interna, agentes, cerrar }) {
 }
 // La conversación de cada agente con vos queda guardada (oficina_conversacion): el chat y las reuniones las guarda
 // oficina-chat; lo del pasillo, esta pantalla (lo que te dijo y lo que le contestaste).
-const CONTESTO = { ahora_no: 'Ahora no.', hablemos: 'Hablemos.', aprobada: 'Dale, aprobado.', rechazada: 'No.' }
+const CONTESTO = { ahora_no: 'Ahora no.', hablemos: 'Hablemos.', seguime: 'Seguime a mi oficina.', aprobada: 'Dale, aprobado.', rechazada: 'No.' }
 async function anotarEncuentroEnBase(agente, texto) {
   const { error } = await supabase.from('oficina_conversacion').insert({ agente, de: 'agente', texto: String(texto).slice(0, 4000), lugar: 'pasillo' })
   if (error) throw error
@@ -662,7 +663,7 @@ async function correrReunionInterna(id) {
 }
 
 // Lo que te dice un agente cuando pasás caminando cerca: su pedido (con aprobar o rechazar ahí mismo) o un aviso.
-function Encuentro({ encuentro, agente, decidir, hablar, despues, contestar, puerta = false }) {
+function Encuentro({ encuentro, agente, decidir, hablar, seguime, despues, contestar, puerta = false }) {
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState('')
   const x = encuentro.pedido
@@ -682,6 +683,7 @@ function Encuentro({ encuentro, agente, decidir, hablar, despues, contestar, pue
         <button type="button" className="btn btn-sm" disabled={ocupado} onClick={() => decidirlo('rechazada')}>No</button>
       </>}
       {charla && <button type="button" className="btn btn-sm" onClick={() => { contestar('hablemos'); hablar(encuentro.id) }}>{puerta ? 'Pasá' : 'Hablemos'}</button>}
+      {charla && !puerta && seguime && <button type="button" className="btn btn-sm" onClick={() => { contestar('seguime'); seguime(encuentro.id) }}>Seguime a mi oficina</button>}
       <button type="button" className="btn btn-sm" onClick={() => { contestar('ahora_no'); despues() }}>Ahora no</button>
     </div>
   </div>
@@ -808,7 +810,7 @@ function Avatar({ agente }) {
 // ---------- Panel del agente ----------
 const PESTANAS = [['ahora', 'Ahora'], ['que', 'Qué hace'], ['tareas', 'Tareas'], ['herramientas', 'Herramientas'], ['charla', 'Conversación']]
 
-function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, setCharla, hablar, venir, pedidos = [], decidir, anotar }) {
+function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, setCharla, hablar, venir, deVisita = false, pedidos = [], decidir, anotar }) {
   const panel = useRef(null)
   // cerrar cambia en cada render: se guarda en una ref para que el efecto corra una sola vez (al abrir el panel)
   // y no le saque el foco al cuadro de la charla cada vez que llega una respuesta.
@@ -840,6 +842,12 @@ function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, se
           <p className="oficina-ahora">{a.ahora}</p>
           {a.ultima && <p className="tenue">Última actividad: {haceCuanto(new Date(a.ultima).toISOString(), ahora)} ({horaAR(a.ultima)}).</p>}
           {!a.sinCharla && <button type="button" className="btn btn-sm" onClick={() => setPestana('charla')}>Preguntarle algo</button>}
+          {!a.sinCharla && venir && <button type="button" className="btn btn-sm" disabled={deVisita} onClick={() => {
+            venir(a.id)
+            setCharla(m => [...m, { role: 'user', content: 'Vení a mi oficina.' }])
+            anotar?.(a.id, 'Vení a mi oficina.').catch(() => { /* igual va */ })
+            setPestana('charla')
+          }}>{deVisita ? 'Está en tu oficina' : 'Llamar a mi oficina'}</button>}
         </>}
         {pestana === 'que' && <p className="oficina-descripcion">{a.descripcion || 'Sin descripción cargada.'}</p>}
         {pestana === 'tareas' && (a.tareas.length
@@ -851,7 +859,7 @@ function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, se
         {pestana === 'herramientas' && (a.herramientas.length
           ? <ul className="oficina-herramientas">{a.herramientas.map(h => <li key={h}>{h}</li>)}</ul>
           : <p className="tenue">Sin herramientas declaradas.</p>)}
-        {pestana === 'charla' && <Charla agente={a} mensajes={charla} setMensajes={setCharla} hablar={hablar} venir={venir} pedidos={pedidos} decidir={decidir} anotar={anotar} />}
+        {pestana === 'charla' && <Charla agente={a} mensajes={charla} setMensajes={setCharla} hablar={hablar} venir={venir} deVisita={deVisita} pedidos={pedidos} decidir={decidir} anotar={anotar} />}
       </div>
     </aside>
   </>
@@ -881,7 +889,7 @@ function PedidoEnCharla({ pedido: x, decidir, alDecidir }) {
 // Charlas fuera de la oficina: salís con el agente y hablan de otras cosas (sin pedidos). Quedan en la misma conversación.
 const SALIDAS = [['', 'En la oficina'], ['comer', 'Salir a comer'], ['cafe', 'Un café'], ['after', 'After office'], ['caminata', 'Una caminata']]
 const MARCA_SALIDA = { comer: 'Salieron a comer', cafe: 'Tomando un café', after: 'After office', caminata: 'De caminata' }
-function Charla({ agente, mensajes, setMensajes, hablar, venir, pedidos = [], decidir, anotar }) {
+function Charla({ agente, mensajes, setMensajes, hablar, venir, deVisita = false, pedidos = [], decidir, anotar }) {
   const [texto, setTexto] = useState('')
   const [esperando, setEsperando] = useState(false)
   const [error, setError] = useState('')
@@ -896,6 +904,8 @@ function Charla({ agente, mensajes, setMensajes, hablar, venir, pedidos = [], de
     const donde = salida || null
     const nuevos = [...mensajes, { role: 'user', content: pregunta, salida: donde }]
     setMensajes(nuevos); setTexto(''); setError(''); setEsperando(true)
+    // Si le pedís que venga a tu oficina, va; si ya está ahí, se queda mientras sigan hablando.
+    if (!donde && (deVisita || lePedisQueVenga(pregunta))) venir?.(agente.id)
     try {
       const respuesta = await hablar(agente.id, nuevos, 'charla', donde)
       setMensajes(m => [...m, { role: 'assistant', content: respuesta, salida: donde }])

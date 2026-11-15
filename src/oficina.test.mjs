@@ -365,3 +365,14 @@ test('pasillo: el mismo agente no te para de nuevo enseguida', async () => {
   assert.deepEqual(puedenPararte(['up:noruega', 'pdg:femina'], ultimos, t), ['pdg:femina'])
   assert.deepEqual(puedenPararte(['up:noruega'], ultimos, t + ENTRE_ENCUENTROS_MS), ['up:noruega'])
 })
+
+test('llamarlo: si le pedís que venga a tu oficina, va', async () => {
+  const { lePedisQueVenga } = await import('./oficina.mjs')
+  assert.equal(lePedisQueVenga('Vení a mi oficina que lo vemos.'), true)
+  assert.equal(lePedisQueVenga('Seguime a mi oficina'), true)
+  assert.equal(lePedisQueVenga('Te espero en mi despacho.'), true)
+  assert.equal(lePedisQueVenga('Seguime'), true)
+  assert.equal(lePedisQueVenga('Vení un toque'), true)
+  assert.equal(lePedisQueVenga('¿Cómo viene la cadena?'), false)
+  assert.equal(lePedisQueVenga('Mi oficina está muy linda.'), false)
+})
