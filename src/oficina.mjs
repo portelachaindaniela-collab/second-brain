@@ -493,3 +493,13 @@ const VIENE = /\b(voy|vengo|paso|me acerco|me doy una vuelta|caigo|me cruzo|subo
 export function vieneATuOficina(texto) {
   return VIENE.test(String(texto ?? ''))
 }
+
+// Golpear la puerta: cada tanto, un agente que tiene algo pendiente para vos (un pedido o un aviso) va hasta la puerta
+// de tu oficina. El primero, al rato de abrir la Oficina; después, de a uno por vez y con pausa. No repite lo que ya te
+// planteó en esta visita ni lo que dejaste para después.
+export const PRIMER_GOLPE_MS = 90_000
+export const ENTRE_GOLPES_MS = 6 * 60_000
+export function quienGolpea(ids = [], datos = {}, descartados = new Set(), ultimo = 0, ahora = Date.now()) {
+  if (ahora - ultimo < (ultimo ? ENTRE_GOLPES_MS : 0)) return null
+  return primerEncuentro(ids, datos, descartados)
+}

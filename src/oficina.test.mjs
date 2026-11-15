@@ -348,3 +348,12 @@ test('visita: si el agente dice que va a tu oficina, camina hasta ahí', async (
   assert.equal(vieneATuOficina('Te lo dejo en el Archivo.'), false)
   assert.equal(vieneATuOficina('La reunión es en la sala.'), false)
 })
+
+test('golpear la puerta: de a uno, con pausa y sin repetir', async () => {
+  const { quienGolpea, ENTRE_GOLPES_MS } = await import('./oficina.mjs')
+  const datos = { solicitudes: [{ id: 3, agente: 'up:noruega', titulo: 'Frenar la pieza', estado: 'pendiente', creada: '2026-11-15T12:00:00Z' }] }
+  const t = Date.parse('2026-11-15T13:00:00Z')
+  assert.equal(quienGolpea(['pdg:femina', 'up:noruega'], datos, new Set(), 0, t)?.id, 'up:noruega')
+  assert.equal(quienGolpea(['up:noruega'], datos, new Set(), t - 60_000, t), null)
+  assert.equal(quienGolpea(['up:noruega'], datos, new Set(['p3']), t - ENTRE_GOLPES_MS - 1, t), null)
+})
