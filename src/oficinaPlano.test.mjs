@@ -225,3 +225,18 @@ test('reunión en la oficina de Daniela: hasta 5 en su mesa, entran por su puert
   for (const id of ['trabajadores:maria', 'up:noruega', 'sistemas:mesa_entrada', 'trabajadores:opera', 'pdg:marketing', 'pdg:femina', 'admin:limpieza']) assert.ok([1, 2].includes(variante(id).pelo), id)
   for (const id of ['up:redactor', 'trabajadores:canillita', 'pdg:demo']) assert.ok([0, 3].includes(variante(id).pelo), id)
 })
+
+test('Femina tiene su oficina en la fila ejecutiva, entre la de María y la de Daniela', () => {
+  const pdg = lugares('pdg', ['prospector', 'femina', 'demo'])
+  const f = pdg[1], maria = oficinaMaria()
+  assert.equal(f.oficina.id, 'femina')
+  assert.equal(pdg[0].tipo, 'mesa')
+  assert.equal(pdg[2].tipo, 'mesa')
+  assert.ok(Math.abs(f.x0 - maria.x1) < 1e-9 && Math.abs(f.x1 - DIRECCION.x0) < 1e-9, 'pegada a las dos')
+  assert.ok(f.y1 <= EJECUTIVO.y1)
+  assert.equal(alturaPiso(f.sentado.x, f.sentado.y), EJECUTIVO.tarima)
+  assert.ok(f.escritorio.x - 0.82 > f.x0 && f.escritorio.x + 0.82 < f.puerta.x - 0.5)
+  recto(f.salida)
+  assert.ok(maria.escritorio.x + 0.82 < maria.x1 - 2.6, 'el escritorio de María no pisa su zona de estar')
+  assert.ok((maria.x1 - maria.x0) * (maria.y1 - maria.y0) > (f.x1 - f.x0) * (f.y1 - f.y0))
+})

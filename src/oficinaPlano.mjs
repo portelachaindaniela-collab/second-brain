@@ -60,16 +60,33 @@ export const JEFA = 'maria'
 const PASO_ESCRITORIO = 2.4
 const ancho = l => l.filter((p, i) => i === 0 || p.x !== l[i - 1].x || p.y !== l[i - 1].y)
 
+// La fila ejecutiva, de izquierda a derecha: la oficina de María, la de Femina y la de Daniela (DIRECCION).
+export const FEMINA = 'femina'
+export const OFICINA_FEMINA = { x0: 23.5, x1: 28.5 }
 // La oficina de María: la de la izquierda de la fila ejecutiva, grande, con zona de estar (`jefa: true`).
 export function oficinaMaria() {
-  const x0 = X0, x1 = 28.5, y0 = EJECUTIVO.y0, y1 = EJECUTIVO.y1
+  const x0 = X0, x1 = OFICINA_FEMINA.x0, y0 = EJECUTIVO.y0, y1 = EJECUTIVO.y1
   const puerta = { x: x0 + 1.0, y: y1 }
   const oficina = { id: JEFA, nombre: 'Dirección', jefa: true, x0, x1, y0, y1, puerta, puestos: 1 }
-  const escritorio = { x: (x0 + x1) / 2 - 0.6, y: 3.0 }
+  // Entre la mesa chica y la zona de estar.
+  const escritorio = { x: x0 + 4.6, y: 3.0 }
   const sentado = { x: escritorio.x, y: 2.1 }
   return { tipo: 'oficina', oficina, jefa: true, x0, x1, y0, y1, escritorio, sentado, mira: 0, puerta,
     salida: ancho([sentado, { x: puerta.x, y: sentado.y }, puerta, { x: puerta.x, y: CORREDOR_EJECUTIVO }]) }
 }
+
+// La oficina de Femina: entre la de María y la de Daniela, en la fila ejecutiva. La puerta, del lado de Daniela.
+export function oficinaFemina() {
+  const { x0, x1 } = OFICINA_FEMINA, y0 = EJECUTIVO.y0, y1 = EJECUTIVO.y1
+  const puerta = { x: x1 - 1.0, y: y1 }
+  const oficina = { id: FEMINA, nombre: 'Femina', jefa: false, x0, x1, y0, y1, puerta, puestos: 1 }
+  const escritorio = { x: (x0 + x1) / 2 - 0.5, y: 3.0 }
+  const sentado = { x: escritorio.x, y: 2.1 }
+  return { tipo: 'oficina', oficina, jefa: false, x0, x1, y0, y1, escritorio, sentado, mira: 0, puerta,
+    salida: ancho([sentado, { x: puerta.x, y: sentado.y }, puerta, { x: puerta.x, y: CORREDOR_EJECUTIVO }]) }
+}
+// Los de PDG que trabajan en el tablón (Femina tiene su oficina).
+export const enTablonPdg = claves => claves.filter(c => c !== FEMINA)
 
 // claves: las de los trabajadores en el orden del plantel. Devuelve el lugar de cada uno, en ese mismo orden.
 export function oficinasTrabajadores(claves) {
@@ -187,7 +204,11 @@ export const CUADROS_PDG = ['mapa', 'presentacion', 'escudo', 'documento', 'mega
 // Lugar de trabajo de cada agente de un equipo, en el orden en que llegan. claves: las de sus agentes.
 export function lugares(equipo, claves) {
   if (equipo === 'trabajadores') return oficinasTrabajadores(claves)
-  if (equipo === 'pdg') return mesaPdg(claves.length).asientos
+  if (equipo === 'pdg') {
+    const mesa = mesaPdg(enTablonPdg(claves).length).asientos
+    let k = 0
+    return claves.map(c => (c === FEMINA ? oficinaFemina() : mesa[k++]))
+  }
   if (equipo === 'admin') return mesaAdmin(claves.length).asientos
   if (equipo === 'sistemas') return mesaSistemas(claves.length).asientos
   return mesaUp(claves.length).asientos
@@ -581,6 +602,7 @@ export const ESTILOS = {
   prensa: { alfombra: { patron: 'rombos', colores: ['#ece3d8', '#b89a7c'] }, pared: '#efe7dc', cuadros: ['diario', 'mascaras', 'entrada'], objeto: 'diarios' },
   empleo: { alfombra: { patron: 'borde', colores: ['#efe8da', '#c9a24a'] }, pared: '#f1ebdf', cuadros: ['maletin', 'busqueda'], objeto: 'maletin' },
   maria: { alfombra: { patron: 'borde', colores: ['#efe6d2', '#c9a24a'] }, pared: '#f0e9da', cuadros: ['grafico'], objeto: null },
+  femina: { alfombra: { patron: 'rombos', colores: ['#e7efe6', '#2f7d4f'] }, pared: '#edf2eb', cuadros: ['mapa', 'busqueda'], objeto: null },
 }
 const ESTILO_COMUN = { alfombra: { patron: 'borde', colores: ['#e6e2db', '#c8c1b6'] }, pared: '#f3f1ec', cuadros: ['grafico'], objeto: null }
 export function estiloDe(oficinaId) { return ESTILOS[oficinaId] ?? ESTILO_COMUN }

@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, primeroElRespaldo, limpiarMarcas, extraerGrupo, lineasDelGrupo, cumpleDe, conNombres, nombrarVida, validarGeneral, sistemaGeneral, leerGeneral } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, primeroElRespaldo, limpiarMarcas, extraerGrupo, lineasDelGrupo, cumpleDe, conNombres, nombrarVida, validarGeneral, sistemaGeneral, leerGeneral, leerAclarar, sistemaChatInterno, leerChatInterno } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
@@ -74,7 +74,7 @@ async function vidaDe(db: any, id: string) {
 // relaciones que nacen o cambian) siguiendo lo que ya venía pasando. Si ya hay momentos de hoy, no se repite.
 async function vida(db: any) {
   const hoy = hoyISO();
-  const { data: ya } = await db.from("oficina_momentos").select("id").eq("fecha", hoy).limit(1);
+  const { data: ya } = await db.from("oficina_momentos").select("id").eq("fecha", hoy).neq("tipo", "chat").limit(1);
   if (ya?.length) return json({ ya: true });
   const provs = proveedores(env);
   if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
@@ -138,7 +138,10 @@ async function general(db: any, body: any) {
       const r = await db.from("oficina_chat_general").insert(respuestas);
       if (r.error) console.error("oficina-chat: no se pudieron guardar las respuestas del chat", r.error.message);
     }
-    return json({ respuestas });
+    // Los que tienen un malentendido con Daniela le escriben por privado: queda en su charla y la app abre ese chat.
+    const aclarar = leerAclarar((resultado as any)?.content, plantel.filter(x => !x.id.startsWith("sistemas:")).map(x => x.id)).map(x => ({ ...x, texto: conNombres(x.texto, nombres) }));
+    await guardarConversacion(db, aclarar.map(x => ({ agente: x.agente, de: "agente", texto: x.texto, lugar: "charla" })));
+    return json({ respuestas, aclarar });
   } catch (e) {
     // Lo que escribió Daniela ya quedó; si nadie contesta, se avisa.
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
@@ -268,7 +271,13 @@ async function leerDatosBase(db: any, equipo: string, clave: string) {
 // Guarda los pedidos de permiso (pendientes hasta que Daniela decida) y agenda las reuniones internas (esas no piden
 // permiso). Devuelve lo que quedó guardado.
 async function derivar(db: any, pedidos: any[], origen = "agente") {
-  const { internas, solicitudes } = separarInternas(pedidos);
+  const { internas, solicitudes, chats } = separarInternas(pedidos);
+  // Los malentendidos entre compañeros se arreglan por chat: se escribe aparte, sin hacer esperar la respuesta.
+  if (chats.length) {
+    const tarea = Promise.all(chats.map((x: any) => chatInterno(db, x).catch(e => console.error("oficina-chat: no se pudo armar el chat entre compañeros", (e as Error).message))));
+    const rt = (globalThis as any).EdgeRuntime;
+    if (rt?.waitUntil) rt.waitUntil(tarea); else await tarea;
+  }
   let guardadas: any[] = [], agendadas: any[] = [];
   if (solicitudes.length) {
     const { data, error } = await db.from("oficina_solicitudes").insert(solicitudes.map((s: any) => ({ agente: s.agente, titulo: s.titulo, detalle: s.detalle, accion: s.accion ?? null, origen }))).select("id,agente,titulo");
@@ -279,6 +288,26 @@ async function derivar(db: any, pedidos: any[], origen = "agente") {
     if (error) console.error("oficina-chat: no se pudo agendar la reunión interna", error.message); else agendadas = data || [];
   }
   return { solicitudes: guardadas, internas: agendadas };
+}
+
+// El chat entre compañeros para aclarar un malentendido: la IA lo escribe y queda como un momento de su vida (tipo chat).
+async function chatInterno(db: any, chat: any) {
+  const provs = proveedores(env);
+  if (!provs.length) return;
+  const hilo = await leerHilo(db);
+  const participantes = (await Promise.all(chat.agentes.map(async (aid: string) => {
+    const [equipo, clave] = aid.split(":");
+    return { id: aid, c: contexto(equipo, clave, await leerDatos(db, equipo, clave)) };
+  }))).filter((p: any) => p.c);
+  if (participantes.length < 2) return;
+  await sumarLoPersonal(db, participantes, hilo.plantel);
+  const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaChatInterno(participantes, chat, hoyLargo()) }, { role: "user", content: "Escriban." }], temperature: 0.7, max_tokens: 1500 }, { timeoutMs: 90000 }));
+  const nombres = Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre]));
+  const { mensajes, resumen } = leerChatInterno((resultado as any)?.content, participantes.map((p: any) => p.id));
+  if (mensajes.length < 2) return;
+  const hora = new Intl.DateTimeFormat("es-AR", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+  const r = await db.from("oficina_momentos").insert({ agentes: participantes.map((p: any) => p.id).slice(0, 4), tipo: "chat", lugar: "por chat", hora, fecha: hoyISO(), resumen: conNombres(resumen || `Aclararon «${chat.tema}» por chat.`, nombres).slice(0, 600), charla: mensajes.map(m => ({ ...m, texto: conNombres(m.texto, nombres) })) });
+  if (r.error) console.error("oficina-chat: no se pudo guardar el chat entre compañeros", r.error.message);
 }
 
 // En la reunión cada uno es la misma persona que en la charla de a uno: su vida en la oficina, lo que tiene con Daniela y lo

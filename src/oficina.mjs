@@ -280,7 +280,11 @@ export function encuentroCon(id, { solicitudes = [], pendientes = [] } = {}, des
         : `¿Tenés un minuto? Te quería pedir permiso para «${pedido.titulo}».${t === 'programar' ? ' Necesita código: si me decís que sí, lo programa Sistemas.' : ''}`
     return { id, clave: `p${pedido.id}`, tipo: 'pedido', pedido, texto: texto + mas }
   }
-  const aviso = pendientes.find(p => p.agente === id && !descartados.has(`a${p.texto}`))
+  const avisos = pendientes.filter(p => p.agente === id && !descartados.has(`a${p.texto}`))
+  // Una reunión que pidió y aprobaste, el día que toca: te viene a buscar para arrancarla.
+  const deReunion = avisos.find(p => p.reunion?.solicitud)
+  if (deReunion) return { id, clave: `a${deReunion.texto}`, tipo: 'reunion', aviso: deReunion, reunion: deReunion.reunion, texto: `¿Arrancamos la reunión «${deReunion.reunion.tema}»? Es la que me aprobaste; los convocados ya están avisados.` }
+  const aviso = avisos[0]
   if (aviso) return { id, clave: `a${aviso.texto}`, tipo: 'aviso', aviso, texto: `Daniela, una cosa: ${aviso.texto}` }
   return null
 }
@@ -542,7 +546,7 @@ export function momentoQueToca(momentos = [], hoy, jugados = new Set(), presente
   return momentos.find(m => m.fecha === hoy && ADENTRO.includes(m.tipo) && !jugados.has(m.id)
     && (!presentes || m.agentes.every(id => presentes.has(id)))) ?? null
 }
-export const TEXTO_MOMENTO = { mate: 'tomaron mate', cafe: 'se tomaron un café', almuerzo: 'almorzaron juntos', merienda: 'merendaron juntos', cena: 'salieron a cenar', after: 'fueron a un after office', paseo: 'salieron a pasear' }
+export const TEXTO_MOMENTO = { mate: 'tomaron mate', cafe: 'se tomaron un café', almuerzo: 'almorzaron juntos', merienda: 'merendaron juntos', cena: 'salieron a cenar', after: 'fueron a un after office', paseo: 'salieron a pasear', chat: 'se escribieron por chat' }
 // Las relaciones entre agentes, como en un simulador de vida (de las más cercanas a las que terminaron).
 export const TEXTO_VINCULO = {
   casados: 'Casados', comprometidos: 'Comprometidos', pareja: 'Novios', saliendo: 'Saliendo', amantes: 'Amantes',

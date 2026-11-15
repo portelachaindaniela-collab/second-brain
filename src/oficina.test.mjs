@@ -423,3 +423,14 @@ test('tu relación con cada agente: lo que le decís, en su género', async () =
   assert.equal(textoConVos('amistad', 'up:redactor'), 'Me caés re bien: ya somos amigos.')
   assert.equal(textoConVos('', 'up:redactor'), 'Prefiero que volvamos a ser compañeros de trabajo.')
 })
+
+test('el que pidió una reunión aprobada te viene a buscar para arrancarla', async () => {
+  const { encuentroCon } = await import('./oficina.mjs')
+  const reunion = { asistentes: ['up:noruega', 'up:redactor'], solicitud: 9, tema: 'Calendario de enero', pidio: 'up:noruega' }
+  const pendientes = [{ agente: 'up:noruega', texto: 'Algo de antes' }, { agente: 'up:noruega', texto: 'Hoy: reunión «Calendario de enero», la pidió Noruega.', reunion }]
+  const e = encuentroCon('up:noruega', { solicitudes: [], pendientes })
+  assert.equal(e.tipo, 'reunion')
+  assert.deepEqual(e.reunion, reunion)
+  assert.match(e.texto, /¿Arrancamos la reunión «Calendario de enero»\?/)
+  assert.equal(encuentroCon('up:noruega', { solicitudes: [], pendientes }, new Set([e.clave])).texto, 'Daniela, una cosa: Algo de antes')
+})
