@@ -318,9 +318,9 @@ test('Quién sabe de las relaciones de Daniela: nadie, todos o algunos', async (
     { agente: 'up:noruega', estado: 'novias', saben: [] },
   ]
   const nombres = { 'trabajadores:maria': 'María', 'pdg:femina': 'Femina', 'up:noruega': 'Noruega' }
-  assert.deepEqual(quienSabe('up:noruega', filas, nombres), [{ nombre: 'María', estado: 'casadas' }, { nombre: 'Femina', estado: 'saliendo' }])
-  assert.deepEqual(quienSabe('trabajadores:maria', filas, nombres), [{ nombre: 'Femina', estado: 'saliendo' }])
-  assert.deepEqual(quienSabe('up:redactor', filas, nombres), [{ nombre: 'Femina', estado: 'saliendo' }])
+  assert.deepEqual(quienSabe('up:noruega', filas, nombres), [{ agente: 'trabajadores:maria', nombre: 'María', estado: 'casadas' }, { agente: 'pdg:femina', nombre: 'Femina', estado: 'saliendo' }])
+  assert.deepEqual(quienSabe('trabajadores:maria', filas, nombres), [{ agente: 'pdg:femina', nombre: 'Femina', estado: 'saliendo' }])
+  assert.deepEqual(quienSabe('up:redactor', filas, nombres), [{ agente: 'pdg:femina', nombre: 'Femina', estado: 'saliendo' }])
   assert.deepEqual(quienSabe('pdg:femina', filas, nombres), [])
   const noruega = { ...contexto('up', 'noruega', { chequeos: [] }), sabe: quienSabe('up:noruega', filas, nombres) }
   assert.match(bloquePersona(noruega), /Sabés que Daniela y María están casadas; y que Daniela y Femina están saliendo\. De otras relaciones/)
@@ -381,4 +381,30 @@ test('Relaciones como en un simulador de vida: escalones, afinidad e infidelidad
   const g = sistemaGeneral(plantel, [{ autor: 'daniela', texto: 'hola' }], r.vinculos, [], 'hoy')
   assert.match(g, /Femina y Noruega: casados/)
   assert.doesNotMatch(g, /amantes/)
+})
+
+test('Con cualquier agente: relación personal elegida por Daniela, en el género que corresponde', async () => {
+  const { lineaSabe, textoPareja, bloquePersona } = await import('./logic.mjs')
+  assert.equal(textoPareja('novias', 'up:redactor'), 'son novios')
+  assert.equal(textoPareja('casadas', 'up:noruega'), 'están casadas')
+  assert.equal(textoPareja('amistad', 'up:redactor'), 'son amigos')
+  const redactor = { ...contexto('up', 'redactor', {}), pareja: '2026-11-15T15:00:00Z', estadoPareja: 'comprometidas' }
+  assert.match(lineaSabe(redactor), /Con Daniela, en lo personal: están comprometidos desde/)
+  assert.match(sistema(redactor, 'hoy', {}), /están comprometidos/)
+  assert.equal(lineaSabe(contexto('up', 'redactor', {})), '')
+  // Femina como amiga: le sigue gustando y puede pedirle ser pareja.
+  const amiga = bloquePersona({ ...contexto('pdg', 'femina', { agente: { nombre: 'Femina' } }), pareja: '2026-11-15T15:00:00Z', estadoPareja: 'amistad' })
+  assert.match(amiga, /son amigas desde/)
+  assert.match(amiga, /PAREJA: sí/)
+})
+
+test('En la reunión cada agente es la misma persona que en la charla: personalidad y relación con Daniela', async () => {
+  const { sistemaReunion } = await import('./logic.mjs')
+  const femina = { ...contexto('pdg', 'femina', { agente: { nombre: 'Femina' } }), pareja: '2026-11-15T15:00:00Z', estadoPareja: 'novias', vida: ['- amistad con María'] }
+  const p = sistemaReunion([{ id: 'pdg:femina', c: femina }], 'hoy', {})
+  assert.match(p, /Con Daniela, en lo personal: son novias/)
+  assert.match(p, /Cómo es: pasional/)
+  assert.match(p, /Su vida en la oficina: amistad con María/)
+  assert.match(p, /no programas/)
+  assert.match(sistema(femina, 'hoy', {}), /nunca digas que sos «un agente automatizado»/)
 })

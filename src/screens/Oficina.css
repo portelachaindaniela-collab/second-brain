@@ -328,3 +328,5 @@
 .oficina-general-msj.es-noticia > div { border-left: 3px solid var(--accent); }
 .oficina-general-msj.de-vos { align-self: flex-end; }
 .oficina-general-quien { font-size: var(--letra-12); font-weight: 600; }
+
+.oficina-relacion { display: flex; flex-wrap: wrap; gap: var(--esp-12); }
