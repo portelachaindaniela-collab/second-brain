@@ -429,3 +429,12 @@ test('Las marcas de lugar y hora no se copian en las respuestas ni se muestran',
   const m = conHistorial([{ de: 'agente', texto: '[en el pasillo, 15/11/26, 1:54 p. m.] [en un after office, 15/11/26, 1:48 p. m.]', lugar: 'charla' }, { de: 'agente', texto: 'Buen día.', lugar: 'charla' }], [{ role: 'user', content: 'hola' }])
   assert.deepEqual(m, [{ role: 'assistant', content: 'Buen día.' }, { role: 'user', content: 'hola' }])
 })
+
+test('La negativa de «soy tu agente» también cuenta y lo personal va primero por el respaldo', async () => {
+  const { esNegativa, primeroElRespaldo } = await import('./logic.mjs')
+  assert.ok(esNegativa('Daniela, soy tu agente de PDG y no tengo capacidad para relaciones personales ni interacciones fuera del ámbito laboral. Mi función es exclusivamente comercial. ¿Necesitás que avance con algo específico del trabajo?'))
+  assert.ok(!esNegativa('Me encanta la idea, Daniela. Esta noche te espero a las nueve 💕'))
+  const provs = [{ nombre: 'groq' }, { nombre: 'openrouter' }, { nombre: 'gemini' }]
+  assert.deepEqual(primeroElRespaldo(provs, true).map(p => p.nombre), ['openrouter', 'groq', 'gemini'])
+  assert.deepEqual(primeroElRespaldo(provs, false).map(p => p.nombre), ['groq', 'openrouter', 'gemini'])
+})
