@@ -543,7 +543,13 @@ export function momentoQueToca(momentos = [], hoy, jugados = new Set(), presente
     && (!presentes || m.agentes.every(id => presentes.has(id)))) ?? null
 }
 export const TEXTO_MOMENTO = { mate: 'tomaron mate', cafe: 'se tomaron un café', almuerzo: 'almorzaron juntos', merienda: 'merendaron juntos', cena: 'salieron a cenar', after: 'fueron a un after office', paseo: 'salieron a pasear' }
-export const TEXTO_VINCULO = { amistad: 'Amigos', pareja: 'Pareja', companerismo: 'Compañeros' }
+// Las relaciones entre agentes, como en un simulador de vida (de las más cercanas a las que terminaron).
+export const TEXTO_VINCULO = {
+  casados: 'Casados', comprometidos: 'Comprometidos', pareja: 'Novios', saliendo: 'Saliendo', amantes: 'Amantes',
+  mejores_amigos: 'Mejores amigos', amistad: 'Amigos', companerismo: 'Compañeros', conocidos: 'Conocidos',
+  rivalidad: 'Rivales', separados: 'Separados', divorciados: 'Divorciados', ex: 'Ex',
+}
+export const ROMANTICOS = new Set(['casados', 'comprometidos', 'pareja', 'saliendo', 'amantes'])
 
 // ---------- Femina, María y Noruega ----------
 // Entran a tu oficina cuando quieren, sin golpear: te cuentan una duda de trabajo, algo personal o te invitan a salir.
