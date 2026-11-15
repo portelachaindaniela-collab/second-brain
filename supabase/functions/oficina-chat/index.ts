@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, limpiarMarcas, cumpleDe, validarGeneral, sistemaGeneral, leerGeneral } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, primeroElRespaldo, limpiarMarcas, cumpleDe, validarGeneral, sistemaGeneral, leerGeneral } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
@@ -130,7 +130,7 @@ async function general(db: any, body: any) {
   const [gente, g, vin, pub] = await Promise.all([equipos(db), ultimosGeneral(db), db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto").limit(60), publicasDeDaniela(db)]);
   const plantel = [...gente.trabajadores, ...gente.up, ...gente.pdg, ...gente.sistemas];
   try {
-    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaGeneral(plantel, g, vin.data || [], pub, hoyLargo()) }, { role: "user", content: v.texto }], temperature: 0.8, max_tokens: 900 }));
+    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaGeneral(plantel, g, vin.data || [], pub, hoyLargo()) }, { role: "user", content: v.texto }], temperature: 0.8, max_tokens: 900 }));
     const respuestas = leerGeneral((resultado as any)?.content, plantel.map(x => x.id));
     if (respuestas.length) {
       const r = await db.from("oficina_chat_general").insert(respuestas);
@@ -182,7 +182,7 @@ async function entra(db: any, id: string) {
   try { ({ c, hilo, historial } = await armarAgente(db, equipo, clave)); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
   try {
-    const { resultado } = await conRespaldo(provs, (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, [{ role: "user", content: ENTRA_SOLA }]), hoyLargo(), hilo), temperature: 0.8, max_tokens: 600 }));
+    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, [{ role: "user", content: ENTRA_SOLA }]), hoyLargo(), hilo), temperature: 0.8, max_tokens: 600 }));
     const { texto: sinPareja } = extraerPareja(limpiarMarcas((resultado as any)?.content));
     const { texto } = extraerSolicitudes(sinPareja, id);
     if (!texto) return json({ error: "La IA no devolvió texto." }, 502);
@@ -307,7 +307,8 @@ async function reunion(db: any, body: any) {
   } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
   if (!participantes.length) return json({ error: "No encontré a los asistentes." }, 404);
   try {
-    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: mensajesReunion(participantes, v.mensajes, hoyLargo(), hilo), temperature: 0.5, max_tokens: 1400 }, { timeoutMs: 90000 }));
+    const personal = participantes.some((p: any) => ELLAS.includes(p.id) || p.c.pareja);
+    const { resultado, ia } = await conRespaldo(primeroElRespaldo(provs, personal), (prov: any) => llamarModelo(prov, { messages: mensajesReunion(participantes, v.mensajes, hoyLargo(), hilo), temperature: 0.5, max_tokens: 1400 }, { timeoutMs: 90000 }));
     const respuestas = leerRespuestas((resultado as any)?.content, participantes.map((p: any) => p.id));
     if (!respuestas.length) return json({ error: "Nadie respondió. Probá preguntar de nuevo, o nombrá a alguien." }, 502);
     const { solicitudes, internas } = await derivar(db, leerSolicitudes((resultado as any)?.content, participantes.map((p: any) => p.id)), "reunion");
@@ -450,7 +451,8 @@ Deno.serve(async (req: Request) => {
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
 
   try {
-    const { resultado, ia } = await conRespaldo(provs, (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo, v.salida), temperature: v.salida ? 0.8 : 0.4, max_tokens: 900 }));
+    const personal = Boolean(ELLAS.includes(id) || c.pareja || v.salida);
+    const { resultado, ia } = await conRespaldo(primeroElRespaldo(provs, personal), (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo, v.salida), temperature: v.salida ? 0.8 : 0.4, max_tokens: 900 }));
     const { texto: sinPareja, pareja } = extraerPareja(limpiarMarcas((resultado as any)?.content));
     const { texto, solicitudes: pedidos } = extraerSolicitudes(sinPareja, id);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);

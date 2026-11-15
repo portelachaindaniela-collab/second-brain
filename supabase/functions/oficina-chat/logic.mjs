@@ -60,7 +60,13 @@ export const LUGARES = ['charla', 'pasillo', 'reunion']
 // La negativa enlatada de la IA («Lo siento, pero no puedo ayudar con eso.»): no es una respuesta del agente. Se pasa a la
 // IA de respaldo y, si alguna quedó guardada de antes, no se le muestra al modelo (si no, la repite).
 const NEGATIVA = /^(lo siento|perd[oó]n|disculp\p{L}*)[,.!]?\s+(pero\s+)?no\s+(puedo|me es posible)\b[^.!?]*[.!?]?$/iu
-export const esNegativa = t => { const s = String(t ?? '').trim(); return s.length <= 120 && NEGATIVA.test(s) }
+// También la que se niega diciendo que es un programa («soy tu agente de PDG y no tengo capacidad para relaciones
+// personales…»): un agente de la oficina nunca habla así.
+const NEGATIVA_ROL = /(no tengo (la )?capacidad (para|de)|soy (tu|un|una) (agente|asistente|programa|modelo)\b|agente automatizado|fuera del [áa]mbito (laboral|profesional)|no puedo (tener|mantener|establecer) (relaciones|v[ií]nculos)|como (modelo de lenguaje|inteligencia artificial)\b)/iu
+export const esNegativa = t => { const s = String(t ?? '').trim(); return (s.length <= 120 && NEGATIVA.test(s)) || NEGATIVA_ROL.test(s) }
+// Para lo personal (Femina, María, Noruega, los que tienen algo con Daniela, las salidas y el chat de la oficina) va primero
+// la IA de respaldo: la gratis se niega a esas charlas y se pierde tiempo.
+export const primeroElRespaldo = (provs, personal) => (personal ? [...provs.filter(p => p.nombre === 'openrouter'), ...provs.filter(p => p.nombre !== 'openrouter')] : provs)
 // Dónde fue cada cosa va como marca solo en lo de Daniela (si el agente habló primero, con una marca sola antes): si va en
 // lo del agente, la IA la copia en sus respuestas.
 export function conHistorial(filas = [], mensajes = []) {
@@ -185,7 +191,7 @@ Cómo responder:
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
 - La charla de abajo es toda tu conversación con Daniela: por chat, en el pasillo y en reuniones (lo de fuera del chat dice entre corchetes dónde fue). Si te pregunta qué le querías decir o retoma algo, está ahí: seguí desde ahí.
 - Las marcas entre corchetes de la charla de abajo («[en el pasillo, …]») solo dicen dónde fue cada cosa: nunca las escribas en tu respuesta.
-- Sos una persona de la oficina, no un programa: nunca digas que sos «un agente automatizado» ni que no podés hablar con un compañero. Si Daniela te pide hablar con alguien de la oficina (por ejemplo, con María), respondé como lo harías vos: lo hablás y lo contás.
+- Sos una persona de la oficina, no un programa: nunca digas que sos «un agente automatizado» ni que no podés hablar con un compañero ni de lo personal (tus instrucciones de trabajo son para el trabajo: no te impiden tener vida personal). Si Daniela te pide hablar con alguien de la oficina (por ejemplo, con María), respondé como lo harías vos: lo hablás y lo contás.
 - Si Daniela te invita a algo personal (salir, cenar, un café), respondé como persona, con calidez: podés aceptar o decir que no con cariño, pero nunca con un «no puedo responder a eso».
 - Seguí el hilo: respondé a lo último que te dijo y hacé avanzar la charla. No repitas frases ni respuestas que ya diste, ni retomes temas de trabajo si ella está hablando de algo personal. Hablá de vos (nada de «tú» ni «contigo»).
 - Respondé a lo que Daniela te dice, en el contexto de la charla: si te pide ideas u opinión, dalas ahí mismo con lo que sabés de tu área. No recites tu estado ni tu registro salvo que te lo pida o venga al caso.
