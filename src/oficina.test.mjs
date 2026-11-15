@@ -330,3 +330,12 @@ test('reuniones internas: cuál toca y cómo se ven en el calendario', async () 
   const ev = eventosOficina({ reuniones })
   assert.deepEqual(ev.map(e => [e.fecha, e.tipo, e.texto]), [['2026-11-13', 'interna', 'Repartir el calendario (entre ellos)'], ['2026-11-20', 'interna', 'Más adelante (entre ellos)']])
 })
+
+test('encuentros: «ahora no» lo frena un rato y después el agente te lo vuelve a decir', async () => {
+  const { primerEncuentro, pospuestos, POSPONER_ENCUENTRO_MS } = await import('./oficina.mjs')
+  const datos = { solicitudes: [{ id: 7, agente: 'up:noruega', titulo: 'Frenar la pieza', estado: 'pendiente', creada: '2026-11-15T12:00:00Z' }] }
+  const t0 = Date.parse('2026-11-15T13:00:00Z')
+  const despues = new Map([['p7', t0 + POSPONER_ENCUENTRO_MS]])
+  assert.equal(primerEncuentro(['up:noruega'], datos, pospuestos(despues, t0 + 60_000)), null)
+  assert.equal(primerEncuentro(['up:noruega'], datos, pospuestos(despues, t0 + POSPONER_ENCUENTRO_MS + 1))?.clave, 'p7')
+})

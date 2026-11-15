@@ -38,9 +38,16 @@ async function tareasDe(db: any, id: string) {
   return data || [];
 }
 
+// Lo que le dijo a Daniela en el pasillo en los últimos dos días (y lo que ella contestó).
+async function encuentrosDe(db: any, id: string) {
+  const { data } = await db.from("oficina_encuentros").select("texto,respuesta,creado").eq("agente", id).gte("creado", new Date(Date.now() - 2 * 86400000).toISOString()).order("creado", { ascending: false }).limit(5);
+  return data || [];
+}
+
 async function leerDatos(db: any, equipo: string, clave: string) {
   const datos: any = await leerDatosBase(db, equipo, clave);
-  datos.tareas = await tareasDe(db, `${equipo}:${clave}`);
+  const [tareas, encuentros] = await Promise.all([tareasDe(db, `${equipo}:${clave}`), encuentrosDe(db, `${equipo}:${clave}`)]);
+  Object.assign(datos, { tareas, encuentros });
   return datos;
 }
 

@@ -284,6 +284,12 @@ export function encuentroCon(id, { solicitudes = [], pendientes = [] } = {}, des
   if (aviso) return { id, clave: `a${aviso.texto}`, tipo: 'aviso', aviso, texto: `Daniela, una cosa: ${aviso.texto}` }
   return null
 }
+// «Ahora no»: el agente no te lo vuelve a decir por un rato, pero no se olvida: pasado ese rato te lo vuelve a plantear.
+// despues: Map clave → hasta cuándo (ms). Devuelve las claves que todavía esperan.
+export const POSPONER_ENCUENTRO_MS = 15 * 60_000
+export function pospuestos(despues = new Map(), ahora = Date.now()) {
+  return new Set([...despues].filter(([, hasta]) => hasta > ahora).map(([clave]) => clave))
+}
 export function primerEncuentro(cercanos = [], datos = {}, descartados = new Set()) {
   for (const id of cercanos) {
     const e = encuentroCon(id, datos, descartados)
