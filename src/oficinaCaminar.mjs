@@ -37,7 +37,8 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
   if (oficinas.has('femina')) {
     const F = MUEBLES_FEMINA
     rect(F.archivero.x0, F.archivero.x1, F.archivero.y0, F.archivero.y1)
-    circulo(F.sillon.x, F.sillon.y, 0.45)
+    for (const x of F.sillones) circulo(x.x, x.y, 0.45)
+    rect(F.biblioteca.x0, F.biblioteca.x1, F.biblioteca.y0, F.biblioteca.y1)
     circulo(F.mesita.x, F.mesita.y, F.mesita.radio)
     rect(F.pizarra.x0, F.pizarra.x1, F.pizarra.y - 0.2, F.pizarra.y + 0.2)
     circulo(F.lampara.x, F.lampara.y, 0.2)
