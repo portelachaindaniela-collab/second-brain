@@ -1,7 +1,8 @@
 // Lógica pura de oficina-chat: validar el pedido, armar el contexto de cada agente con sus datos reales y el prompt.
 // El agente solo habla de lo que está en sus datos; no hace cambios (para eso están sus pantallas).
 import { armarProveedores } from '../_shared/ia.mjs'
-import { AGENTES_UP, EQUIPOS, herramientasPdg, partirId, generoDe, SUPERVISORES, AREAS_TAREA, PERSONAS, CARACTER } from '../_shared/oficina.mjs'
+import { AGENTES_UP, EQUIPOS, herramientasPdg, partirId, generoDe, SUPERVISORES, AREAS_TAREA, PERSONAS, CARACTER, limpiarMarcas } from '../_shared/oficina.mjs'
+export { limpiarMarcas }
 
 export const MAX_MENSAJES = 12
 export const MAX_CARACTERES = 2000
@@ -60,11 +61,20 @@ export const LUGARES = ['charla', 'pasillo', 'reunion']
 // IA de respaldo y, si alguna quedó guardada de antes, no se le muestra al modelo (si no, la repite).
 const NEGATIVA = /^(lo siento|perd[oó]n|disculp\p{L}*)[,.!]?\s+(pero\s+)?no\s+(puedo|me es posible)\b[^.!?]*[.!?]?$/iu
 export const esNegativa = t => { const s = String(t ?? '').trim(); return s.length <= 120 && NEGATIVA.test(s) }
+// Dónde fue cada cosa va como marca solo en lo de Daniela (si el agente habló primero, con una marca sola antes): si va en
+// lo del agente, la IA la copia en sus respuestas.
 export function conHistorial(filas = [], mensajes = []) {
-  const previos = (filas || []).filter(f => !(f.de !== 'daniela' && esNegativa(f.texto))).slice(-MAX_HISTORIAL).map(f => ({
-    role: f.de === 'daniela' ? 'user' : 'assistant',
-    content: `${SALIDAS[f.salida] ? `[${SALIDAS[f.salida].marca}, ${hora(f.creado)}] ` : LUGAR[f.lugar] ? `[${LUGAR[f.lugar]}, ${hora(f.creado)}] ` : ''}${String(f.texto ?? '').slice(0, MAX_CARACTERES)}`,
-  }))
+  const previos = []
+  for (const f of (filas || []).filter(f => !(f.de !== 'daniela' && esNegativa(f.texto))).slice(-MAX_HISTORIAL)) {
+    const marca = SALIDAS[f.salida] ? `[${SALIDAS[f.salida].marca}, ${hora(f.creado)}]` : LUGAR[f.lugar] ? `[${LUGAR[f.lugar]}, ${hora(f.creado)}]` : ''
+    const texto = limpiarMarcas(String(f.texto ?? '').slice(0, MAX_CARACTERES))
+    if (!texto) continue
+    if (f.de === 'daniela') previos.push({ role: 'user', content: marca ? `${marca} ${texto}` : texto })
+    else {
+      if (marca && previos.at(-1)?.role !== 'user') previos.push({ role: 'user', content: marca })
+      previos.push({ role: 'assistant', content: texto })
+    }
+  }
   const juntos = []
   for (const m of [...previos, ...mensajes.slice(-1)]) {
     const antes = juntos.at(-1)
@@ -174,6 +184,7 @@ Cómo responder:
 - En primera persona, en español rioplatense, corto y concreto (2 a 6 oraciones salvo que te pidan detalle).
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
 - La charla de abajo es toda tu conversación con Daniela: por chat, en el pasillo y en reuniones (lo de fuera del chat dice entre corchetes dónde fue). Si te pregunta qué le querías decir o retoma algo, está ahí: seguí desde ahí.
+- Las marcas entre corchetes de la charla de abajo («[en el pasillo, …]») solo dicen dónde fue cada cosa: nunca las escribas en tu respuesta.
 - Sos una persona de la oficina, no un programa: nunca digas que sos «un agente automatizado» ni que no podés hablar con un compañero. Si Daniela te pide hablar con alguien de la oficina (por ejemplo, con María), respondé como lo harías vos: lo hablás y lo contás.
 - Si Daniela te invita a algo personal (salir, cenar, un café), respondé como persona, con calidez: podés aceptar o decir que no con cariño, pero nunca con un «no puedo responder a eso».
 - Seguí el hilo: respondé a lo último que te dijo y hacé avanzar la charla. No repitas frases ni respuestas que ya diste, ni retomes temas de trabajo si ella está hablando de algo personal. Hablá de vos (nada de «tú» ni «contigo»).
@@ -248,7 +259,7 @@ export function sistemaSalida(c, hoy, salida) {
 Ahora no están en la oficina: ${SALIDAS[salida].escena}.
 ${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}${lineaSabe(c)}
 Cómo charlar:
-- Seguí el hilo: respondé a lo último que te dijo, sin repetir frases ni respuestas que ya diste. Hablá de vos (nada de «tú» ni «contigo»).
+- Seguí el hilo: respondé a lo último que te dijo, sin repetir frases ni respuestas que ya diste. Hablá de vos (nada de «tú» ni «contigo»). Nunca escribas las marcas entre corchetes de la charla de abajo.
 - Es una charla entre compañeros, relajada, en español rioplatense: de la vida, gustos, música, fútbol, comida, planes, lo que surja. Corto y natural (1 a 4 oraciones), con preguntas de ida y vuelta.
 - Tenés tu personalidad: podés tener gustos y opiniones propias, pero sé coherente con lo que ya dijiste antes (está en la conversación de abajo). No inventes datos del trabajo.
 - Del trabajo hablás solo si ella lo saca, y sin pedir permisos ni armar pedidos: eso queda para cuando vuelvan a la oficina.
@@ -670,7 +681,9 @@ Armá lo de hoy:
 - momentos: entre 2 y 4, de 2 a 4 agentes cada uno, sobre todo entre los que ya tienen relación (pero también alguno
   nuevo, así se conocen). tipo: mate, cafe, almuerzo o merienda (en la oficina) o cena, after o paseo (afuera, después
   del trabajo). hora: HH:MM. lugar: corto (por ejemplo «la cafetería», «un bodegón en Palermo»). resumen: 1 o 2
-  oraciones de qué pasó o de qué hablaron, en español rioplatense, cálido y creíble.
+  oraciones de qué pasó o de qué hablaron, en español rioplatense, cálido y creíble. charla: lo que se dijeron, entre 4 y 8
+  intervenciones cortas (agente: id de los que están en ese momento; texto: 1 o 2 oraciones), con la personalidad de cada
+  uno y lo que viven (también pueden cruzarse en el pasillo o la cocina: usá el tipo más parecido y el lugar real).
 - vinculos: solo los que nacen o cambian hoy (entre 1 y 4). tipo: ${Object.keys(TIPOS_VINCULO).join(', ')}.
   afinidad: de -100 (se detestan) a 100 (inseparables); cambia de a poco según lo que pase (un buen momento +5 a +15, una
   pelea o una traición -10 a -40). secreto: true solo para una relación que nadie más sabe (amantes, una infidelidad).
@@ -691,7 +704,7 @@ Armá lo de hoy:
   del chat (que no se repita). Lo que es secreto no se publica (salvo que hoy se descubra). De Daniela solo se comenta lo
   que dice arriba que se sabe; nada privado.
 
-Respondé SOLO con JSON: {"momentos":[{"agentes":["id","id"],"tipo":"mate","hora":"10:30","lugar":"...","resumen":"..."}],"vinculos":[{"a":"id","b":"id","tipo":"amistad","afinidad":40,"secreto":false,"historia":"..."}],"noticias":[{"autor":"id","texto":"..."}]}`
+Respondé SOLO con JSON: {"momentos":[{"agentes":["id","id"],"tipo":"mate","hora":"10:30","lugar":"...","resumen":"...","charla":[{"agente":"id","texto":"..."}]}],"vinculos":[{"a":"id","b":"id","tipo":"amistad","afinidad":40,"secreto":false,"historia":"..."}],"noticias":[{"autor":"id","texto":"..."}]}`
 }
 export function leerVida(texto, idsValidos) {
   const crudo = String(texto ?? '')
@@ -706,6 +719,7 @@ export function leerVida(texto, idsValidos) {
     hora: /^[0-2]\d:[0-5]\d$/.test(String(m?.hora ?? '')) ? m.hora : null,
     lugar: String(m?.lugar ?? '').replace(/\s+/g, ' ').trim().slice(0, 120),
     resumen: String(m?.resumen ?? '').replace(/\s+/g, ' ').trim().slice(0, 600),
+    charla: lista(m?.charla).map(x => ({ agente: String(x?.agente ?? ''), texto: String(x?.texto ?? '').replace(/\s+/g, ' ').trim().slice(0, 400) })).filter(x => x.texto && validos.has(x.agente) && lista(m?.agentes).map(String).includes(x.agente)).slice(0, 10),
   })).filter(m => m.agentes.length >= 2 && m.tipo && m.resumen.length >= 3).slice(0, 5)
   const vistos = new Set()
   const vinculos = lista(d?.vinculos).map(v => {
@@ -758,6 +772,7 @@ export function leerGeneral(texto, idsValidos) {
 export function lineasVida(id, vinculos = [], momentos = [], nombres = {}) {
   const n = x => nombres[x] ?? x
   const lazos = vinculos.filter(v => v.a === id || v.b === id).map(v => `- ${TIPOS_VINCULO[v.tipo] ?? v.tipo} con ${n(v.a === id ? v.b : v.a)}${v.secreto ? ' (en secreto: no se lo contás a nadie)' : ''}${v.historia ? `: ${recortar(v.historia, 200)}` : ''}`)
-  const compartido = momentos.filter(m => m.agentes.includes(id)).slice(0, 6).map(m => `- ${m.fecha}${m.hora ? ` ${m.hora}` : ''}: con ${m.agentes.filter(x => x !== id).map(n).join(' y ')} ${MOMENTOS[m.tipo]?.texto ?? m.tipo}${m.lugar ? ` (${m.lugar})` : ''}: ${recortar(m.resumen, 200)}`)
+  // De las dos últimas veces que se juntó con alguien, también se acuerda de lo que se dijeron.
+  const compartido = momentos.filter(m => m.agentes.includes(id)).slice(0, 6).map((m, i) => `- ${m.fecha}${m.hora ? ` ${m.hora}` : ''}: con ${m.agentes.filter(x => x !== id).map(n).join(' y ')} ${MOMENTOS[m.tipo]?.texto ?? m.tipo}${m.lugar ? ` (${m.lugar})` : ''}: ${recortar(m.resumen, 200)}${i < 2 && m.charla?.length ? ` Se dijeron: ${recortar(m.charla.map(x => `${x.agente === id ? 'vos' : n(x.agente)}: «${x.texto}»`).join(' '), 400)}` : ''}`)
   return [...lazos, ...compartido]
 }

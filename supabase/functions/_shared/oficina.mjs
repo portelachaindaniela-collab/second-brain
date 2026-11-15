@@ -83,3 +83,8 @@ export function partirId(id) {
   const m = /^(trabajadores|up|pdg):([a-z_]{1,40})$/.exec(String(id ?? ''))
   return m ? { equipo: m[1], clave: m[2] } : null
 }
+
+// Las marcas de lugar y hora de la charla guardada («[en el pasillo, 15/11/26, 1:54 p. m.]»): son solo para que el agente
+// sepa dónde fue cada cosa. Si la IA las copia en lo que contesta, se sacan antes de guardar y de mostrar.
+const MARCA = /\[(?:en |salieron |fuera )[^\]\n]{0,80}?\d{1,2}\/\d{1,2}\/\d{2,4}[^\]\n]{0,40}\]\s*/giu
+export const limpiarMarcas = t => String(t ?? '').replace(MARCA, '').trim()
