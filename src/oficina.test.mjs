@@ -403,3 +403,15 @@ test('Femina, María y Noruega entran a tu oficina de a una, con pausa y pocas v
   assert.equal(quienEntra(agentes, 0, MAX_ENTRADAS, t), null)
   assert.equal(quienEntra([{ id: 'up:redactor', estado: 'libre' }], 0, 0, t), null)
 })
+
+test('visitas: pueden venir varios a la vez', async () => {
+  const { sumarVisita, escenaDeVisitas, VISITA_MS } = await import('./oficina.mjs')
+  let v = sumarVisita([], 'pdg:femina', false, 1000)
+  v = sumarVisita(v, 'up:noruega', true, 2000)
+  assert.deepEqual(escenaDeVisitas(v), { id: 1000, agentes: ['pdg:femina', 'up:noruega'], desdePuerta: ['up:noruega'], destino: 'oficina' })
+  // Si Femina vuelve a decir que viene, se queda más rato y no cambia el orden ni la escena.
+  const v2 = sumarVisita(v, 'pdg:femina', false, 5000)
+  assert.equal(v2.find(x => x.agente === 'pdg:femina').hasta, 5000 + VISITA_MS)
+  assert.deepEqual(escenaDeVisitas(v2).agentes, ['pdg:femina', 'up:noruega'])
+  assert.equal(escenaDeVisitas([]), null)
+})
