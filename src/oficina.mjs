@@ -290,6 +290,12 @@ export const POSPONER_ENCUENTRO_MS = 15 * 60_000
 export function pospuestos(despues = new Map(), ahora = Date.now()) {
   return new Set([...despues].filter(([, hasta]) => hasta > ahora).map(([clave]) => clave))
 }
+// Un mismo agente te para una sola vez cada tanto: si tiene más cosas, te lo dice en el globo y las ves en su charla
+// (así el globo no vuelve a aparecer enseguida con otra cosa y otros botones). ultimos: Map id → cuándo te paró.
+export const ENTRE_ENCUENTROS_MS = 10 * 60_000
+export function puedenPararte(cercanos = [], ultimos = new Map(), ahora = Date.now()) {
+  return cercanos.filter(id => !(ahora - (ultimos.get(id) ?? -Infinity) < ENTRE_ENCUENTROS_MS))
+}
 export function primerEncuentro(cercanos = [], datos = {}, descartados = new Set()) {
   for (const id of cercanos) {
     const e = encuentroCon(id, datos, descartados)
