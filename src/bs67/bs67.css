@@ -40,6 +40,8 @@
 .bs67-lanzador .maria-mascot-art { width: 58px; transition: transform .2s; }
 .bs67-lanzador:hover .maria-mascot-art, .bs67-lanzador:focus-visible .maria-mascot-art { transform: translateY(-3px); }
 .bs67-lanzador span { padding: var(--esp-4) var(--esp-8); border-radius: var(--radius); background: var(--b-acento); color: var(--b-acento-texto); font-size: var(--letra-11); font-weight: 700; letter-spacing: .08em; }
+/* Con el panel de un agente abierto (Oficina) el robot tapaba el botón «Enviar» de la charla. */
+body:has(.oficina-panel) .bs67-lanzador { display: none; }
 .bs67-lanzador:focus-visible { outline: 2px solid var(--b-acento); outline-offset: 4px; border-radius: var(--radius); }
 
 /* Panel: menú de charlas a la izquierda y la charla a la derecha */

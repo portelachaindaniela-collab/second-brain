@@ -17,6 +17,7 @@ import MisCosas from './screens/MisCosas.jsx'
 import { puedeMandarDesdeAca, mandarAlAbrir, mandarMiUbicacion } from './miUbicacion.js'
 import Login from './Login.jsx'
 import BS67 from './bs67/BS67.jsx'
+import { leerRecordado, guardarRecordado } from './recordar.mjs'
 import MailCalendario from './screens/MailCalendario.jsx'
 import VisorArchivo from './screens/VisorArchivo.jsx'
 import Inicio from './Inicio.jsx'
@@ -33,15 +34,15 @@ export default function App() {
   const [session, setSession] = useState(undefined)
   // App elegida en el inicio: null muestra las dos (BS67 y UP).
   // Al volver de conectar una red (up-linkedin redirige con ?up_redes=...) se entra directo a UP.
-  const [app, setApp] = useState(() => (new URLSearchParams(window.location.search).has('up_redes') ? 'up' : null))
-  const [pantalla, setPantalla] = useState('hoy')
-  const [proyectoId, setProyectoId] = useState(null)
+  const [app, setApp] = useState(() => (new URLSearchParams(window.location.search).has('up_redes') ? 'up' : leerRecordado('app', null)))
+  const [pantalla, setPantalla] = useState(() => leerRecordado('pantalla', 'hoy'))
+  const [proyectoId, setProyectoId] = useState(() => leerRecordado('proyecto', null))
   const [hojaProyecto, setHojaProyecto] = useState('resumen')
-  const [pantallaWebId, setPantallaWebId] = useState(null)
+  const [pantallaWebId, setPantallaWebId] = useState(() => leerRecordado('pantallaWeb', null))
   const [pantallaOrigen, setPantallaOrigen] = useState('hoy')
-  const [mailId, setMailId] = useState(null)
+  const [mailId, setMailId] = useState(() => leerRecordado('mail', null))
   const [mailOrigen, setMailOrigen] = useState('hoy')
-  const [mailCalTab, setMailCalTab] = useState('calendario')
+  const [mailCalTab, setMailCalTab] = useState(() => leerRecordado('mailCalTab', 'calendario'))
   const [htmlLocal, setHtmlLocal] = useState(null)
   const htmlInput = useRef(null)
   const creandoRef = useRef(false)
@@ -63,6 +64,11 @@ export default function App() {
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [pantallasVisitadas, setPantallasVisitadas] = useState(() => new Set(['hoy']))
 
+  // Al actualizar la página vuelve a la misma pantalla, no al inicio.
+  useEffect(() => {
+    guardarRecordado('app', app); guardarRecordado('pantalla', pantalla); guardarRecordado('proyecto', proyectoId)
+    guardarRecordado('pantallaWeb', pantallaWebId); guardarRecordado('mail', mailId); guardarRecordado('mailCalTab', mailCalTab)
+  }, [app, pantalla, proyectoId, pantallaWebId, mailId, mailCalTab])
   useEffect(() => { setPantallasVisitadas(prev => prev.has(pantalla) ? prev : new Set(prev).add(pantalla)) }, [pantalla])
   // En el celular, si está activado en Mis cosas, SB manda su ubicación cada vez que se abre. Si falla no molesta:
   // la próxima vez que se abra lo vuelve a intentar.

@@ -8,6 +8,7 @@ import Ficha from './Ficha.jsx'
 import Agentes from './Agentes.jsx'
 import Redes from './Redes.jsx'
 import BS67 from '../bs67/BS67.jsx'
+import { leerRecordado, guardarRecordado } from '../recordar.mjs'
 
 const PANTALLAS = [
   { id: 'hoy', label: 'Hoy' },
@@ -25,7 +26,8 @@ function fechaConAnio() {
 }
 
 export default function UpApp({ email, volver }) {
-  const [pantalla, setPantalla] = useState(() => (new URLSearchParams(window.location.search).has('up_redes') ? 'redes' : 'hoy'))
+  const [pantalla, setPantalla] = useState(() => (new URLSearchParams(window.location.search).has('up_redes') ? 'redes' : leerRecordado('up:pantalla', 'hoy')))
+  useEffect(() => { guardarRecordado('up:pantalla', pantalla) }, [pantalla])
   const [cuentas, setCuentas] = useState({})
   const [version, setVersion] = useState(0) // sube cuando BS67 cambia algo, para recargar la pantalla
   const [foco, setFoco] = useState(null) // { fecha, red, calendarioId } que abre la mesa de trabajo en Redes

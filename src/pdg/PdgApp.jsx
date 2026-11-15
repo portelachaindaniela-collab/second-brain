@@ -6,6 +6,7 @@ import Cuentas from './Cuentas.jsx'
 import Marketing from './Marketing.jsx'
 import Manual from './Manual.jsx'
 import BS67 from '../bs67/BS67.jsx'
+import { leerRecordado, guardarRecordado } from '../recordar.mjs'
 
 const PANTALLAS = [
   { id: 'tablero', label: 'Tablero' },
@@ -16,7 +17,8 @@ const PANTALLAS = [
 
 // PDG comercial: el departamento de ventas y marketing de Point Data Global dentro de Second Brain.
 export default function PdgApp({ email, volver }) {
-  const [pantalla, setPantalla] = useState('tablero')
+  const [pantalla, setPantalla] = useState(() => leerRecordado('pdg:pantalla', 'tablero'))
+  useEffect(() => { guardarRecordado('pdg:pantalla', pantalla) }, [pantalla])
   const [cuentas, setCuentas] = useState(null)
   const [trabajos, setTrabajos] = useState([])
   const [agentes, setAgentes] = useState([])
