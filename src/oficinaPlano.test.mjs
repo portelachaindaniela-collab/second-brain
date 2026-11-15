@@ -235,7 +235,7 @@ test('Femina tiene su oficina en la fila ejecutiva, entre la de María y la de D
   assert.ok(Math.abs(f.x0 - maria.x1) < 1e-9 && Math.abs(f.x1 - DIRECCION.x0) < 1e-9, 'pegada a las dos')
   assert.ok(f.y1 <= EJECUTIVO.y1)
   assert.equal(alturaPiso(f.sentado.x, f.sentado.y), EJECUTIVO.tarima)
-  assert.ok(f.escritorio.x - 0.82 > f.x0 && f.escritorio.x + 0.82 < f.puerta.x - 0.5)
+  assert.ok(f.escritorio.x - f.mesa.a > f.x0 && f.escritorio.x + f.mesa.a < f.puerta.x - 0.5)
   recto(f.salida)
   assert.ok(maria.escritorio.x + 0.82 < maria.x1 - 2.6, 'el escritorio de María no pisa su zona de estar')
   assert.ok((maria.x1 - maria.x0) * (maria.y1 - maria.y0) > (f.x1 - f.x0) * (f.y1 - f.y0))

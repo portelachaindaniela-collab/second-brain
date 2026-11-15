@@ -180,7 +180,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
             if (of.userData.luz) luzMaria = of.userData.luz
             construidas.add(lugar.oficina.id)
           }
-          mueble = crearEscritorio(lugar.escritorio.x, lugar.escritorio.y, lugar.mira, { ejecutivo: lugar.jefa, decoracion: i })
+          mueble = crearEscritorio(lugar.escritorio.x, lugar.escritorio.y, lugar.mira, { ejecutivo: lugar.jefa, decoracion: i, mesa: lugar.mesa, completo: lugar.oficina.id === 'femina' })
         } else mueble = crearPuestoMesa(lugar.sentado.x, lugar.sentado.y, lugar.mira, COLOR_PUESTO[e])
         mueble.grupo.position.y = alturaPiso(lugar.sentado.x, lugar.sentado.y)
         mueble.sentado = { x: lugar.sentado.x, y: 0.08, z: lugar.sentado.y }
