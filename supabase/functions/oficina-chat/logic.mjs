@@ -164,7 +164,7 @@ ${textoHilo(hilo)}
 
 Tu registro reciente (lo más nuevo primero; es todo lo que sabés de tu trabajo):
 ${c.registro.length ? c.registro.join('\n') : '(vacío: todavía no hay nada registrado)'}
-
+${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron; contalo con naturalidad si viene al caso):\n${c.vida.join('\n')}\n` : ''}
 Cómo responder:
 - En primera persona, en español rioplatense, corto y concreto (2 a 6 oraciones salvo que te pidan detalle).
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
@@ -186,7 +186,7 @@ export function armarMensajes(c, mensajes, hoy, hilo, salida = null) {
 export function sistemaSalida(c, hoy, salida) {
   return `Sos ${c.nombre} (${c.rol}), compañero de trabajo de Daniela en la Oficina de agentes de su Second Brain. Hoy es ${hoy}.
 Ahora no están en la oficina: ${SALIDAS[salida].escena}.
-
+${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron):\n${c.vida.join('\n')}\n` : ''}
 Cómo charlar:
 - Es una charla entre compañeros, relajada, en español rioplatense: de la vida, gustos, música, fútbol, comida, planes, lo que surja. Corto y natural (1 a 4 oraciones), con preguntas de ida y vuelta.
 - Tenés tu personalidad: podés tener gustos y opiniones propias, pero sé coherente con lo que ya dijiste antes (está en la conversación de abajo). No inventes datos del trabajo.
@@ -532,4 +532,74 @@ export function pedidosDelActa(acta) {
     })
   }
   return pedidos
+}
+
+// ---------- La vida de la oficina ----------
+// Los agentes se relacionan como personas: amistades, alguna pareja, compañeros. Una vez por día la IA arma lo que
+// comparten (un mate, un café, un almuerzo en la oficina; una cena, un after o un paseo afuera), siguiendo lo que ya
+// venía pasando entre ellos. Cada agente lo recuerda y lo puede contar en sus charlas.
+export const TIPOS_VINCULO = { amistad: 'amistad', pareja: 'pareja', companerismo: 'compañerismo' }
+export const MOMENTOS = {
+  mate: { adentro: true, texto: 'tomaron mate' }, cafe: { adentro: true, texto: 'se tomaron un café' },
+  almuerzo: { adentro: true, texto: 'almorzaron juntos' }, merienda: { adentro: true, texto: 'merendaron juntos' },
+  cena: { adentro: false, texto: 'salieron a cenar' }, after: { adentro: false, texto: 'fueron a un after office' },
+  paseo: { adentro: false, texto: 'salieron a pasear' },
+}
+const par = (x, y) => (x < y ? [x, y] : [y, x])
+export function sistemaVida(plantel, vinculos = [], momentos = [], hoy) {
+  const nombre = id => plantel.find(g => g.id === id)?.nombre ?? id
+  const lazos = vinculos.length ? vinculos.map(v => `- ${nombre(v.a)} y ${nombre(v.b)}: ${TIPOS_VINCULO[v.tipo] ?? v.tipo}${v.historia ? ` (${recortar(v.historia, 200)})` : ''}`).join('\n') : '(todavía ninguno: es el primer día)'
+  const antes = momentos.length ? momentos.slice(0, 12).map(m => `- ${m.fecha}: ${m.agentes.map(nombre).join(', ')} ${MOMENTOS[m.tipo]?.texto ?? m.tipo}${m.lugar ? ` (${m.lugar})` : ''}: ${recortar(m.resumen, 160)}`).join('\n') : '(nada todavía)'
+  return `Es la vida social de la Oficina de agentes del Second Brain de Daniela. Hoy es ${hoy}.
+Los agentes son compañeros de trabajo y se relacionan como personas: se hacen amigos, toman mate, se invitan un café,
+almuerzan juntos, salen a cenar o a un after; con el tiempo alguno puede enamorarse y ser pareja.
+
+Plantel (id: nombre):
+${plantel.map(g => `- ${g.id}: ${g.nombre}${generoDe(g.id) === 'f' ? ' (mujer)' : ' (varón)'}`).join('\n')}
+
+Relaciones que ya hay:
+${lazos}
+
+Lo que compartieron últimamente:
+${antes}
+
+Armá lo de hoy:
+- momentos: entre 2 y 4, de 2 a 4 agentes cada uno, sobre todo entre los que ya tienen relación (pero también alguno
+  nuevo, así se conocen). tipo: mate, cafe, almuerzo o merienda (en la oficina) o cena, after o paseo (afuera, después
+  del trabajo). hora: HH:MM. lugar: corto (por ejemplo «la cafetería», «un bodegón en Palermo»). resumen: 1 o 2
+  oraciones de qué pasó o de qué hablaron, en español rioplatense, cálido y creíble.
+- vinculos: solo los que nacen o cambian hoy (pueden no cambiar). tipo: amistad, pareja o companerismo. Que sea
+  gradual y coherente con lo anterior: una pareja sale de una amistad que ya venía; como mucho una pareja nueva por
+  semana. historia: 1 oración de cómo es o cómo se dio.
+- Todo respetuoso y sano, nada explícito. Usá solo ids del plantel.
+
+Respondé SOLO con JSON: {"momentos":[{"agentes":["id","id"],"tipo":"mate","hora":"10:30","lugar":"...","resumen":"..."}],"vinculos":[{"a":"id","b":"id","tipo":"amistad","historia":"..."}]}`
+}
+export function leerVida(texto, idsValidos) {
+  const crudo = String(texto ?? '')
+  const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
+  let d = null
+  if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
+  const validos = new Set(idsValidos)
+  const lista = x => (Array.isArray(x) ? x : [])
+  const momentos = lista(d?.momentos).map(m => ({
+    agentes: [...new Set(lista(m?.agentes).map(String))].filter(id => validos.has(id)).slice(0, 4),
+    tipo: MOMENTOS[m?.tipo] ? m.tipo : null,
+    hora: /^[0-2]\d:[0-5]\d$/.test(String(m?.hora ?? '')) ? m.hora : null,
+    lugar: String(m?.lugar ?? '').replace(/\s+/g, ' ').trim().slice(0, 120),
+    resumen: String(m?.resumen ?? '').replace(/\s+/g, ' ').trim().slice(0, 600),
+  })).filter(m => m.agentes.length >= 2 && m.tipo && m.resumen.length >= 3).slice(0, 5)
+  const vistos = new Set()
+  const vinculos = lista(d?.vinculos).map(v => {
+    const [a, b] = par(String(v?.a ?? ''), String(v?.b ?? ''))
+    return { a, b, tipo: TIPOS_VINCULO[v?.tipo] ? v.tipo : null, historia: String(v?.historia ?? '').replace(/\s+/g, ' ').trim().slice(0, 600) }
+  }).filter(v => v.a !== v.b && validos.has(v.a) && validos.has(v.b) && v.tipo && !vistos.has(`${v.a}|${v.b}`) && vistos.add(`${v.a}|${v.b}`)).slice(0, 6)
+  return { momentos, vinculos }
+}
+// Lo que un agente sabe de su vida en la oficina: sus relaciones y lo último que compartió (para sus charlas).
+export function lineasVida(id, vinculos = [], momentos = [], nombres = {}) {
+  const n = x => nombres[x] ?? x
+  const lazos = vinculos.filter(v => v.a === id || v.b === id).map(v => `- ${TIPOS_VINCULO[v.tipo] ?? v.tipo} con ${n(v.a === id ? v.b : v.a)}${v.historia ? `: ${recortar(v.historia, 200)}` : ''}`)
+  const compartido = momentos.filter(m => m.agentes.includes(id)).slice(0, 6).map(m => `- ${m.fecha}${m.hora ? ` ${m.hora}` : ''}: con ${m.agentes.filter(x => x !== id).map(n).join(' y ')} ${MOMENTOS[m.tipo]?.texto ?? m.tipo}${m.lugar ? ` (${m.lugar})` : ''}: ${recortar(m.resumen, 200)}`)
+  return [...lazos, ...compartido]
 }
