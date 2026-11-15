@@ -438,3 +438,18 @@ test('La negativa de «soy tu agente» también cuenta y lo personal va primero 
   assert.deepEqual(primeroElRespaldo(provs, true).map(p => p.nombre), ['openrouter', 'groq', 'gemini'])
   assert.deepEqual(primeroElRespaldo(provs, false).map(p => p.nombre), ['groq', 'openrouter', 'gemini'])
 })
+
+test('Lo que un agente dice que publica en el grupo se publica de verdad y sabe lo que se dijo ahí', async () => {
+  const { extraerGrupo, lineasDelGrupo, sistemaGeneral } = await import('./logic.mjs')
+  assert.deepEqual(extraerGrupo('Listo, ahí lo puse.\nGRUPO: «Sí, estoy enamorada 💕»'), { texto: 'Listo, ahí lo puse.', grupo: ['Sí, estoy enamorada 💕'] })
+  assert.deepEqual(extraerGrupo('Nada para el grupo.'), { texto: 'Nada para el grupo.', grupo: [] })
+  const lineas = lineasDelGrupo([{ autor: 'up:noruega', texto: 'Para nada.' }, { autor: 'daniela', texto: '¿Estás enamorada?' }], { 'up:noruega': 'Noruega' })
+  assert.deepEqual(lineas, ['- Noruega: Para nada.', '- Daniela: ¿Estás enamorada?'])
+  const c = { ...contexto('up', 'noruega', { chequeos: [] }), grupo: lineas }
+  const p = sistema(c, 'hoy', {})
+  assert.match(p, /Lo último en el chat de toda la oficina/)
+  assert.match(p, /GRUPO: <el mensaje/)
+  const g = sistemaGeneral([{ id: 'up:noruega', nombre: 'Noruega' }], [{ autor: 'daniela', texto: 'hola' }], [], [], 'hoy', [{ agente: 'up:noruega', estado: 'novias' }])
+  assert.match(g, /En privado \(NO se cuenta en este chat/)
+  assert.match(g, /Daniela y Noruega son novias/)
+})

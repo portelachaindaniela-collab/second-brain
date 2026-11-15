@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, primeroElRespaldo, limpiarMarcas, cumpleDe, validarGeneral, sistemaGeneral, leerGeneral } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, primeroElRespaldo, limpiarMarcas, extraerGrupo, lineasDelGrupo, cumpleDe, validarGeneral, sistemaGeneral, leerGeneral } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
@@ -127,10 +127,11 @@ async function general(db: any, body: any) {
   if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
   const r0 = await db.from("oficina_chat_general").insert({ autor: "daniela", texto: v.texto });
   if (r0.error) return json({ error: r0.error.message }, 500);
-  const [gente, g, vin, pub] = await Promise.all([equipos(db), ultimosGeneral(db), db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto").limit(60), publicasDeDaniela(db)]);
+  const [gente, g, vin, pub, cor] = await Promise.all([equipos(db), ultimosGeneral(db), db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto").limit(60), publicasDeDaniela(db), db.from("oficina_corazon").select("agente,estado,saben")]);
+  const privadas = (cor.data || []).filter((x: any) => !(x.saben || []).includes("*"));
   const plantel = [...gente.trabajadores, ...gente.up, ...gente.pdg, ...gente.sistemas];
   try {
-    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaGeneral(plantel, g, vin.data || [], pub, hoyLargo()) }, { role: "user", content: v.texto }], temperature: 0.8, max_tokens: 900 }));
+    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaGeneral(plantel, g, vin.data || [], pub, hoyLargo(), privadas) }, { role: "user", content: v.texto }], temperature: 0.8, max_tokens: 900 }));
     const respuestas = leerGeneral((resultado as any)?.content, plantel.map(x => x.id));
     if (respuestas.length) {
       const r = await db.from("oficina_chat_general").insert(respuestas);
@@ -148,9 +149,9 @@ async function general(db: any, body: any) {
 // de Daniela (Femina, María y Noruega), lo que sabe de sus otras relaciones, el hilo y la conversación guardada.
 async function armarAgente(db: any, equipo: string, clave: string) {
   const id = `${equipo}:${clave}`;
-  const [datos, hilo, historial, social, corazon] = await Promise.all([
+  const [datos, hilo, historial, social, corazon, grupo] = await Promise.all([
     leerDatos(db, equipo, clave), leerHilo(db), conversacionDe(db, id), vidaDe(db, id),
-    db.from("oficina_corazon").select("agente,desde,estado,saben"),
+    db.from("oficina_corazon").select("agente,desde,estado,saben"), ultimosGeneral(db),
   ]);
   // Lo que tiene Daniela con este agente en lo personal (cualquiera, lo elige ella).
   const suya = (corazon?.data || []).find((f: any) => f.agente === id) ?? null;
@@ -161,6 +162,8 @@ async function armarAgente(db: any, equipo: string, clave: string) {
     c.estadoPareja = suya?.estado ?? null;
     // Lo que sabe de las relaciones de Daniela con las otras (solo lo que Daniela eligió que sepa).
     c.sabe = quienSabe(id, corazon?.data || [], Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
+    // Lo último del chat de toda la oficina: así lo que dice acá no contradice lo que se dijo ahí.
+    c.grupo = lineasDelGrupo(grupo, Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
   }
   return { c, hilo, historial };
 }
@@ -454,13 +457,19 @@ Deno.serve(async (req: Request) => {
     const personal = Boolean(ELLAS.includes(id) || c.pareja || v.salida);
     const { resultado, ia } = await conRespaldo(primeroElRespaldo(provs, personal), (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo, v.salida), temperature: v.salida ? 0.8 : 0.4, max_tokens: 900 }));
     const { texto: sinPareja, pareja } = extraerPareja(limpiarMarcas((resultado as any)?.content));
-    const { texto, solicitudes: pedidos } = extraerSolicitudes(sinPareja, id);
+    const { texto: sinGrupo, grupo } = extraerGrupo(sinPareja);
+    const { texto, solicitudes: pedidos } = extraerSolicitudes(sinGrupo, id);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);
     if (pareja !== null && ELLAS.includes(id)) await cambiarPareja(db, id, pareja);
+    // Lo que dijo que publicaba en el chat de la oficina, se publica de verdad, con su nombre.
+    if (grupo.length) {
+      const r = await db.from("oficina_chat_general").insert(grupo.map(t => ({ autor: id, texto: t })));
+      if (r.error) console.error("oficina-chat: no se pudo publicar en el chat de la oficina", r.error.message);
+    }
     await guardarConversacion(db, [{ agente: id, de: "daniela", texto: v.mensajes.at(-1).content, lugar: v.lugar, salida: v.salida }, { agente: id, de: "agente", texto, lugar: v.lugar, salida: v.salida }]);
     // Fuera de la oficina no hay pedidos: se charla y nada más.
     const { solicitudes, internas } = v.salida ? { solicitudes: [], internas: [] } : await derivar(db, pedidos);
-    return json({ texto, solicitudes, internas, ia, pareja });
+    return json({ texto, solicitudes, internas, ia, pareja, grupo });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
     return json({ error: (e as Error).message }, 500);
