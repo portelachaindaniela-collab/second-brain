@@ -586,3 +586,27 @@ export function quienEntra(agentes = [], ultima = 0, cuantas = 0, ahora = Date.n
   const ellas = ELLAS.filter(id => agentes.some(a => a.id === id && a.estado !== 'pausado'))
   return ellas.length ? ellas[Math.floor(azar() * ellas.length) % ellas.length] : null
 }
+
+// ---------- Comunicados oficiales ----------
+// Lo oficial de la oficina, en una sola lista (lo más nuevo primero): lo que decidís o anunciás vos, lo que sale de las
+// reuniones, las noticias del día y los avisos de los agentes (lo que terminaron y los problemas).
+// tipo: 'tuyo' | 'reunion' | 'noticia' | 'aviso'.
+export const TIPOS_COMUNICADO = { tuyo: 'Tuyos', reunion: 'De reuniones', noticia: 'Noticias', aviso: 'Avisos' }
+const ESTADO_DECIDIDO = { aprobada: 'Aprobaste', rechazada: 'Rechazaste', hecha: 'Quedó hecho' }
+export function comunicados({ general = [], solicitudes = [], actas = [], tareas = [], corazon = [], agentes = [] } = {}, ahora = Date.now(), max = 80) {
+  const nombre = id => String(agentes.find(a => a.id === id)?.nombre ?? id).split(' (')[0]
+  const lista = []
+  for (const m of general) {
+    if (m.tipo === 'comunicado') lista.push({ id: `g${m.id}`, tipo: 'tuyo', fecha: m.creado, titulo: 'Comunicado tuyo', texto: m.texto })
+    else if (m.tipo === 'noticia') lista.push({ id: `g${m.id}`, tipo: 'noticia', fecha: m.creado, titulo: nombre(m.autor), texto: m.texto })
+  }
+  for (const x of solicitudes) if (ESTADO_DECIDIDO[x.estado] && x.decidida) lista.push({ id: `s${x.id}`, tipo: 'tuyo', fecha: x.decidida, titulo: `${ESTADO_DECIDIDO[x.estado]}: «${x.titulo}»`, texto: `Lo pidió ${nombre(x.agente)}.${x.nota ? ` Tu nota: ${x.nota}` : ''}` })
+  for (const c of corazon) if ((c.saben || []).includes('*') && c.desde) lista.push({ id: `c${c.agente}`, tipo: 'tuyo', fecha: c.desde, titulo: `Es oficial: vos y ${nombre(c.agente)}`, texto: RELACIONES_CON_VOS.find(([v]) => v === c.estado)?.[1] ?? 'Noviazgo' })
+  for (const a of actas) if (a.fin) {
+    const dec = (a.plan?.decisiones || []).slice(0, 5)
+    lista.push({ id: `a${a.id}`, tipo: 'reunion', fecha: a.fin, titulo: a.titulo || 'Reunión', texto: dec.length ? `Se decidió: ${dec.join('; ')}.` : (a.resumen || '') })
+  }
+  for (const t of tareas) if (t.estado === 'hecha' && t.actualizada) lista.push({ id: `t${t.id}`, tipo: 'aviso', fecha: t.actualizada, titulo: `${nombre(t.responsable)} terminó una tarea`, texto: t.tarea })
+  for (const a of agentes) if (a.estado === 'error') lista.push({ id: `e${a.id}`, tipo: 'aviso', fecha: new Date(ahora).toISOString(), titulo: `${nombre(a.id)} tiene un problema`, texto: a.ahora || 'Revisá su registro.', problema: true })
+  return lista.filter(x => x.fecha && Number.isFinite(Date.parse(x.fecha))).sort((p, q) => Date.parse(q.fecha) - Date.parse(p.fecha)).slice(0, max)
+}

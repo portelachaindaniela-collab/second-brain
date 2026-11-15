@@ -434,3 +434,25 @@ test('el que pidió una reunión aprobada te viene a buscar para arrancarla', as
   assert.match(e.texto, /¿Arrancamos la reunión «Calendario de enero»\?/)
   assert.equal(encuentroCon('up:noruega', { solicitudes: [], pendientes }, new Set([e.clave])).texto, 'Daniela, una cosa: Algo de antes')
 })
+
+test('comunicados: lo tuyo, lo de las reuniones, las noticias y los avisos, lo más nuevo primero', async () => {
+  const { comunicados } = await import('./oficina.mjs')
+  const agentes = [{ id: 'pdg:femina', nombre: 'Femina' }, { id: 'up:noruega', nombre: 'Noruega (madre)' }, { id: 'trabajadores:canillita', nombre: 'Canillita', estado: 'error', ahora: 'no pudo leer los diarios' }]
+  const lista = comunicados({
+    general: [{ id: 1, tipo: 'comunicado', autor: 'daniela', texto: 'Desde hoy, los viernes no hay reuniones.', creado: '2026-11-15T10:00:00Z' },
+      { id: 2, tipo: 'noticia', autor: 'up:noruega', texto: '¡Feliz cumple, Femina! 🎂', creado: '2026-11-15T09:00:00Z' },
+      { id: 3, tipo: 'charla', autor: 'daniela', texto: 'hola', creado: '2026-11-15T11:00:00Z' }],
+    solicitudes: [{ id: 7, agente: 'up:noruega', titulo: 'Calendario de enero', estado: 'aprobada', decidida: '2026-11-14T12:00:00Z' }, { id: 8, agente: 'up:noruega', titulo: 'Otra', estado: 'pendiente' }],
+    actas: [{ id: 4, fin: '2026-11-13T15:00:00Z', titulo: 'Plan de redes', plan: { decisiones: ['Tres posts por semana'] } }],
+    tareas: [{ id: 5, estado: 'hecha', actualizada: '2026-11-12T10:00:00Z', responsable: 'pdg:femina', tarea: 'Buscar 5 cuentas' }],
+    corazon: [{ agente: 'pdg:femina', estado: 'novias', saben: ['*'], desde: '2026-11-10T10:00:00Z' }, { agente: 'up:noruega', estado: 'amantes', saben: [], desde: '2026-11-11T10:00:00Z' }],
+    agentes,
+  }, Date.parse('2026-11-16T00:00:00Z'))
+  assert.deepEqual(lista.map(x => x.tipo), ['aviso', 'tuyo', 'noticia', 'tuyo', 'reunion', 'aviso', 'tuyo'])
+  assert.equal(lista[0].titulo, 'Canillita tiene un problema')
+  assert.equal(lista[2].titulo, 'Noruega')
+  assert.equal(lista[3].titulo, 'Aprobaste: «Calendario de enero»')
+  assert.match(lista[4].texto, /Tres posts por semana/)
+  assert.equal(lista[6].titulo, 'Es oficial: vos y Femina')
+  assert.ok(!lista.some(x => /Noruega/.test(x.titulo) && x.tipo === 'tuyo' && /oficial/.test(x.titulo)), 'lo secreto no es oficial')
+})

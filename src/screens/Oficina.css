@@ -337,3 +337,15 @@
 
 .oficina-acciones { display: inline-flex; gap: var(--esp-8); flex-wrap: wrap; }
 .oficina-chat-cuerpo .oficina-general-msj { max-width: 100%; }
+
+/* Comunicados oficiales */
+.oficina-comunicados { display: flex; flex-direction: column; gap: 10px; }
+.oficina-comunicados-filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+.oficina-comunicados-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: var(--letra-13); }
+.oficina-comunicados-lista li { border-left: 3px solid var(--borde, #888); padding: 4px 10px; }
+.oficina-comunicados-lista li p { margin: 0; }
+.oficina-comunicados-lista li.tipo-tuyo { border-left-color: var(--acento, #d9a441); }
+.oficina-comunicados-lista li.tipo-reunion { border-left-color: #5b8def; }
+.oficina-comunicados-lista li.tipo-noticia { border-left-color: #c66ad6; }
+.oficina-comunicados-lista li.tipo-aviso { border-left-color: #3fa66b; }
+.oficina-comunicados-lista li.es-problema { border-left-color: #d9534f; }

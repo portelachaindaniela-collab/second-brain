@@ -2,7 +2,7 @@ import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, u
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, quienEntra, PRIMERA_ENTRADA_MS, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, ROMANTICOS, RELACIONES_CON_VOS, ROMANCE_CON_VOS, textoConVos, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, sumarVisita, escenaDeVisitas, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { comunicados, TIPOS_COMUNICADO, armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, quienEntra, PRIMERA_ENTRADA_MS, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, ROMANTICOS, RELACIONES_CON_VOS, ROMANCE_CON_VOS, textoConVos, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, sumarVisita, escenaDeVisitas, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { limpiarMarcas } from '../../supabase/functions/_shared/oficina.mjs'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
@@ -59,7 +59,7 @@ async function cargarOficina() {
     leer('Administración', supabase.rpc('oficina_administracion'), []),
     leer('Sistemas', supabase.from('oficina_solicitudes').select('id,agente,titulo,detalle,estado,nota,creada,decidida,accion,origen').order('creada', { ascending: false }).limit(40), []),
     leer('actas', supabase.from('oficina_actas').select('id,modo,inicio,fin,asistentes,mensajes,resumen,titulo,plan').order('fin', { ascending: false }).limit(15), []),
-    leer('tareas', supabase.from('oficina_tareas').select('id,acta_id,tarea,area,responsable,supervisor,vence,estado,presentada').order('vence', { ascending: true, nullsFirst: false }).limit(150), []),
+    leer('tareas', supabase.from('oficina_tareas').select('id,acta_id,tarea,area,responsable,supervisor,vence,estado,presentada,actualizada').order('vence', { ascending: true, nullsFirst: false }).limit(150), []),
     leer('conexiones', supabase.rpc('oficina_conexiones'), []),
     leer('tareas programadas', supabase.rpc('oficina_operador'), []),
     leer('vueltas de Femina', supabase.from('pdg_femina_corridas').select('estado,iniciada_at,resumen,error').order('iniciada_at', { ascending: false }).limit(8), []),
@@ -133,7 +133,8 @@ export default function Oficina() {
     solicitudes={datos?.solicitudes ?? []} actas={datos?.actas ?? []} reuniones={datos?.reuniones ?? []} decidir={async (id, estado, nota, accion) => { await decidirSolicitud(id, estado, nota, accion); await recargar() }}
     tareas={datos?.tareas ?? []} cambiarTarea={async (id, estado) => { await cambiarTarea(id, estado); await recargar() }}
     marcarPresentada={async ids => { await marcarPresentada(ids); await recargar() }}
-    guardarActa={async acta => { try { await guardarActa(acta) } finally { await recargar() } }} />
+    guardarActa={async acta => { try { await guardarActa(acta) } finally { await recargar() } }}
+    publicarComunicado={async texto => { await publicarComunicadoEnBase(texto); await recargar() }} />
 }
 
 // Reunión: una pregunta de Daniela y responden los que tengan algo que decir ({ agente, texto }).
@@ -218,7 +219,7 @@ async function entrarSola(agente) {
 export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now,
   solicitudes = [], actas = [], tareas = [], reuniones = [], decidir = async () => {}, cambiarTarea = async () => {}, marcarPresentada = async () => {}, guardarActa = async () => {},
   vinculos = [], momentos = [], corazon = [], general = [], escribirGeneral = async () => {}, cambiarConVosEnBase = cambiarCorazonEnBase, cambiarSabenEnBase = cambiarSabenDeBase, correrInterna = correrReunionInterna, entrar = entrarSola, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
-  leerConversacion = leerConversacionDeBase, anotarEnConversacion = anotarEnConversacionDeBase }) {
+  leerConversacion = leerConversacionDeBase, anotarEnConversacion = anotarEnConversacionDeBase, publicarComunicado = async () => {} }) {
   const [elegidoId, setElegidoId] = useState(null)
   const [pestana, setPestana] = useState('ahora')
   const [charlas, setCharlas] = useState({})
@@ -577,6 +578,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
             </li>)}</ul>
             : <p className="tenue">Nada pendiente: los agentes no te necesitan por ahora.</p> },
           { id: 'general', titulo: 'Chat de la oficina', contenido: <ChatGeneral mensajes={general} agentes={agentes} escribir={escribirYAclarar} /> },
+          { id: 'comunicados', titulo: 'Comunicados', contenido: <Comunicados lista={comunicados({ general, solicitudes, actas, tareas, corazon, agentes }, ahora)} publicar={publicarComunicado} /> },
           { id: 'ahora', titulo: 'Trabajando ahora', contenido: <ActividadAhora agentes={agentes} abrir={abrir} /> },
           { id: 'mensajes', titulo: 'Mensajes', num: solicitudes.filter(x => x.estado === 'pendiente').length, contenido: <Mensajes solicitudes={solicitudes} agentes={agentes} decidir={decidir} responder={responder} ahora={ahora} /> },
           { id: 'calendario', titulo: 'Calendario', contenido: <CalendarioOficina eventos={eventos} ahora={ahora} /> },
@@ -862,6 +864,42 @@ function LibroOficina({ hojas, hoja, setHoja }) {
         {h.titulo}{h.num > 0 && <span className="oficina-pestana-num" aria-label={`${h.num} esperan tu respuesta`}>{h.num}</span>}
       </button>)}
     </div>
+  </div>
+}
+
+// Comunicados oficiales: lo que decidís o anunciás vos, lo que sale de las reuniones, las noticias y los avisos de los
+// agentes. Lo que publicás acá queda también en el chat de la oficina, así lo saben todos.
+async function publicarComunicadoEnBase(texto) {
+  const { error } = await supabase.from('oficina_chat_general').insert({ autor: 'daniela', texto, tipo: 'comunicado' })
+  if (error) throw new Error(error.message)
+}
+function Comunicados({ lista, publicar }) {
+  const [filtro, setFiltro] = useState('')
+  const [texto, setTexto] = useState('')
+  const [estado, setEstado] = useState('')
+  const enviar = async e => {
+    e.preventDefault()
+    const t = texto.trim()
+    if (!t || estado === 'enviando') return
+    setEstado('enviando')
+    try { await publicar(t); setTexto(''); setEstado('') } catch (err) { setEstado(`No se pudo publicar: ${err.message}`) }
+  }
+  const vistos = filtro ? lista.filter(x => x.tipo === filtro) : lista
+  return <div className="oficina-comunicados">
+    <form className="oficina-charla-form" onSubmit={enviar}>
+      <textarea rows={2} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribí un comunicado oficial para toda la oficina…" aria-label="Comunicado oficial" disabled={estado === 'enviando'} />
+      <button type="submit" className="btn btn-primary btn-sm" disabled={estado === 'enviando' || !texto.trim()}>Publicar</button>
+    </form>
+    {estado && estado !== 'enviando' && <p role="alert" className="feedback-error">{estado}</p>}
+    <div className="oficina-comunicados-filtros" role="group" aria-label="Qué comunicados ver">
+      {[['', 'Todos'], ...Object.entries(TIPOS_COMUNICADO)].map(([v, t]) => <button key={v} type="button" className={`btn btn-sm${filtro === v ? ' btn-primary' : ''}`} aria-pressed={filtro === v} onClick={() => setFiltro(v)}>{t}</button>)}
+    </div>
+    {vistos.length
+      ? <ul className="oficina-comunicados-lista">{vistos.map(x => <li key={x.id} className={`tipo-${x.tipo}${x.problema ? ' es-problema' : ''}`}>
+        <p className="oficina-comunicado-cabeza"><strong>{x.titulo}</strong> <span className="tenue">· {TIPOS_COMUNICADO[x.tipo]} · {haceCuanto(x.fecha)}</span></p>
+        {x.texto && <p>{x.texto}</p>}
+      </li>)}</ul>
+      : <p className="tenue">Todavía no hay comunicados{filtro ? ' de este tipo' : ''}.</p>}
   </div>
 }
 
