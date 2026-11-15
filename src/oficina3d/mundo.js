@@ -504,6 +504,55 @@ function globo(x, z) {
   return g
 }
 
+// Estantes de pared (dos tablas con ménsulas) llenos de cosas de oficina: biblioratos, libros, cajas de archivo y alguna
+// plantita. x: la cara de la pared; lado: 1 si los estantes salen hacia +x (pared izquierda), -1 si hacia -x (derecha).
+// Van colgados (arriba de la altura de la cabeza), así que no ocupan lugar en el piso.
+const TONOS_OFICINA = ['#2f5d8a', '#c8323f', '#3fa66b', '#d9a441', '#6b4f8a', '#e9e2d2', '#7f98a8', '#b98a74']
+function estantesPared(x, z0, z1, lado, semilla = 1) {
+  const g = new THREE.Group()
+  const fondo = 0.26
+  const xa = Math.min(x, x + lado * fondo), xb = Math.max(x, x + lado * fondo)
+  let n = semilla
+  const azar = () => { n = (n * 16807) % 2147483647; return n / 2147483647 }
+  for (const y of [1.38, 1.8]) {
+    g.add(caja(xa, xb, y - 0.03, y, z0, z1, mat(COLORES.madera), { r: 0.01 }))
+    for (const z of [z0 + 0.15, z1 - 0.15]) g.add(caja(x + lado * 0.005, x + lado * 0.2, y - 0.16, y - 0.03, z - 0.015, z + 0.015, mat(COLORES.gris)))
+    let z = z0 + 0.08
+    while (z < z1 - 0.12) {
+      const r = azar()
+      if (r < 0.12 && z1 - z > 0.35) { // caja de archivo
+        g.add(caja(xa + 0.02, xb - 0.02, y, y + 0.2, z, z + 0.3, mat('#d8c7a8'), { r: 0.01 }))
+        g.add(caja(xa + 0.02, xb - 0.02, y + 0.08, y + 0.12, z + 0.11, z + 0.19, mat(COLORES.blanco)))
+        z += 0.36
+      } else if (r < 0.2 && z1 - z > 0.25) { // plantita
+        const cx = (xa + xb) / 2
+        g.add(cilindro(cx, z + 0.1, 0.06, y, y + 0.1, mat(COLORES.maceta), 0.07))
+        const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.09, 1), mat(COLORES.hoja, { flatShading: true }))
+        h.position.set(cx, y + 0.18, z + 0.1)
+        g.add(h)
+        z += 0.26
+      } else { // biblioratos y libros, de a tandas del mismo color
+        const tanda = 2 + Math.floor(azar() * 4), color = TONOS_OFICINA[Math.floor(azar() * TONOS_OFICINA.length)]
+        for (let k = 0; k < tanda && z < z1 - 0.12; k++) {
+          const ancho = 0.05 + azar() * 0.03, alto = 0.22 + azar() * 0.08
+          g.add(caja(xa + 0.03, xb - 0.03, y, y + alto, z, z + ancho, mat(color), { sombra: false }))
+          z += ancho + 0.006
+        }
+        z += 0.04
+      }
+    }
+  }
+  return g
+}
+// Sobre el mueble bajo del rincón: una impresora chica y un portabiblioratos.
+function sobreMueble(x0, x1, z0, z1, alto) {
+  const g = new THREE.Group()
+  g.add(caja(x0 + 0.04, x0 + 0.34, alto, alto + 0.16, z0 + 0.04, z1 - 0.04, mat(COLORES.blanco), { r: 0.02 }))
+  g.add(caja(x0 + 0.08, x0 + 0.3, alto + 0.16, alto + 0.17, z0 + 0.08, z1 - 0.08, mat(COLORES.negro)))
+  for (let k = 0; k < 3; k++) g.add(caja(x0 + 0.38 + k * 0.06, x0 + 0.43 + k * 0.06, alto, alto + 0.26, z0 + 0.06, z1 - 0.06, mat(TONOS_OFICINA[k * 2])))
+  return g
+}
+
 // Oficina (de uno, compartida o la de María): paredes, frente de vidrio con puerta, alfombra, decoración y, si es de un
 // grupo, su cartel. o: el `oficina` de oficinaPlano.mjs.
 export function crearOficina(o) {
@@ -536,6 +585,11 @@ export function crearOficina(o) {
       g.add(planta(o.x1 - 0.45, 0.45, 0.8))
       if (o.sofa) g.add(sofaPared(o.sofa.x0, o.sofa.x1, o.sofa.y0 - o.y0, o.sofa.y1 - o.y0, o.sofa.plazas))
       g.add(caja(o.x0 + 0.15, o.x0 + 0.75, 0, 0.9, 0.1, 0.5, mat(COLORES.blanco), { r: 0.03 }))
+      g.add(sobreMueble(o.x0 + 0.15, o.x0 + 0.75, 0.1, 0.5, 0.9))
+      // Estantes en la pared izquierda y, arriba del sofá, en la derecha.
+      const semilla = Math.round(o.x0 * 97) + 7
+      if (D - 2.2 > 0.8) g.add(estantesPared(o.x0 + 0.08, 1.1, D - 1.1, 1, semilla))
+      if (o.sofa) g.add(estantesPared(o.x1 - 0.08, o.sofa.y0 - o.y0, o.sofa.y1 - o.y0, -1, semilla + 31))
       // Cuadros y objeto de pared en la pared del fondo, desde el centro hacia los costados.
       const piezas = [...estilo.cuadros.map(t => ({ t, w: 0.86, h: 0.64 })), ...(estilo.objeto === 'tablero' || estilo.objeto === 'corcho' ? [{ t: estilo.objeto, w: 1.1, h: 0.72 }] : [])]
       const libre = o.y0 === 0 ? 1.05 : 0.1
@@ -569,6 +623,9 @@ export function crearOficina(o) {
     g.add(planta(o.x1 - 0.5, 0.5, 1.4))
     g.add(planta(zona - 0.3, 0.5, 1.1))
     g.add(mesaChica(o.x0 + MESA_CHICA_MARIA.dx, MESA_CHICA_MARIA.dy, 3))
+    // Estantes con libros y biblioratos en las dos paredes de los costados.
+    g.add(estantesPared(o.x0 + 0.08, 1.0, D - 1.0, 1, 4242))
+    g.add(estantesPared(o.x1 - 0.08, 3.9, D - 0.9, -1, 777))
     g.add(cuadro(zona + 0.6, 0, COLORES.dorado))
     const cartel = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.36), new THREE.MeshStandardMaterial({ map: textoTextura('Dirección', { fondo: '#5c3f2c', color: '#d9a441', tam: 66 }), transparent: true }))
     cartel.position.set(o.puerta.x + 1.6, 1.85, D + 0.06)
