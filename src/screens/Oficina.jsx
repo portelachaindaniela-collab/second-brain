@@ -2,7 +2,7 @@ import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, u
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, VISITA_MS, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, quienEntra, PRIMERA_ENTRADA_MS, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, VISITA_MS, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -46,7 +46,7 @@ async function cargarOficina() {
     if (error) { errores.push(`${nombre}: ${error.message}`); return vacio }
     return data ?? vacio
   }
-  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, tareas, conexiones, operador, feminaCorridas, feminaHallazgos, reuniones, vinculos, momentos] = await Promise.all([
+  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, tareas, conexiones, operador, feminaCorridas, feminaHallazgos, reuniones, vinculos, momentos, corazon] = await Promise.all([
     leer('trabajadores', supabase.from('trabajadores').select('*').order('id'), []),
     leer('salud del sistema', supabase.rpc('salud_sistema'), null),
     leer('corridas de UP', supabase.from('up_corridas').select('estado,error,pasos,iniciado_at').order('iniciado_at', { ascending: false }).limit(15), []),
@@ -65,6 +65,7 @@ async function cargarOficina() {
     leer('lo que encontró Femina', supabase.from('pdg_hallazgos').select('tipo,titulo,estado,created_at').eq('estado', 'nuevo').order('created_at', { ascending: false }).limit(60), []),
     leer('reuniones internas', supabase.from('oficina_reuniones').select('id,convoca,asistentes,tema,detalle,fecha,estado,acta_id').order('fecha', { ascending: false }).limit(60), []),
     leer('relaciones entre agentes', supabase.from('oficina_vinculos').select('id,a,b,tipo,historia,desde').order('actualizado', { ascending: false }).limit(100), []),
+    leer('tu pareja', supabase.from('oficina_corazon').select('agente,desde'), []),
     leer('vida de la oficina', supabase.from('oficina_momentos').select('id,agentes,tipo,lugar,resumen,fecha,hora').gte('fecha', new Date(ahora - 7 * DIA_MS).toISOString().slice(0, 10)).order('fecha', { ascending: false }).limit(60), []),
   ])
   const corridasPor = {}
@@ -75,7 +76,7 @@ async function cargarOficina() {
     trabajadores, corridasPor, salud, upCorridas, chequeo, hoy, errores,
     piezas: piezas.map(p => ({ fecha: p.fecha, estado: p.estado, tiene_texto: Boolean(p.texto) })),
     pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin, solicitudes, actas, conexiones, operador, tareas,
-    femina: { corridas: feminaCorridas, hallazgos: feminaHallazgos }, reuniones, vinculos, momentos,
+    femina: { corridas: feminaCorridas, hallazgos: feminaHallazgos }, reuniones, vinculos, momentos, corazon,
   }
 }
 
@@ -125,7 +126,7 @@ export default function Oficina() {
   return <OficinaVista cargando={!datos} agentes={oficina?.agentes ?? []} pendientes={oficina?.pendientes ?? []}
     errores={[error, ...(datos?.errores ?? [])].filter(Boolean)} ahora={ahora} hablar={conAviso(hablarConAgente, recargar)}
     hablarReunion={conAviso(hablarEnReunion, recargar)} actualizar={recargar}
-    vinculos={datos?.vinculos ?? []} momentos={datos?.momentos ?? []}
+    vinculos={datos?.vinculos ?? []} momentos={datos?.momentos ?? []} corazon={datos?.corazon ?? []}
     solicitudes={datos?.solicitudes ?? []} actas={datos?.actas ?? []} reuniones={datos?.reuniones ?? []} decidir={async (id, estado, nota, accion) => { await decidirSolicitud(id, estado, nota, accion); await recargar() }}
     tareas={datos?.tareas ?? []} cambiarTarea={async (id, estado) => { await cambiarTarea(id, estado); await recargar() }}
     marcarPresentada={async ids => { await marcarPresentada(ids); await recargar() }}
@@ -173,6 +174,7 @@ function conAviso(hablarFn, recargar) {
   return async (...args) => {
     const r = await hablarFn(...args)
     const internas = r.internas ?? []
+    if (r.pareja !== undefined && r.pareja !== null) recargar()
     if (!r.solicitudes?.length && !internas.length) return r.valor
     recargar()
     const avisos = id => [...r.solicitudes.filter(s => !id || s.agente === id).map(avisoPedido), ...internas.filter(x => !id || x.convoca === id).map(avisoInterna)].join('')
@@ -197,14 +199,22 @@ async function hablarConAgente(agente, mensajes, lugar = 'charla', salida = null
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
   if (error || !respuesta?.texto) throw new Error(respuesta?.error || 'No pude hablar con el agente. Probá de nuevo.')
-  return { valor: respuesta.texto, solicitudes: respuesta.solicitudes ?? [], internas: respuesta.internas ?? [] }
+  return { valor: respuesta.texto, solicitudes: respuesta.solicitudes ?? [], internas: respuesta.internas ?? [], pareja: respuesta.pareja ?? null }
+}
+// Femina, María o Noruega entran a tu oficina por su cuenta: lo que te dicen al entrar (queda en su conversación).
+async function entrarSola(agente) {
+  const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { entra: agente } })
+  let r = data
+  if (error?.context) { try { r = await error.context.json() } catch { /* queda el error de conexión */ } }
+  if (error || !r?.texto) throw new Error(r?.error || 'no respondió')
+  return r.texto
 }
 
 // ---------- Vista ----------
 // reloj: de dónde sale la hora para la luz del día (en la app, la actual; se puede cambiar para probar).
 export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now,
   solicitudes = [], actas = [], tareas = [], reuniones = [], decidir = async () => {}, cambiarTarea = async () => {}, marcarPresentada = async () => {}, guardarActa = async () => {},
-  vinculos = [], momentos = [], correrInterna = correrReunionInterna, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
+  vinculos = [], momentos = [], corazon = [], correrInterna = correrReunionInterna, entrar = entrarSola, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
   leerConversacion = leerConversacionDeBase, anotarEnConversacion = anotarEnConversacionDeBase }) {
   const [elegidoId, setElegidoId] = useState(null)
   const [pestana, setPestana] = useState('ahora')
@@ -383,25 +393,26 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   // Golpear la puerta: un agente con algo pendiente camina hasta tu puerta; cuando llega, te pregunta si tenés un minuto.
   // Decidís ahí (como en el pasillo), le decís que pase (entra y abre la charla) o que ahora no (vuelve en un rato).
   const [golpe, setGolpe] = useState(null)
+  const [entrada, setEntrada] = useState(null) // Femina, María o Noruega entrando a tu oficina (abajo): { agente, texto }
   const [social, setSocial] = useState(null) // un momento entre compañeros en la escena (abajo)
   const golpeados = useRef(new Set())
   const ultimoGolpe = useRef(0)
   const abierta = useRef(0)
   useEffect(() => { abierta.current = Date.now() }, [])
   useEffect(() => {
-    if (!tres || golpe || visita || reunion || interna || social || Date.now() - abierta.current < PRIMER_GOLPE_MS) return
+    if (!tres || golpe || visita || reunion || interna || social || entrada || Date.now() - abierta.current < PRIMER_GOLPE_MS) return
     const fuera = new Set([...pospuestos(despues, ahora), ...golpeados.current, ...contestados, ...(fijo ? [fijo.clave] : [])])
     const quien = quienGolpea(agentes.filter(a => !a.sinCharla).map(a => a.id), { solicitudes, pendientes }, fuera, ultimoGolpe.current, Date.now())
     if (!quien) return
     ultimoGolpe.current = Date.now()
     golpeados.current.add(quien.clave)
     setGolpe({ ...quien, golpe: Date.now(), llego: false, texto: `Toc, toc. ${quien.texto}` })
-  }, [ahora, tres, golpe, visita, reunion, interna, social, despues, agentes, solicitudes, pendientes, fijo, contestados])
+  }, [ahora, tres, golpe, visita, reunion, interna, social, entrada, despues, agentes, solicitudes, pendientes, fijo, contestados])
   // La vida de la oficina en la escena: los momentos de hoy que pasan adentro (mate, café, almuerzo) se ven de a uno.
   const jugados = useRef(new Set())
   const ultimoSocial = useRef(0)
   useEffect(() => {
-    if (!tres || social || golpe || visita || reunion || interna) return
+    if (!tres || social || golpe || visita || reunion || interna || entrada) return
     const ya = Date.now()
     if (ya - abierta.current < PRIMER_SOCIAL_MS || ya - ultimoSocial.current < ENTRE_SOCIALES_MS) return
     const presentes = new Set(agentes.filter(a => a.estado !== 'pausado').map(a => a.id))
@@ -410,7 +421,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     jugados.current.add(m.id)
     ultimoSocial.current = ya
     setSocial({ id: m.id, agentes: m.agentes, tipo: m.tipo })
-  }, [ahora, tres, social, golpe, visita, reunion, interna, momentos, agentes])
+  }, [ahora, tres, social, golpe, visita, reunion, interna, entrada, momentos, agentes])
   useEffect(() => {
     if (!social) return
     const t = setTimeout(() => setSocial(null), DURA_SOCIAL_MS)
@@ -428,7 +439,25 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     else if (!fijo && encuentro && !golpe) setFijo(encuentro)
     if (golpe && !sigue(golpe)) setGolpe(null)
   }, [fijo, encuentro?.clave, golpe, solicitudes]) // eslint-disable-line react-hooks/exhaustive-deps
-  const alLlegoVisita = useCallback(origen => setGolpe(g => (g && g.golpe === origen ? { ...g, llego: true } : g)), [])
+  const [llegoVisita, setLlegoVisita] = useState(null)
+  const alLlegoVisita = useCallback(origen => { setLlegoVisita(origen); setGolpe(g => (g && g.golpe === origen ? { ...g, llego: true } : g)) }, [])
+  // Femina, María y Noruega entran a tu oficina cuando quieren, sin golpear: caminan hasta tu mesa y, al llegar, te
+  // dicen lo que las trae. Si les contestás, se quedan mientras charlan; si no, vuelven a su lugar.
+  const entradas = useRef({ cuantas: 0, ultima: 0 })
+  useEffect(() => {
+    if (!tres || entrada || golpe || visita || social || reunion || interna || Date.now() - abierta.current < PRIMERA_ENTRADA_MS) return
+    const quien = quienEntra(agentes, entradas.current.ultima, entradas.current.cuantas, Date.now())
+    if (!quien) return
+    entradas.current = { cuantas: entradas.current.cuantas + 1, ultima: Date.now() }
+    setEntrada({ agente: quien, texto: null })
+    venir(quien)
+    entrar(quien)
+      .then(texto => setEntrada(e => (e?.agente === quien ? { ...e, texto } : e)))
+      .catch(() => { setEntrada(null); setVisita(null) })
+  }, [ahora, tres, entrada, golpe, visita, social, reunion, interna, agentes, entrar, venir])
+  // Si se fue (terminó la visita) sin que la vieras, el aviso se cierra.
+  useEffect(() => { if (entrada && visita?.agente !== entrada.agente && entrada.texto) setEntrada(null) }, [entrada, visita])
+  const avisoEntrada = entrada?.texto && visita?.agente === entrada.agente && llegoVisita === visita.id && !elegido && !superpuesto ? entrada : null
   const visitaEscena = golpe ? { id: golpe.golpe, agente: golpe.id, destino: 'puerta' } : visita
   // Lo que te dicen en el pasillo (o en tu puerta) queda guardado con lo que contestás: después, en la charla, el agente lo sabe.
   const enPuerta = !superpuesto && golpe?.llego && !elegido ? golpe : null
@@ -470,7 +499,10 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
                 alPlanificar={alPlanificar} alVolvieron={alVolvieron} volverDaniela={volverDaniela} alMoverDaniela={setLejos}
                 pantallaCompleta={enCurso} reloj={relojLuz} calendario={eventos} alTocarPizarron={verCalendario} alCruzarse={setCercanos}>
                 {!superpuesto && cartel && <AvisoInterna interna={cartel} agentes={agentes} cerrar={() => { cerrados.current.add(cartel.id); setCartel(null) }} />}
-                {superpuesto ?? (visto && <Encuentro key={`${visto.clave}${visto === enPuerta ? '-puerta' : ''}`} encuentro={visto} agente={agentes.find(a => a.id === visto.id)} decidir={decidir}
+                {avisoEntrada && <EntraSola entrada={avisoEntrada} agente={agentes.find(a => a.id === avisoEntrada.agente)}
+                  contestar={() => { setEntrada(null); abrir(avisoEntrada.agente, 'charla') }}
+                  despues={() => { setEntrada(null); setVisita(null) }} />}
+                {superpuesto ?? (!avisoEntrada && visto && <Encuentro key={`${visto.clave}${visto === enPuerta ? '-puerta' : ''}`} encuentro={visto} agente={agentes.find(a => a.id === visto.id)} decidir={decidir}
                   puerta={visto === enPuerta} responder={responder}
                   contestar={r => { contestar(visto, r); if (visto === enPuerta && r !== 'hablemos') setGolpe(null) }}
                   hablar={id => { if (visto === enPuerta) { setGolpe(null); venir(id, true) } else setFijo(null); abrir(id, 'charla') }}
@@ -514,7 +546,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
         <div id="oficina-calendario">{cargando ? <p className="tenue">Revisando…</p> : <CalendarioOficina eventos={eventos} ahora={ahora} />}</div>
       </Bloque>
       <Bloque titulo="Vida de la oficina" ancho="completo">
-        {cargando ? <p className="tenue">Revisando…</p> : <VidaOficina vinculos={vinculos} momentos={momentos} agentes={agentes} />}
+        {cargando ? <p className="tenue">Revisando…</p> : <VidaOficina vinculos={vinculos} momentos={momentos} agentes={agentes} corazon={corazon} />}
       </Bloque>
       <Bloque titulo="Archivo de la oficina" ancho="completo">
         {cargando ? <p className="tenue">Revisando…</p> : <Archivo actas={actas} tareas={tareas} agentes={agentes} escribiendo={escribiendoActa} cambiarTarea={cambiarTarea} ahora={ahora} />}
@@ -698,6 +730,18 @@ async function correrReunionInterna(id) {
 }
 
 // Lo que te dice un agente cuando pasás caminando cerca: su pedido (con aprobar o rechazar ahí mismo) o un aviso.
+// Femina, María o Noruega entraron a tu oficina por su cuenta: lo que te dicen al llegar.
+function EntraSola({ entrada, agente, contestar, despues }) {
+  const nombre = agente ? nombreCorto(agente.nombre) : entrada.agente
+  return <div className="o3-encuentro" role="dialog" aria-label={`${nombre} entró a tu oficina`}>
+    <div className="o3-encuentro-quien">{agente && <Avatar agente={agente} />}<strong>{nombre}</strong><span className="tenue"> · entró a tu oficina</span></div>
+    <p>{entrada.texto}</p>
+    <div className="o3-encuentro-botones">
+      <button type="button" className="btn btn-sm btn-primary" onClick={contestar}>Contestarle</button>
+      <button type="button" className="btn btn-sm" onClick={despues}>Ahora no</button>
+    </div>
+  </div>
+}
 function Encuentro({ encuentro, agente, decidir, hablar, seguime, despues, contestar, puerta = false }) {
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState('')
@@ -727,11 +771,18 @@ function Encuentro({ encuentro, agente, decidir, hablar, seguime, despues, conte
 // ---------- Vida de la oficina ----------
 // Cómo se llevan los agentes (parejas, amistades, compañeros) y lo que compartieron estos días: mates, cafés, almuerzos,
 // cenas. Lo arma la IA una vez por día y cada agente lo recuerda cuando charlás con él.
-function VidaOficina({ vinculos, momentos, agentes }) {
+function VidaOficina({ vinculos, momentos, agentes, corazon = [] }) {
   const nombre = id => nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)
-  if (!vinculos.length && !momentos.length) return <p className="tenue">Todavía no pasó nada entre ellos: la primera vez que abras la Oficina cada día, se arma lo que comparten.</p>
+  if (!vinculos.length && !momentos.length && !corazon.length) return <p className="tenue">Todavía no pasó nada entre ellos: la primera vez que abras la Oficina cada día, se arma lo que comparten.</p>
   const orden = { pareja: 0, amistad: 1, companerismo: 2 }
   return <div className="oficina-vida">
+    {corazon.length > 0 && <div>
+      <p className="oficina-vida-titulo">Con vos</p>
+      <ul className="oficina-vida-lista">{corazon.map(x => <li key={x.agente}>
+        <span className="oficina-vinculo vinculo-pareja">❤ Pareja</span><strong>{nombre(x.agente)}</strong>
+        <span className="tenue"> · desde el {new Date(x.desde).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'long' })}</span>
+      </li>)}</ul>
+    </div>}
     {vinculos.length > 0 && <div>
       <p className="oficina-vida-titulo">Cómo se llevan</p>
       <ul className="oficina-vida-lista">{[...vinculos].sort((p, q) => orden[p.tipo] - orden[q.tipo]).map(v => <li key={v.id}>
@@ -948,6 +999,8 @@ function PedidoEnCharla({ pedido: x, decidir, alDecidir }) {
 }
 // Charlas fuera de la oficina: salís con el agente y hablan de otras cosas (sin pedidos). Quedan en la misma conversación.
 const SALIDAS = [['', 'En la oficina'], ['comer', 'Salir a comer'], ['cafe', 'Un café'], ['after', 'After office'], ['caminata', 'Una caminata']]
+// Regalos: le das algo y lo recibe en la charla (lo agradece a su manera).
+const REGALOS = ['un ramo de flores', 'chocolates', 'un libro', 'un perfume', 'entradas para un recital', 'un mate nuevo', 'una planta', 'una carta escrita a mano']
 const MARCA_SALIDA = { comer: 'Salieron a comer', cafe: 'Tomando un café', after: 'After office', caminata: 'De caminata' }
 function Charla({ agente, mensajes, setMensajes, hablar, venir, deVisita = false, pedidos = [], decidir, anotar }) {
   const [texto, setTexto] = useState('')
@@ -957,13 +1010,13 @@ function Charla({ agente, mensajes, setMensajes, hablar, venir, deVisita = false
   const fin = useRef(null)
   useEffect(() => { fin.current?.scrollIntoView({ block: 'nearest' }) }, [mensajes, esperando])
 
-  async function enviar(e) {
-    e.preventDefault()
-    const pregunta = texto.trim()
+  async function enviar(e, forzado = null) {
+    e?.preventDefault?.()
+    const pregunta = (forzado ?? texto).trim()
     if (!pregunta || esperando) return
     const donde = salida || null
     const nuevos = [...mensajes, { role: 'user', content: pregunta, salida: donde }]
-    setMensajes(nuevos); setTexto(''); setError(''); setEsperando(true)
+    setMensajes(nuevos); if (!forzado) setTexto(''); setError(''); setEsperando(true)
     // Si le pedís que venga a tu oficina, va; si ya está ahí, se queda mientras sigan hablando.
     if (!donde && (deVisita || lePedisQueVenga(pregunta))) venir?.(agente.id)
     try {
@@ -995,6 +1048,10 @@ function Charla({ agente, mensajes, setMensajes, hablar, venir, deVisita = false
         {SALIDAS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
       </select>
       {salida && <span className="tenue">Fuera de la oficina: charlan de la vida, sin pedidos.</span>}
+      <select value="" disabled={esperando} aria-label={`Regalarle algo a ${agente.nombre}`} onChange={e => { if (e.target.value) enviar(null, `🎁 Te traje un regalo: ${e.target.value}.`) }}>
+        <option value="">🎁 Regalarle algo…</option>
+        {REGALOS.map(r => <option key={r} value={r}>{r}</option>)}
+      </select>
     </label>
     <form className="oficina-charla-form" onSubmit={enviar}>
       <textarea rows={2} value={texto} disabled={esperando} placeholder={`Escribile a ${agente.nombre}…`} aria-label={`Mensaje para ${agente.nombre}`}

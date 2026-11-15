@@ -1,13 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
 // Oficina: hablar con los agentes. La app manda { agente: 'up:redactor', mensajes } (charla con uno),
 // { reunion: true, asistentes: [...], mensajes } (reunión: responde con { respuestas: [{ agente, texto }] }),
 // { acta: true, ... } (María escribe el acta), { propuestas: true } (las propuestas del día) o { reunion_interna: id }
-// (los agentes se juntan entre ellos y María escribe el acta) o { vida: true } (la vida social del día, una vez por día). Todas leen el hilo de la
+// (los agentes se juntan entre ellos y María escribe el acta), { vida: true } (la vida social del día, una vez por día) o
+// { entra: id } (Femina, María o Noruega entran a la oficina de Daniela por su cuenta y le dicen algo). Todas leen el hilo de la
 // oficina (actas, tareas, pedidos y el plantel); la charla con uno lee además toda su conversación guardada con Daniela. Lee con la sesión de la dueña (RLS, nunca con permisos de servicio).
 // Lo que escribe: los pedidos de permiso de los agentes (entran pendientes, la base no deja crearlos de otra forma,
 // hasta que Daniela decide) y el acta de cada reunión con sus tareas.
@@ -84,6 +85,51 @@ async function vida(db: any) {
     const { data, error } = await db.from("oficina_momentos").insert(momentos.map(x => ({ ...x, fecha: hoy }))).select("id,agentes,tipo,lugar,resumen,fecha,hora");
     if (error) return json({ error: error.message }, 500);
     return json({ momentos: data || [], vinculos });
+  } catch (e) {
+    if (e instanceof ErrorIA) return json({ error: e.message }, 502);
+    return json({ error: (e as Error).message }, 500);
+  }
+}
+
+// Todo lo que un agente necesita para hablar con Daniela: su ficha con el registro, su vida en la oficina, si es pareja
+// de Daniela (Femina, María y Noruega), el hilo y la conversación guardada.
+async function armarAgente(db: any, equipo: string, clave: string) {
+  const id = `${equipo}:${clave}`;
+  const [datos, hilo, historial, social, corazon] = await Promise.all([
+    leerDatos(db, equipo, clave), leerHilo(db), conversacionDe(db, id), vidaDe(db, id),
+    ELLAS.includes(id) ? db.from("oficina_corazon").select("desde").eq("agente", id).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  const c: any = contexto(equipo, clave, datos);
+  if (c) {
+    c.vida = lineasVida(id, social.vinculos, social.momentos, Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
+    c.pareja = corazon?.data?.desde ?? null;
+  }
+  return { c, hilo, historial };
+}
+async function cambiarPareja(db: any, id: string, pareja: boolean) {
+  const r = pareja
+    ? await db.from("oficina_corazon").upsert({ agente: id }, { onConflict: "owner_id,agente", ignoreDuplicates: true })
+    : await db.from("oficina_corazon").delete().eq("agente", id);
+  if (r.error) console.error("oficina-chat: no se pudo guardar la relación con Daniela", r.error.message);
+}
+
+// Femina, María o Noruega entran a la oficina de Daniela por su cuenta: la IA escribe lo que le dicen al entrar (queda
+// en la conversación). Solo ellas tres.
+async function entra(db: any, id: string) {
+  if (!ELLAS.includes(id)) return json({ error: "Ese agente no entra sin que lo llames." }, 400);
+  const provs = proveedores(env);
+  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
+  const [equipo, clave] = id.split(":");
+  let c: any, hilo: any, historial: any;
+  try { ({ c, hilo, historial } = await armarAgente(db, equipo, clave)); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
+  if (!c) return json({ error: "No encontré a ese agente." }, 404);
+  try {
+    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, conHistorial(historial, [{ role: "user", content: ENTRA_SOLA }]), hoyLargo(), hilo), temperature: 0.8, max_tokens: 600 }));
+    const { texto: sinPareja } = extraerPareja(String((resultado as any)?.content ?? ""));
+    const { texto } = extraerSolicitudes(sinPareja, id);
+    if (!texto) return json({ error: "La IA no devolvió texto." }, 502);
+    await guardarConversacion(db, [{ agente: id, de: "agente", texto, lugar: "charla" }]);
+    return json({ texto });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
     return json({ error: (e as Error).message }, 500);
@@ -317,26 +363,27 @@ Deno.serve(async (req: Request) => {
   if (body?.propuestas) return await propuestas(db);
   if (body?.reunion_interna) return await reunionInterna(db, Number(body.reunion_interna));
   if (body?.vida) return await vida(db);
+  if (body?.entra) return await entra(db, String(body.entra));
   const v: any = validar(body);
   if (!v.ok) return json({ error: v.error }, 400);
   const provs = proveedores(env);
   if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
 
   const id = `${v.equipo}:${v.clave}`;
-  let datos, hilo, historial, social;
-  try { [datos, hilo, historial, social] = await Promise.all([leerDatos(db, v.equipo, v.clave), leerHilo(db), conversacionDe(db, id), vidaDe(db, id)]); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
-  const c: any = contexto(v.equipo, v.clave, datos);
+  let c: any, hilo: any, historial: any;
+  try { ({ c, hilo, historial } = await armarAgente(db, v.equipo, v.clave)); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
-  c.vida = lineasVida(id, social.vinculos, social.momentos, Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
 
   try {
     const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo, v.salida), temperature: v.salida ? 0.8 : 0.4, max_tokens: 900 }));
-    const { texto, solicitudes: pedidos } = extraerSolicitudes(String((resultado as any)?.content ?? ""), id);
+    const { texto: sinPareja, pareja } = extraerPareja(String((resultado as any)?.content ?? ""));
+    const { texto, solicitudes: pedidos } = extraerSolicitudes(sinPareja, id);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);
+    if (pareja !== null && ELLAS.includes(id)) await cambiarPareja(db, id, pareja);
     await guardarConversacion(db, [{ agente: id, de: "daniela", texto: v.mensajes.at(-1).content, lugar: v.lugar, salida: v.salida }, { agente: id, de: "agente", texto, lugar: v.lugar, salida: v.salida }]);
     // Fuera de la oficina no hay pedidos: se charla y nada más.
     const { solicitudes, internas } = v.salida ? { solicitudes: [], internas: [] } : await derivar(db, pedidos);
-    return json({ texto, solicitudes, internas, ia });
+    return json({ texto, solicitudes, internas, ia, pareja });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
     return json({ error: (e as Error).message }, 500);

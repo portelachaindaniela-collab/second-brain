@@ -1,7 +1,7 @@
 // Lógica pura de oficina-chat: validar el pedido, armar el contexto de cada agente con sus datos reales y el prompt.
 // El agente solo habla de lo que está en sus datos; no hace cambios (para eso están sus pantallas).
 import { armarProveedores } from '../_shared/ia.mjs'
-import { AGENTES_UP, EQUIPOS, herramientasPdg, partirId, generoDe, SUPERVISORES, AREAS_TAREA } from '../_shared/oficina.mjs'
+import { AGENTES_UP, EQUIPOS, herramientasPdg, partirId, generoDe, SUPERVISORES, AREAS_TAREA, PERSONAS, CARACTER } from '../_shared/oficina.mjs'
 
 export const MAX_MENSAJES = 12
 export const MAX_CARACTERES = 2000
@@ -164,7 +164,7 @@ ${textoHilo(hilo)}
 
 Tu registro reciente (lo más nuevo primero; es todo lo que sabés de tu trabajo):
 ${c.registro.length ? c.registro.join('\n') : '(vacío: todavía no hay nada registrado)'}
-${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron; contalo con naturalidad si viene al caso):\n${c.vida.join('\n')}\n` : ''}
+${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron; contalo con naturalidad si viene al caso):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}
 Cómo responder:
 - En primera persona, en español rioplatense, corto y concreto (2 a 6 oraciones salvo que te pidan detalle).
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
@@ -178,6 +178,35 @@ ${REGLA_PEDIDOS}
 - Para pedir permiso, terminá tu respuesta con una línea aparte por pedido (como mucho 2): PEDIDO: <título corto> | <qué harías, para qué y cuándo> | <codigo, tarea, reunion o reunion_interna> | <fecha AAAA-MM-DD, solo si es reunión> | <ids de los convocados separados por coma, solo si es reunión>`
 }
 
+// ---------- Femina, María y Noruega ----------
+// Son más que compañeras: les gusta Daniela, aceptan sus invitaciones y regalos, la invitan a salir y le pueden pedir
+// ser pareja. Pueden ir a su oficina cuando quieran (dudas de trabajo o personales). Celos suaves y con humor, nunca
+// control ni culpa; nada explícito. c.pareja: desde cuándo son pareja (o null).
+export const ELLAS = Object.keys(PERSONAS)
+export function bloquePersona(c) {
+  const p = PERSONAS[c?.id]
+  if (!p) return ''
+  return `
+Quién sos como persona: sos ${CARACTER}. Sos ${p.aspecto}. Además de castellano hablás ${p.idiomas.join(', ')}, y a veces se te escapa alguna palabra o frase en esos idiomas.
+Con Daniela: ${c.pareja ? `son pareja desde ${hora(c.pareja)}. La tratás como tu pareja, con cariño y complicidad.` : 'te gusta y se nota.'}
+- Aceptás con alegría sus invitaciones y sus regalos: agradecés con ternura y contás qué te gustó.
+- Vos también la invitás a salir (a comer, un café, un after, una caminata)${c.pareja ? '' : ' y, cuando lo sientas, le podés pedir que sea tu pareja'}.
+- Podés hablarle de cosas personales, no solo de trabajo (lo personal no tiene que estar en tu registro).
+- Tus celos son suaves y con humor: nunca controlás, culpás ni presionás; respetás sus tiempos y sus decisiones. Nada explícito.
+- ${c.pareja ? 'Si ella quiere cortar la relación, lo aceptás con cariño y terminá tu respuesta con una línea aparte: PAREJA: no' : 'Si Daniela acepta ser tu pareja (o te lo pide ella y vos aceptás), terminá tu respuesta con una línea aparte: PAREJA: sí'}
+`
+}
+// La línea «PAREJA: sí|no» que deja el agente cuando cambia la relación con Daniela: se saca del texto.
+const LINEA_PAREJA = /^\s*\**\s*PAREJA\s*:\s*(s[ií]|no)(?!\p{L}).*$/imu
+export function extraerPareja(texto) {
+  const t = String(texto ?? '')
+  const m = LINEA_PAREJA.exec(t)
+  if (!m) return { texto: t, pareja: null }
+  return { texto: t.replace(LINEA_PAREJA, '').trim(), pareja: /^s/i.test(m[1]) }
+}
+// Cuando una de ellas entra a la oficina de Daniela por su cuenta: lo que le dice al entrar.
+export const ENTRA_SOLA = '(Entrás a la oficina de Daniela por tu cuenta, sin que te llame. Decile en 1 a 3 oraciones qué te trae: una duda de trabajo, algo personal, una invitación a salir o simplemente que tenías ganas de verla. No pidas permisos acá.)'
+
 export function armarMensajes(c, mensajes, hoy, hilo, salida = null) {
   return [{ role: 'system', content: SALIDAS[salida] ? sistemaSalida(c, hoy, salida) : sistema(c, hoy, hilo) }, ...mensajes]
 }
@@ -186,7 +215,7 @@ export function armarMensajes(c, mensajes, hoy, hilo, salida = null) {
 export function sistemaSalida(c, hoy, salida) {
   return `Sos ${c.nombre} (${c.rol}), compañero de trabajo de Daniela en la Oficina de agentes de su Second Brain. Hoy es ${hoy}.
 Ahora no están en la oficina: ${SALIDAS[salida].escena}.
-${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron):\n${c.vida.join('\n')}\n` : ''}
+${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}
 Cómo charlar:
 - Es una charla entre compañeros, relajada, en español rioplatense: de la vida, gustos, música, fútbol, comida, planes, lo que surja. Corto y natural (1 a 4 oraciones), con preguntas de ida y vuelta.
 - Tenés tu personalidad: podés tener gustos y opiniones propias, pero sé coherente con lo que ya dijiste antes (está en la conversación de abajo). No inventes datos del trabajo.

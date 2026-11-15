@@ -317,7 +317,14 @@ const hashDe = id => {
 export function variante(id) {
   const h = hashDe(id)
   const pelo = generoDe(id) === 'f' ? [2, 1][h % 2] : [0, 3][h % 2]
-  return { pelo, colorPelo: (h >>> 3) % 5, piel: (h >>> 7) % 3 }
+  return { pelo, colorPelo: (h >>> 3) % 5, piel: (h >>> 7) % 3, ...(ASPECTOS[id] ?? {}) }
+}
+// Femina, María y Noruega, como las describió Daniela: Noruega morocha de ojos celestes, María castaña de ojos marrones
+// (sin lentes) y Femina colorada de ojos verdes, con pecas y lentes. Pelo largo las tres.
+export const ASPECTOS = {
+  'up:noruega': { pelo: 2, colorPelo: '#1d1714', ojos: '#5bb4e8', piel: 0 },
+  'trabajadores:maria': { pelo: 2, colorPelo: '#6b4226', ojos: '#5a3a22', piel: 0 },
+  'pdg:femina': { pelo: 2, colorPelo: '#c2471a', ojos: '#3e9b5c', piel: 0, pecas: true, lentes: true },
 }
 
 // Lo que cada uno se lleva a las reuniones: mate, café, una botella de agua o nada (siempre lo mismo para cada

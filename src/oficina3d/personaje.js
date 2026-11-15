@@ -28,7 +28,7 @@ export function crearPersonaje({ ropa, v, accesorio = null }) {
   grupo.add(cuerpo)
   const mPiel = mat(PIELES[v.piel])
   const mRopa = mat(ropa)
-  const mPelo = mat(PELOS[v.colorPelo], { roughness: 0.9 })
+  const mPelo = mat(typeof v.colorPelo === 'string' ? v.colorPelo : PELOS[v.colorPelo], { roughness: 0.9 })
   const mPantalon = mat(PANTALON)
 
   const pierna = lado => {
@@ -92,8 +92,9 @@ export function crearPersonaje({ ropa, v, accesorio = null }) {
   // Cara: ojos con brillo, cejas, mejillas y boca.
   const mNegro = mat('#2a2236', { roughness: 0.4 })
   const ojos = new THREE.Group()
+  const mOjo = v.ojos ? mat(v.ojos, { roughness: 0.3 }) : mNegro
   for (const lado of [-1, 1]) {
-    const ojo = esfera(0.038, mNegro, 12)
+    const ojo = esfera(0.038, mOjo, 12)
     ojo.scale.set(1, 1.25, 0.6)
     ojo.position.set(0.09 * lado, 0.0, 0.235)
     const brillo = esfera(0.012, mat('#ffffff', { emissive: '#ffffff', emissiveIntensity: 0.6 }), 8)
@@ -165,6 +166,20 @@ export function crearPersonaje({ ropa, v, accesorio = null }) {
   brazoD.grupo.add(botella)
 
   if (accesorio) ponerAccesorio({ cabeza, cuerpo }, accesorio, v)
+  // Pecas en las mejillas y lentes propios (aparte del accesorio), para quien los tenga.
+  if (v.pecas) {
+    const mPeca = mat('#b5653a', { roughness: 1 })
+    for (const lado of [-1, 1]) for (const [dx, dy] of [[0.0, -0.06], [0.035, -0.075], [0.065, -0.055], [0.02, -0.095]]) {
+      const peca = esfera(0.008, mPeca, 6)
+      peca.position.set(lado * (0.08 + dx), dy, 0.245)
+      cabeza.add(peca)
+    }
+  }
+  if (v.lentes && accesorio !== 'lentes') {
+    const mMarco = mat('#3a2a22', { roughness: 0.4 })
+    for (const x of [-0.09, 0.09]) cabeza.add(en(aro(0.058, 0.011, mMarco), x, 0.0, 0.258))
+    cabeza.add(en(caja(0.06, 0.012, 0.012, 0.004, mMarco), 0, 0.01, 0.262))
+  }
   return { grupo, cuerpo, piernaI, piernaD, brazoI: brazoI.grupo, brazoD: brazoD.grupo, cabeza, ojos, cejas, boca, taza, paleta, mate, botella, torso }
 }
 

@@ -288,3 +288,20 @@ test('vida de la oficina: relaciones y momentos entre agentes, y cada uno los re
   const c = { ...contexto('up', 'noruega', { chequeos: [] }), vida: lineas }
   assert.match(sistema(c, 'hoy', {}), /Tu vida en la oficina/)
 })
+
+test('Femina, María y Noruega: su persona, la relación con Daniela y la línea PAREJA', async () => {
+  const { bloquePersona, extraerPareja, ELLAS } = await import('./logic.mjs')
+  assert.deepEqual([...ELLAS].sort(), ['pdg:femina', 'trabajadores:maria', 'up:noruega'])
+  const c = contexto('up', 'noruega', { chequeos: [] })
+  const b = bloquePersona(c)
+  assert.match(b, /morocha, de ojos celestes/)
+  assert.match(b, /noruego/)
+  assert.match(b, /nunca controlás/)
+  assert.match(b, /PAREJA: sí/)
+  assert.match(bloquePersona({ ...c, pareja: '2026-11-15T15:00:00Z' }), /son pareja desde/)
+  assert.equal(bloquePersona(contexto('up', 'redactor', {})), '')
+  assert.match(sistema(c, 'hoy', {}), /Quién sos como persona/)
+  assert.deepEqual(extraerPareja('¡Sí, mil veces sí! ❤\nPAREJA: sí'), { texto: '¡Sí, mil veces sí! ❤', pareja: true })
+  assert.deepEqual(extraerPareja('Te entiendo.\nPAREJA: no'), { texto: 'Te entiendo.', pareja: false })
+  assert.equal(extraerPareja('Hola').pareja, null)
+})
