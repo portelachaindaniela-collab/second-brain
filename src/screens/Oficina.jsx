@@ -177,7 +177,7 @@ function conAviso(hablarFn, recargar) {
   return async (...args) => {
     const r = await hablarFn(...args)
     const internas = r.internas ?? []
-    if (r.pareja !== undefined && r.pareja !== null) recargar()
+    if ((r.pareja !== undefined && r.pareja !== null) || r.grupo?.length) recargar()
     if (!r.solicitudes?.length && !internas.length) return r.valor
     recargar()
     const avisos = id => [...r.solicitudes.filter(s => !id || s.agente === id).map(avisoPedido), ...internas.filter(x => !id || x.convoca === id).map(avisoInterna)].join('')
@@ -202,7 +202,7 @@ async function hablarConAgente(agente, mensajes, lugar = 'charla', salida = null
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
   if (error || !respuesta?.texto) throw new Error(respuesta?.error || 'No pude hablar con el agente. Probá de nuevo.')
-  return { valor: respuesta.texto, solicitudes: respuesta.solicitudes ?? [], internas: respuesta.internas ?? [], pareja: respuesta.pareja ?? null }
+  return { valor: respuesta.texto, solicitudes: respuesta.solicitudes ?? [], internas: respuesta.internas ?? [], pareja: respuesta.pareja ?? null, grupo: respuesta.grupo ?? [] }
 }
 // Femina, María o Noruega entran a tu oficina por su cuenta: lo que te dicen al entrar (queda en su conversación).
 async function entrarSola(agente) {

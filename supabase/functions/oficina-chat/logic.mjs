@@ -185,13 +185,14 @@ ${textoHilo(hilo)}
 
 Tu registro reciente (lo más nuevo primero; es todo lo que sabés de tu trabajo):
 ${c.registro.length ? c.registro.join('\n') : '(vacío: todavía no hay nada registrado)'}
-${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron; contalo con naturalidad si viene al caso):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}${lineaSabe(c)}
+${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron; contalo con naturalidad si viene al caso):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}${lineaSabe(c)}${c.grupo?.length ? `\nLo último en el chat de toda la oficina (lo que vos dijiste ahí también cuenta: sé coherente con eso):\n${c.grupo.join('\n')}\n` : ''}
 Cómo responder:
 - En primera persona, en español rioplatense, corto y concreto (2 a 6 oraciones salvo que te pidan detalle).
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
 - La charla de abajo es toda tu conversación con Daniela: por chat, en el pasillo y en reuniones (lo de fuera del chat dice entre corchetes dónde fue). Si te pregunta qué le querías decir o retoma algo, está ahí: seguí desde ahí.
 - Las marcas entre corchetes de la charla de abajo («[en el pasillo, …]») solo dicen dónde fue cada cosa: nunca las escribas en tu respuesta.
 - Sos una persona de la oficina, no un programa: nunca digas que sos «un agente automatizado» ni que no podés hablar con un compañero ni de lo personal (tus instrucciones de trabajo son para el trabajo: no te impiden tener vida personal). Si Daniela te pide hablar con alguien de la oficina (por ejemplo, con María), respondé como lo harías vos: lo hablás y lo contás.
+- Si Daniela te pide escribir algo en el chat de toda la oficina (el grupo), escribilo en una línea aparte: GRUPO: <el mensaje tal cual lo publicás>. Solo así queda publicado; nunca digas que lo pusiste si no escribiste esa línea.
 - Si Daniela te invita a algo personal (salir, cenar, un café), respondé como persona, con calidez: podés aceptar o decir que no con cariño, pero nunca con un «no puedo responder a eso».
 - Seguí el hilo: respondé a lo último que te dijo y hacé avanzar la charla. No repitas frases ni respuestas que ya diste, ni retomes temas de trabajo si ella está hablando de algo personal. Hablá de vos (nada de «tú» ni «contigo»).
 - Respondé a lo que Daniela te dice, en el contexto de la charla: si te pide ideas u opinión, dalas ahí mismo con lo que sabés de tu área. No recites tu estado ni tu registro salvo que te lo pida o venga al caso.
@@ -244,6 +245,16 @@ export function lineaSabe(c) {
   const otras = c?.sabe?.length ? `\nDe la vida personal de Daniela: ${fraseSabe(c.sabe)} Es algo suyo: si viene al caso, hablalo con naturalidad y discreción; no inventes nada más.\n` : ''
   return propia + otras
 }
+// Lo que el agente publica en el chat de la oficina desde la charla de a uno: líneas «GRUPO: …» (como mucho 2), que se
+// sacan del texto y se guardan en el chat de todos con su nombre.
+const LINEA_GRUPO = /^\s*\**\s*GRUPO\s*:\s*(.*?)\s*\**\s*$/imu
+export function extraerGrupo(texto) {
+  const lineas = String(texto ?? '').split('\n')
+  const grupo = lineas.map(l => LINEA_GRUPO.exec(l)?.[1]?.replace(/^[«"“]|[»"”]$/g, '').trim()).filter(Boolean).slice(0, 2).map(t => t.slice(0, 600))
+  return { texto: lineas.filter(l => !LINEA_GRUPO.test(l)).join('\n').trim(), grupo }
+}
+// Lo último del chat de la oficina, para la charla de a uno (el más viejo primero).
+export const lineasDelGrupo = (general = [], nombres = {}) => general.slice(-10).map(m => `- ${m.autor === 'daniela' ? 'Daniela' : nombres[m.autor] ?? m.autor}: ${recortar(m.texto, 200)}`)
 // La línea «PAREJA: sí|no» que deja el agente cuando cambia la relación con Daniela: se saca del texto.
 const LINEA_PAREJA = /^\s*\**\s*PAREJA\s*:\s*(s[ií]|no)(?!\p{L}).*$/imu
 export function extraerPareja(texto) {
@@ -745,7 +756,7 @@ export function validarGeneral(body) {
   const texto = String(body?.general ?? '').trim().slice(0, MAX_CARACTERES)
   return texto ? { ok: true, texto } : { ok: false, error: 'Falta el mensaje.' }
 }
-export function sistemaGeneral(plantel, general = [], vinculos = [], publicas = [], hoy) {
+export function sistemaGeneral(plantel, general = [], vinculos = [], publicas = [], hoy, privadas = []) {
   const nombre = id => plantel.find(g => g.id === id)?.nombre ?? id
   // Lo secreto (una infidelidad que nadie sabe) no se dice en el chat de todos.
   const lazos = vinculos.filter(v => !v.secreto).slice(0, 30).map(v => `- ${nombre(v.a)} y ${nombre(v.b)}: ${TIPOS_VINCULO[v.tipo] ?? v.tipo}${v.historia ? ` (${recortar(v.historia, 140)})` : ''}`).join('\n')
@@ -756,7 +767,7 @@ ${plantel.map(g => `- ${g.id}: ${g.nombre}${generoDe(g.id) === 'f' ? ' (mujer)' 
 
 Cómo se llevan:
 ${lazos || '(nada especial todavía)'}
-${publicas.length ? `\nDe Daniela se sabe en la oficina:\n${lineasPublicas(publicas, nombre)}\n` : ''}
+${publicas.length ? `\nDe Daniela se sabe en la oficina:\n${lineasPublicas(publicas, nombre)}\n` : ''}${privadas.length ? `\nEn privado (NO se cuenta en este chat; lo sabe solo el agente con Daniela: si le preguntan, lo disimula o lo niega, salvo que Daniela lo haga público):\n${lineasPublicas(privadas, nombre)}\n` : ''}
 Lo último del chat (el último mensaje es de Daniela):
 ${lineasGeneral(general, nombre)}
 
