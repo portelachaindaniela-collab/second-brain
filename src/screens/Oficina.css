@@ -79,6 +79,8 @@
 .oficina-mensaje.de-user { align-self: flex-end; background: var(--accent-100); border: 1px solid var(--accent-borde); }
 .oficina-mensaje.de-assistant { align-self: flex-start; background: var(--surface-inset); border: 1px solid var(--gray-200); }
 .oficina-mensaje-lugar { display: block; font-size: var(--letra-11); color: var(--gray-500); margin-bottom: 2px; }
+.oficina-charla-donde { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-8); font-size: var(--letra-12); }
+.oficina-charla-donde select { font-size: var(--letra-13); padding: 4px 8px; }
 .oficina-charla-form { display: flex; gap: var(--esp-8); align-items: flex-end; position: sticky; bottom: calc(-1 * var(--esp-16)); padding: var(--esp-8) 0 var(--esp-16); background: var(--surface); }
 .oficina-charla-form textarea { flex: 1; resize: vertical; min-height: 40px; }
 
@@ -120,6 +122,10 @@
 .reunion-gente li { display: flex; align-items: center; gap: var(--esp-8); padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, .05); border: 1px solid transparent; }
 .reunion-gente li .tenue { color: #9d95b5; font-size: var(--letra-11); }
 .reunion-gente li.habla { border-color: #f0a63c; background: rgba(240, 166, 60, .14); }
+.reunion-sacar { margin-left: auto; background: none; border: none; color: #9d95b5; font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.reunion-sacar:hover, .reunion-sacar:focus-visible { color: #f0a63c; }
+.reunion-sumar { display: flex; flex-direction: column; gap: 4px; margin-top: var(--esp-12); font-size: var(--letra-11); color: #9d95b5; }
+.reunion-sumar select { background: rgba(255, 255, 255, .06); color: #e9e4f5; border: 1px solid rgba(255, 255, 255, .15); border-radius: 8px; padding: 6px 8px; font-size: var(--letra-13); }
 .reunion-gente li.turno-en-tu-oficina { border-color: #9f86df; }
 .reunion-gente li.turno-atendido { opacity: .55; }
 .reunion-punto { width: 8px; height: 8px; border-radius: 50%; background: #6b6680; flex-shrink: 0; }

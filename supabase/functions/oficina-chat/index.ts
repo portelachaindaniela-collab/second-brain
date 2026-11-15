@@ -40,7 +40,7 @@ async function tareasDe(db: any, id: string) {
 
 // La conversación guardada de un agente con Daniela (chat, pasillo y reuniones), de la más vieja a la más nueva.
 async function conversacionDe(db: any, id: string) {
-  const { data } = await db.from("oficina_conversacion").select("de,texto,lugar,creado").eq("agente", id).order("creado", { ascending: false }).limit(MAX_HISTORIAL);
+  const { data } = await db.from("oficina_conversacion").select("de,texto,lugar,salida,creado").eq("agente", id).order("creado", { ascending: false }).limit(MAX_HISTORIAL);
   return (data || []).reverse();
 }
 async function guardarConversacion(db: any, filas: any[]) {
@@ -218,10 +218,11 @@ async function reunionInterna(db: any, id: number) {
       return { id: aid, c: contexto(equipo, clave, await leerDatos(db, equipo, clave)) };
     }))).filter((p: any) => p.c);
     if (participantes.length < 2) return await volver("Faltan participantes para la reunión.", 404);
-    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaReunionInterna(participantes, reunion, hoyLargo(), hilo) }, { role: "user", content: "Empiecen." }], temperature: 0.6, max_tokens: 3000 }, { timeoutMs: 120000 }));
+    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaReunionInterna(participantes, reunion, hoyLargo(), hilo) }, { role: "user", content: "Empiecen." }], temperature: 0.6, max_tokens: 8000 }, { timeoutMs: 120000 }));
     mensajes = leerConversacion((resultado as any)?.content, participantes.map((p: any) => p.id));
+    if (mensajes.length < MIN_TURNOS_INTERNA) console.error(`oficina-chat: reunión interna ${id} sin conversación (${ia}): ${String((resultado as any)?.content ?? "").slice(0, 300)}`);
   } catch (e) { return await volver((e as Error).message, e instanceof ErrorIA ? 502 : 500); }
-  if (mensajes.length < MIN_TURNOS_INTERNA) return await volver("La IA no armó la conversación. Se vuelve a intentar la próxima vez.", 502);
+  if (mensajes.length < MIN_TURNOS_INTERNA) return await volver("La IA no armó la conversación", 502);
   const nombre = (aid: string) => participantes.find((p: any) => p.id === aid)?.c.nombre ?? aid;
   const v: any = validarActa({ asistentes: participantes.map((p: any) => p.id), nombres: participantes.map((p: any) => p.c.nombre), mensajes: mensajes.map(m => ({ de: nombre(m.agente), texto: m.texto })), modo: "interna", inicio: new Date().toISOString() });
   if (!v.ok) return await volver(v.error, 400);
@@ -286,11 +287,12 @@ Deno.serve(async (req: Request) => {
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
 
   try {
-    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo), temperature: 0.4, max_tokens: 900 }));
+    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo, v.salida), temperature: v.salida ? 0.8 : 0.4, max_tokens: 900 }));
     const { texto, solicitudes: pedidos } = extraerSolicitudes(String((resultado as any)?.content ?? ""), id);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);
-    await guardarConversacion(db, [{ agente: id, de: "daniela", texto: v.mensajes.at(-1).content, lugar: v.lugar }, { agente: id, de: "agente", texto, lugar: v.lugar }]);
-    const { solicitudes, internas } = await derivar(db, pedidos);
+    await guardarConversacion(db, [{ agente: id, de: "daniela", texto: v.mensajes.at(-1).content, lugar: v.lugar, salida: v.salida }, { agente: id, de: "agente", texto, lugar: v.lugar, salida: v.salida }]);
+    // Fuera de la oficina no hay pedidos: se charla y nada más.
+    const { solicitudes, internas } = v.salida ? { solicitudes: [], internas: [] } : await derivar(db, pedidos);
     return json({ texto, solicitudes, internas, ia });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);

@@ -25,7 +25,7 @@ export function validar(body) {
     content: String(m?.content ?? '').slice(0, MAX_CARACTERES).trim(),
   })).filter(m => m.content)
   if (!mensajes.length || mensajes.at(-1).role !== 'user') return { ok: false, error: 'Falta el mensaje.' }
-  return { ok: true, ...id, mensajes, lugar: body?.lugar === 'reunion' ? 'reunion' : 'charla' }
+  return { ok: true, ...id, mensajes, lugar: body?.lugar === 'reunion' ? 'reunion' : 'charla', salida: SALIDAS[body?.salida] ? body.salida : null }
 }
 
 const hora = iso => (iso ? new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short' }) : '?')
@@ -47,11 +47,18 @@ export function contexto(equipo, clave, datos = {}) {
 // de la más vieja a la más nueva; mensajes: lo que manda la app (se usa el último, lo nuevo de Daniela).
 export const MAX_HISTORIAL = 30
 const LUGAR = { pasillo: 'en el pasillo', reunion: 'en una reunión' }
+// Salidas: charlas fuera de la oficina (no de trabajo). Cada una con su escena.
+export const SALIDAS = {
+  comer: { marca: 'salieron a comer', escena: 'salieron a comer juntos a un lugar cerca de la oficina' },
+  cafe: { marca: 'salieron a tomar un café', escena: 'salieron a tomar un café a la vuelta de la oficina' },
+  after: { marca: 'en un after office', escena: 'están en un after office, tomando algo después del trabajo' },
+  caminata: { marca: 'salieron a caminar', escena: 'salieron a dar una caminata por el barrio' },
+}
 export const LUGARES = ['charla', 'pasillo', 'reunion']
 export function conHistorial(filas = [], mensajes = []) {
   const previos = (filas || []).slice(-MAX_HISTORIAL).map(f => ({
     role: f.de === 'daniela' ? 'user' : 'assistant',
-    content: `${LUGAR[f.lugar] ? `[${LUGAR[f.lugar]}, ${hora(f.creado)}] ` : ''}${String(f.texto ?? '').slice(0, MAX_CARACTERES)}`,
+    content: `${SALIDAS[f.salida] ? `[${SALIDAS[f.salida].marca}, ${hora(f.creado)}] ` : LUGAR[f.lugar] ? `[${LUGAR[f.lugar]}, ${hora(f.creado)}] ` : ''}${String(f.texto ?? '').slice(0, MAX_CARACTERES)}`,
   }))
   const juntos = []
   for (const m of [...previos, ...mensajes.slice(-1)]) {
@@ -164,14 +171,28 @@ Cómo responder:
 - La charla de abajo es toda tu conversación con Daniela: por chat, en el pasillo y en reuniones (lo de fuera del chat dice entre corchetes dónde fue). Si te pregunta qué le querías decir o retoma algo, está ahí: seguí desde ahí.
 - Respondé a lo que Daniela te dice, en el contexto de la charla: si te pide ideas u opinión, dalas ahí mismo con lo que sabés de tu área. No recites tu estado ni tu registro salvo que te lo pida o venga al caso.
 - No podés cambiar nada desde esta charla ni prometer entregas («te lo mando en una hora»): lo que haya que hacer, lo pedís con permiso (abajo).
+- Si para mostrarle algo conviene ir a su oficina, podés decirle que vas (por ejemplo «voy a tu oficina y te lo muestro»): vas caminando y te sentás en su mesa un rato.
 - Si algo falló, explicá qué dice el registro y qué podría revisar ella.
 - ${generoDe(c.id) === 'f' ? 'Sos mujer: hablá de vos en femenino (por ejemplo «estoy lista», «quedé pausada»).' : 'Hablá de vos en masculino.'}
 ${REGLA_PEDIDOS}
 - Para pedir permiso, terminá tu respuesta con una línea aparte por pedido (como mucho 2): PEDIDO: <título corto> | <qué harías, para qué y cuándo> | <codigo, tarea, reunion o reunion_interna> | <fecha AAAA-MM-DD, solo si es reunión> | <ids de los convocados separados por coma, solo si es reunión>`
 }
 
-export function armarMensajes(c, mensajes, hoy, hilo) {
-  return [{ role: 'system', content: sistema(c, hoy, hilo) }, ...mensajes]
+export function armarMensajes(c, mensajes, hoy, hilo, salida = null) {
+  return [{ role: 'system', content: SALIDAS[salida] ? sistemaSalida(c, hoy, salida) : sistema(c, hoy, hilo) }, ...mensajes]
+}
+
+// Fuera de la oficina: una charla entre compañeros, de la vida. Sin pedidos ni permisos (eso queda para la oficina).
+export function sistemaSalida(c, hoy, salida) {
+  return `Sos ${c.nombre} (${c.rol}), compañero de trabajo de Daniela en la Oficina de agentes de su Second Brain. Hoy es ${hoy}.
+Ahora no están en la oficina: ${SALIDAS[salida].escena}.
+
+Cómo charlar:
+- Es una charla entre compañeros, relajada, en español rioplatense: de la vida, gustos, música, fútbol, comida, planes, lo que surja. Corto y natural (1 a 4 oraciones), con preguntas de ida y vuelta.
+- Tenés tu personalidad: podés tener gustos y opiniones propias, pero sé coherente con lo que ya dijiste antes (está en la conversación de abajo). No inventes datos del trabajo.
+- Del trabajo hablás solo si ella lo saca, y sin pedir permisos ni armar pedidos: eso queda para cuando vuelvan a la oficina.
+- La conversación de abajo es todo lo que hablaron antes (en la oficina, en el pasillo, en reuniones y en otras salidas): usala para acordarte de lo que te contó.
+- ${generoDe(c.id) === 'f' ? 'Sos mujer: hablá de vos en femenino.' : 'Hablá de vos en masculino.'}`
 }
 
 // ---------- Reunión ----------
@@ -361,7 +382,7 @@ export function separarInternas(pedidos = []) {
   }
   return { internas, solicitudes }
 }
-export const MIN_TURNOS_INTERNA = 6
+export const MIN_TURNOS_INTERNA = 4
 export function sistemaReunionInterna(participantes, reunion, hoy, hilo) {
   const fichas = participantes.map(({ id, c }) => [
     `### ${c.nombre} (id: ${id}) — ${c.rol} — ${generoDe(id) === 'f' ? 'mujer' : 'varón'}`,
@@ -382,11 +403,18 @@ ${fichas}
 Escribí la reunión completa, como una reunión de trabajo de verdad:
 - Abre ${convoca} planteando el tema. Después hablan los demás, cada uno desde su área, en primera persona, en español
   rioplatense, natural y concreto; se responden entre ellos, discuten y llegan a acuerdos: quién hace qué y para cuándo.
-- Entre ${MIN_TURNOS_INTERNA} y 14 intervenciones, de 1 a 3 oraciones cada una. Cada uno habla de sí en su género.
+- Entre 6 y 12 intervenciones, de 1 a 3 oraciones cada una. Cada uno habla de sí en su género.
 - Nadie ejecuta nada ni promete entregas: lo que haya que hacer queda como propuesta para Daniela (ella lo aprueba
   después). Nadie pide claves, tokens ni accesos.
 
 Respondé SOLO con JSON: {"mensajes":[{"agente":"<id exacto de la lista>","texto":"..."}]}`
+}
+// Si la respuesta llega cortada (la IA se quedó sin espacio), se rescatan los turnos que vinieron completos.
+const TURNO = /\{\s*"agente"\s*:\s*"([^"]+)"\s*,\s*"texto"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g
+function turnosSueltos(crudo) {
+  const lista = []
+  for (const m of crudo.matchAll(TURNO)) { try { lista.push({ agente: m[1], texto: JSON.parse(`"${m[2]}"`) }) } catch { /* turno roto: se saltea */ } }
+  return lista
 }
 export function leerConversacion(texto, idsValidos) {
   const crudo = String(texto ?? '')
@@ -394,7 +422,7 @@ export function leerConversacion(texto, idsValidos) {
   let d = null
   if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
   const validos = new Set(idsValidos)
-  return (Array.isArray(d?.mensajes) ? d.mensajes : [])
+  return (Array.isArray(d?.mensajes) ? d.mensajes : turnosSueltos(crudo))
     .map(m => ({ agente: String(m?.agente ?? ''), texto: String(m?.texto ?? '').trim().slice(0, 1000) }))
     .filter(m => validos.has(m.agente) && m.texto)
     .slice(0, 16)

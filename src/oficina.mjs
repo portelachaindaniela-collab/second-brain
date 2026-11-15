@@ -485,3 +485,11 @@ export function resumenReunion(asistentes, pendientes = []) {
 export function turnosReunion(asistentes, idJefa = 'trabajadores:maria') {
   return [...asistentes.filter(a => a.id !== idJefa), ...asistentes.filter(a => a.id === idJefa)]
 }
+
+// Cuando un agente te dice en la charla que va a tu oficina («voy a tu oficina», «paso por tu despacho»), camina hasta
+// ahí de verdad: se sienta en tu mesa un rato y después vuelve a su puesto.
+export const VISITA_MS = 4 * 60_000
+const VIENE = /\b(voy|vengo|paso|me acerco|me doy una vuelta|caigo|me cruzo|subo|bajo|te alcanzo|estoy yendo|ya voy|me llego|me arrimo)\b[^.!?\n]{0,40}\b(tu oficina|tu despacho|tu escritorio|tu mesa)\b/i
+export function vieneATuOficina(texto) {
+  return VIENE.test(String(texto ?? ''))
+}

@@ -64,7 +64,7 @@ function etiqueta(clase, texto, alClic) {
 // pantallaCompleta: la vista tipo videollamada (la arma Oficina.jsx con children encima de la escena).
 export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, hablando = null, alPlanificar, alVolvieron,
   volverDaniela = 0, alMoverDaniela, pantallaCompleta = false, reloj = Date.now, calendario = [], alTocarPizarron = null, alCruzarse = null,
-  reunionInterna = null, alTerminoInterna = null, children }) {
+  reunionInterna = null, alTerminoInterna = null, visita = null, children }) {
   const marco = useRef(null)
   const pizarron = useRef(null) // la textura del calendario que comparten los pizarrones
   const escenario = useRef(null)
@@ -72,7 +72,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
   datos.current ??= { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, calendario }
   // Cada render deja a mano lo último: el cuadro de animación lo lee sin rearmar la escena.
   useEffect(() => {
-    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, alTocarPizarron, calendario, alCruzarse, reunionInterna, alTerminoInterna }
+    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, alTocarPizarron, calendario, alCruzarse, reunionInterna, alTerminoInterna, visita }
   })
   // Los pizarrones muestran el mes actual con lo que pasa en la oficina: se redibujan cuando cambia el calendario.
   const firmaCalendario = calendario.map(e => `${e.id}${e.tipo}${e.fecha}`).join('|')
@@ -432,6 +432,8 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     // Al convocar, cada asistente arma su camino desde donde esté; se avisa cuándo llega cada uno.
     let plan = null
     let reunionUp = null
+    // Visita: un agente que te dijo que iba a tu oficina camina hasta tu mesa, se sienta y, cuando termina, vuelve.
+    let enVisita = null
     const situacion = (ac, r, t) => {
       if (r?.tipo === 'rutina' && !sinMovimiento) {
         if (ac.descansoId !== r.descanso.id) { ac.camino = camino(ac.lugar, r.descanso); ac.largo = largo(ac.camino); ac.descansoId = r.descanso.id }
@@ -443,25 +445,41 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     }
     const planificar = (R, t) => {
       const asientos = R.modo === 'turnos' ? asientosEspera() : R.modo === 'oficina' ? asientosOficina() : asientosReunion()
-      const ir = R.modo === 'turnos' ? caminoEspera : R.modo === 'oficina' ? caminoOficina : caminoReunion
       const p = { id: R.id, modo: R.modo, por: new Map(), avisado: false }
       const llegadas = {}
       R.asistentes.forEach((id, k) => {
-        const ac = actores.get(id)
-        if (!ac) return
-        const asiento = asientos[k % asientos.length]
-        const desde = situacion(ac, datos.current.rut[id], t)
-        const ruta = ir(desde, asiento)
-        const espera = ac.a.estado === 'trabajando' ? 8 + k * 0.4 : k * 0.9
-        const vuelta = ir(alPasillo(ac.lugar), asiento).reverse()
-        const turnoIda = R.modo === 'turnos' ? caminoTurno(asiento) : null
-        const turnoVuelta = R.modo === 'turnos' ? caminoVueltaTurno(ac.lugar) : null
-        const item = { asiento, ruta, largo: largo(ruta), espera, vuelta, largoVuelta: largo(vuelta), turnoIda, largoIda: turnoIda ? largo(turnoIda) : 0, turnoVuelta, largoTurnoVuelta: turnoVuelta ? largo(turnoVuelta) : 0, listo: false, numero: k + 1 }
+        const item = itemDelPlan(R, id, asientos[k % asientos.length], k, t)
+        if (!item) return
         p.por.set(id, item)
-        llegadas[id] = Math.round(espera + item.largo / VELOCIDAD)
+        llegadas[id] = Math.round(item.espera + item.largo / VELOCIDAD)
       })
       if (!R.propia) datos.current.alPlanificar?.(R.id, llegadas)
       return p
+    }
+    const itemDelPlan = (R, id, asiento, k, t) => {
+      const ac = actores.get(id)
+      if (!ac) return null
+      const ir = R.modo === 'turnos' ? caminoEspera : R.modo === 'oficina' ? caminoOficina : caminoReunion
+      const desde = situacion(ac, datos.current.rut[id], t)
+      const ruta = ir(desde, asiento)
+      const espera = ac.a.estado === 'trabajando' ? 8 + k * 0.4 : k * 0.9
+      const vuelta = ir(alPasillo(ac.lugar), asiento).reverse()
+      const turnoIda = R.modo === 'turnos' ? caminoTurno(asiento) : null
+      const turnoVuelta = R.modo === 'turnos' ? caminoVueltaTurno(ac.lugar) : null
+      return { asiento, ruta, largo: largo(ruta), espera, vuelta, largoVuelta: largo(vuelta), turnoIda, largoIda: turnoIda ? largo(turnoIda) : 0, turnoVuelta, largoTurnoVuelta: turnoVuelta ? largo(turnoVuelta) : 0, listo: false, numero: k + 1 }
+    }
+    // En plena reunión Daniela puede sumar o sacar gente: el que se suma camina hasta un lugar libre; el que sale, vuelve.
+    const ajustarPlan = (R, t) => {
+      for (const [id, pr] of plan.por) if (!R.asistentes.includes(id) && !pr.listo && !pr.retiro) pr.retiro = Date.now()
+      const asientos = R.modo === 'turnos' ? asientosEspera() : R.modo === 'oficina' ? asientosOficina() : asientosReunion()
+      for (const id of R.asistentes) {
+        const ya = plan.por.get(id)
+        if (ya && !ya.retiro && !ya.listo) continue
+        const ocupados = [...plan.por.values()].filter(x => !x.retiro && !x.listo).map(x => `${x.asiento.x},${x.asiento.y}`)
+        const asiento = asientos.find(a => !ocupados.includes(`${a.x},${a.y}`)) ?? asientos[plan.por.size % asientos.length]
+        const item = itemDelPlan(R, id, asiento, 0, t)
+        if (item) plan.por.set(id, { ...item, espera: 0, inicio: Date.now() })
+      }
     }
 
     // ---------- Cámara: modos y vuelos ----------
@@ -546,9 +564,13 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       if (D.reunion || D.reunionInterna) reunionUp = null
       else if (!reunionUp && upTrabajando.length >= 2 && !sinMovimiento) reunionUp = { id: `up-${Date.now()}`, propia: true, modo: 'sala', estado: 'convocada', inicio: Date.now(), asistentes: upTrabajando }
       else if (reunionUp && reunionUp.estado !== 'volviendo' && upTrabajando.length < 2) reunionUp = { ...reunionUp, estado: 'volviendo', vuelta: Date.now() }
-      const R = D.reunion ?? D.reunionInterna ?? reunionUp
+      if (D.visita && !D.reunion && enVisita?.origen !== D.visita.id) enVisita = { id: `visita-${D.visita.id}`, origen: D.visita.id, propia: true, modo: 'oficina', estado: 'convocada', inicio: Date.now(), asistentes: [D.visita.agente] }
+      if (D.reunion) enVisita = null
+      else if (enVisita && enVisita.estado !== 'volviendo' && D.visita?.id !== enVisita.origen) enVisita = { ...enVisita, estado: 'volviendo', vuelta: Date.now() }
+      const R = D.reunion ?? D.reunionInterna ?? enVisita ?? reunionUp
       if (t - ultimaLuz > 2) { aplicarLuz(); ultimaLuz = t }
       if (R && (!plan || plan.id !== R.id)) plan = planificar(R, t)
+      else if (R && plan && R.modo !== 'turnos' && R.estado !== 'volviendo' && (R.asistentes.some(id => { const x = plan.por.get(id); return !x || x.retiro || x.listo }) || [...plan.por].some(([id, x]) => !x.listo && !x.retiro && !R.asistentes.includes(id)))) ajustarPlan(R, t)
       if (!R && plan) plan = null
       const relojS = Date.now() / 1000
       const porId = new Map(lista.map(a => [a.id, a]))
@@ -575,8 +597,11 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
           }
           const terminar = () => { pr.listo = true; ac.desfase = -(t + (r.retraso ?? 0)); enReunion = false; presente = true; pose = 'sentado'; objeto = null; pos = mueble.sentado; giro = lugar.mira ?? 0 }
           const tu = R.turnos?.[id]
-          const e = relojS - R.inicio / 1000
-          if (R.modo === 'turnos' && tu?.fin) {
+          const e = relojS - (pr.inicio ?? R.inicio) / 1000
+          if (pr.retiro) {
+            const d = (relojS - pr.retiro / 1000) * VELOCIDAD
+            if (d < pr.largoVuelta) caminar({ pts: pr.vuelta, d }); else terminar()
+          } else if (R.modo === 'turnos' && tu?.fin) {
             const d = (relojS - tu.fin / 1000) * VELOCIDAD
             if (d < pr.largoTurnoVuelta) caminar({ pts: pr.turnoVuelta, d }); else terminar()
           } else if (R.modo === 'turnos' && tu?.llamado) {
@@ -653,6 +678,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       if (todosVolvieron && plan && !plan.avisado) {
         plan.avisado = true
         if (R.id === D.reunionInterna?.id) D.alTerminoInterna?.(R.id)
+        else if (R === enVisita) enVisita = null
         else if (R.propia) reunionUp = null
         else D.alVolvieron?.(R.id)
       }
