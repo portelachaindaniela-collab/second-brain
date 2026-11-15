@@ -5,8 +5,8 @@ import { lugares, DANIELA, DESCANSOS, ZONAS, DIRECCION, DIVISOR, PUERTA_REUNION,
 
 const REALES = ['tareas_estancadas', 'opera', 'canillita', 'agenda_valentina', 'scraper_empleo', 'maria', 'google_sync', 'monitor_sitios', 'buscador_eventos']
 const ADMIN = ['search_console', 'resumen_diario', 'agenda_dulce', 'historial_up', 'limpieza']
-const todos = [...lugares('trabajadores', REALES), ...lugares('up', ['a', 'b', 'c', 'd', 'e', 'f', 'g']), ...lugares('pdg', ['a', 'b', 'c', 'd', 'e']), ...lugares('admin', ADMIN)]
-const g = grilla(obstaculos(todos, 7, 5, 5))
+const todos = [...lugares('trabajadores', REALES), ...lugares('up', ['a', 'b', 'c', 'd', 'e', 'f', 'g']), ...lugares('pdg', ['a', 'femina', 'c', 'd', 'e']), ...lugares('admin', ADMIN)]
+const g = grilla(obstaculos(todos, 7, 4, 5))
 
 // Recorre el camino a pasitos y verifica que nunca pise algo ocupado.
 function caminable(pts) {

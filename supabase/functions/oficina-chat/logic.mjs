@@ -171,6 +171,7 @@ const NO_CLAVES = 'Nunca pidas claves, tokens, contraseñas ni accesos: eso no s
 export const REGLA_PEDIDOS = `- Sos parte del equipo, no un buscador: si Daniela te pide que hagas algo, o se te ocurre algo concreto que convendría hacer en tu área (un calendario, un sitio nuevo para leer, una cuenta para PDG, una mejora de la app), no lo das por hecho ni lo prometés: le pedís permiso con un pedido. Contá qué harías, para qué y cuándo.
 - Si hace falta juntarse con Daniela (para mostrarle algo o que decida), pedí una reunión: con la fecha, a quiénes convocás (ids del plantel) y el tema. Daniela la aprueba y queda en el calendario de la oficina.
 - Si tenés que coordinar con otros agentes sin Daniela (repartir trabajo, revisar algo entre ustedes, ponerse de acuerdo), convocá una reunión interna: con la fecha, a quiénes (ids del plantel) y el tema. No necesita permiso: se hace en la sala, María escribe el acta y lo que decidan le llega a Daniela para aprobar.
+- Si hay un malentendido o una diferencia, no pidas reunión: con Daniela lo aclarás por chat (en la charla con ella); con un compañero le escribís por chat (pedido tipo chat, con a quiénes: ids del plantel). El chat entre compañeros no necesita permiso: queda guardado y Daniela lo puede leer.
 - Si para hacerlo la app tiene que hacer algo que hoy no hace (una pantalla, un agente o un trabajador nuevo, leer un sitio nuevo, una automatización), el pedido es de código: Sistemas lo programa cuando Daniela lo aprueba. Describí qué tendría que hacer la app, con qué datos y qué se vería. Si alcanza con lo que ya hacés, el pedido es una tarea tuya.
 - ${NO_CLAVES}`
 
@@ -201,7 +202,7 @@ Cómo responder:
 - Si algo falló, explicá qué dice el registro y qué podría revisar ella.
 - ${generoDe(c.id) === 'f' ? 'Sos mujer: hablá de vos en femenino (por ejemplo «estoy lista», «quedé pausada»).' : 'Hablá de vos en masculino.'}
 ${REGLA_PEDIDOS}
-- Para pedir permiso, terminá tu respuesta con una línea aparte por pedido (como mucho 2): PEDIDO: <título corto> | <qué harías, para qué y cuándo> | <codigo, tarea, reunion o reunion_interna> | <fecha AAAA-MM-DD, solo si es reunión> | <ids de los convocados separados por coma, solo si es reunión>`
+- Para pedir permiso, terminá tu respuesta con una línea aparte por pedido (como mucho 2): PEDIDO: <título corto> | <qué harías, para qué y cuándo> | <codigo, tarea, reunion, reunion_interna o chat> | <fecha AAAA-MM-DD, solo si es reunión> | <ids de los convocados (o con quiénes es el chat) separados por coma, solo si es reunión o chat>`
 }
 
 // ---------- Femina, María y Noruega ----------
@@ -343,7 +344,7 @@ Cómo se responde:
 ${REGLA_PEDIDOS.replace(/^- /gm, '  · ')}
 - Los pedidos van en "pedidos", del agente que lo haría (como mucho 3 por respuesta; lista vacía si no hay).
 
-Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}],"pedidos":[{"agente":"<id exacto>","titulo":"...","detalle":"qué haría, para qué y cuándo","tipo":"codigo, tarea, reunion o reunion_interna","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión)"]}]}`
+Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}],"pedidos":[{"agente":"<id exacto>","titulo":"...","detalle":"qué haría, para qué y cuándo","tipo":"codigo, tarea, reunion, reunion_interna o chat","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión o chat)"]}]}`
 }
 
 // Lo personal de cada uno en la ficha de la reunión: cómo es (Femina, María y Noruega), qué tiene con Daniela, lo que sabe
@@ -392,6 +393,10 @@ export const hoyBA = (ahora = Date.now()) => new Intl.DateTimeFormat('en-CA', { 
 // extra: { fecha, asistentes, titulo } para las reuniones. La fecha no puede ser antes de hoy (si no viene, es hoy) y
 // el que la pide siempre está convocado.
 export function accionDePedido(agente, tipo, extra = {}, hoy = hoyBA()) {
+  if (/\bchat\b/i.test(String(tipo ?? ''))) {
+    const r = accionDePedido(agente, 'reunion', extra, hoy)
+    return { tipo: 'chat', asistentes: r.asistentes.filter(x => partirId(x)).slice(0, 4), tema: r.tema }
+  }
   if (/reuni[oó]n/i.test(String(tipo ?? '')) && /interna/i.test(String(tipo ?? ''))) {
     const r = accionDePedido(agente, 'reunion', extra, hoy)
     return { ...r, tipo: 'reunion_interna', asistentes: r.asistentes.filter(x => partirId(x)).slice(0, 12) }
@@ -481,12 +486,37 @@ export function leerPropuestas(texto, idsValidos) {
 // pedidos para Daniela.
 // Separa los pedidos: las reuniones internas no piden permiso (van a su tabla); el resto, a los pedidos de Daniela.
 export function separarInternas(pedidos = []) {
-  const internas = [], solicitudes = []
+  const internas = [], solicitudes = [], chats = []
   for (const p of pedidos) {
-    if (p.accion?.tipo === 'reunion_interna') { if (p.accion.asistentes.length >= 2) internas.push({ convoca: p.agente, asistentes: p.accion.asistentes, tema: p.accion.tema || p.titulo, detalle: String(p.detalle ?? '').slice(0, 2000), fecha: p.accion.fecha }) }
+    // Un malentendido entre compañeros se arregla por chat, sin reunión ni permiso.
+    if (p.accion?.tipo === 'chat') { if (p.accion.asistentes.length >= 2) chats.push({ agentes: p.accion.asistentes, tema: p.accion.tema || p.titulo, detalle: String(p.detalle ?? '').slice(0, 2000) }) }
+    else if (p.accion?.tipo === 'reunion_interna') { if (p.accion.asistentes.length >= 2) internas.push({ convoca: p.agente, asistentes: p.accion.asistentes, tema: p.accion.tema || p.titulo, detalle: String(p.detalle ?? '').slice(0, 2000), fecha: p.accion.fecha }) }
     else solicitudes.push(p)
   }
-  return { internas, solicitudes }
+  return { internas, solicitudes, chats }
+}
+// El chat entre compañeros para aclarar un malentendido: la IA escribe lo que se dicen y un resumen. Queda como un momento
+// de su vida en la oficina (tipo chat), que Daniela lee en «Vida de la oficina» y ellos recuerdan.
+export function sistemaChatInterno(participantes, chat, hoy) {
+  const fichas = participantes.map(({ id, c }) => `- ${c.nombre} (id: ${id}), ${c.rol}, ${generoDe(id) === 'f' ? 'mujer' : 'varón'}${c.vida?.length ? `. Su vida en la oficina: ${c.vida.slice(0, 4).map(l => recortar(l.replace(/^- /, ''), 140)).join('; ')}` : ''}`).join('\n')
+  return `Es un chat entre compañeros de la Oficina de agentes del Second Brain de Daniela, para aclarar un malentendido. Hoy es ${hoy}.
+Tema: «${chat.tema}».${chat.detalle ? ` Contexto: ${recortar(chat.detalle, 600)}` : ''}
+
+Quiénes están en el chat:
+${fichas}
+
+Escribí el chat: entre 4 y 8 mensajes cortos (1 o 2 oraciones), en español rioplatense, como por WhatsApp. Cada uno con su
+personalidad; se explican, se escuchan y lo resuelven (o quedan en hablarlo de nuevo), con respeto y nada explícito.
+En los textos nombrá a cada uno por su nombre, nunca por su id. resumen: 1 oración de cómo quedó.
+
+Respondé SOLO con JSON: {"mensajes":[{"agente":"<id exacto>","texto":"..."}],"resumen":"..."}`
+}
+export function leerChatInterno(texto, idsValidos) {
+  const crudo = String(texto ?? '')
+  const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
+  let d = null
+  if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
+  return { mensajes: leerConversacion(texto, idsValidos).slice(0, 10).map(m => ({ ...m, texto: m.texto.slice(0, 400) })), resumen: String(d?.resumen ?? '').replace(/\s+/g, ' ').trim().slice(0, 600) }
 }
 export const MIN_TURNOS_INTERNA = 4
 export function sistemaReunionInterna(participantes, reunion, hoy, hilo) {
@@ -656,7 +686,7 @@ export const MOMENTOS = {
   mate: { adentro: true, texto: 'tomaron mate' }, cafe: { adentro: true, texto: 'se tomaron un café' },
   almuerzo: { adentro: true, texto: 'almorzaron juntos' }, merienda: { adentro: true, texto: 'merendaron juntos' },
   cena: { adentro: false, texto: 'salieron a cenar' }, after: { adentro: false, texto: 'fueron a un after office' },
-  paseo: { adentro: false, texto: 'salieron a pasear' },
+  paseo: { adentro: false, texto: 'salieron a pasear' }, chat: { adentro: false, texto: 'se escribieron por chat' },
 }
 const par = (x, y) => (x < y ? [x, y] : [y, x])
 // El cumpleaños de cada agente: fijo, sale de su id (así no cambia nunca). 'MM-DD'.
@@ -697,10 +727,11 @@ ${general.length ? lineasGeneral(general, nombre) : '(todavía nada)'}
 Armá lo de hoy:
 - momentos: entre 2 y 4, de 2 a 4 agentes cada uno, sobre todo entre los que ya tienen relación (pero también alguno
   nuevo, así se conocen). tipo: mate, cafe, almuerzo o merienda (en la oficina) o cena, after o paseo (afuera, después
-  del trabajo). hora: HH:MM. lugar: corto (por ejemplo «la cafetería», «un bodegón en Palermo»). resumen: 1 o 2
+  del trabajo) o chat. hora: HH:MM. lugar: corto (por ejemplo «la cafetería», «un bodegón en Palermo»). resumen: 1 o 2
   oraciones de qué pasó o de qué hablaron, en español rioplatense, cálido y creíble. charla: lo que se dijeron, entre 4 y 8
   intervenciones cortas (agente: id de los que están en ese momento; texto: 1 o 2 oraciones), con la personalidad de cada
   uno y lo que viven (también pueden cruzarse en el pasillo o la cocina: usá el tipo más parecido y el lugar real).
+  Un malentendido o una diferencia entre compañeros se arregla por chat, no en reunión: tipo chat, lugar «por chat».
 - vinculos: solo los que nacen o cambian hoy (entre 1 y 4). tipo: ${Object.keys(TIPOS_VINCULO).join(', ')}.
   afinidad: de -100 (se detestan) a 100 (inseparables); cambia de a poco según lo que pase (un buen momento +5 a +15, una
   pelea o una traición -10 a -40). secreto: true solo para una relación que nadie más sabe (amantes, una infidelidad).
@@ -785,8 +816,10 @@ ese contesta primero). Pueden responderse entre ellos y retomar lo que dijo otro
 persona, en español rioplatense, corto (1 oración), con su personalidad y lo que vive en la oficina: pueden bromear,
 chusmear, ponerse celosos o discutir entre ellos, con respeto y nada explícito. Lo privado de Daniela no se dice acá.
 Nadie pide permisos ni claves por este chat. En el texto se nombra a la gente por su nombre, nunca por su id.
+Si alguno tiene un malentendido con Daniela (no entendió algo, ella lo contradijo, o quedó mal con ella), además le escribe
+por privado para aclararlo (en "aclarar", como mucho 2; lista vacía si no hay): en vez de pedir una reunión, le abre un chat.
 
-Respondé SOLO con JSON: {"respuestas":[{"autor":"<id exacto>","texto":"..."}]}`
+Respondé SOLO con JSON: {"respuestas":[{"autor":"<id exacto>","texto":"..."}],"aclarar":[{"agente":"<id exacto>","texto":"lo que le escribe por privado"}]}`
 }
 export function leerGeneral(texto, idsValidos) {
   const crudo = String(texto ?? '')
@@ -794,6 +827,15 @@ export function leerGeneral(texto, idsValidos) {
   let d = null
   if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
   return leerMensajesGeneral(d?.respuestas, new Set(idsValidos), idsValidos.length)
+}
+// Los que le escriben a Daniela por privado para aclarar un malentendido (desde el chat de la oficina).
+export function leerAclarar(texto, idsValidos) {
+  const crudo = String(texto ?? '')
+  const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
+  let d = null
+  if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
+  return leerMensajesGeneral((Array.isArray(d?.aclarar) ? d.aclarar : []).map(x => ({ autor: x?.agente, texto: x?.texto })), new Set(idsValidos), 2)
+    .map(x => ({ agente: x.autor, texto: x.texto }))
 }
 // Lo que un agente sabe de su vida en la oficina: sus relaciones y lo último que compartió (para sus charlas).
 export function lineasVida(id, vinculos = [], momentos = [], nombres = {}) {

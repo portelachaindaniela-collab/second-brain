@@ -473,3 +473,20 @@ test('en el chat de la oficina contestan todos', async () => {
   assert.equal(r.length, 4)
   assert.match(sistemaGeneral(ids.map(id => ({ id, nombre: id })), [{ autor: 'daniela', texto: 'hola' }], [], [], 'hoy'), /Contestan TODOS/)
 })
+
+test('los malentendidos se arreglan por chat: entre compañeros sin reunión y con Daniela por privado', async () => {
+  const { accionDePedido, separarInternas, extraerSolicitudes, sistemaChatInterno, leerChatInterno, leerAclarar, sistemaGeneral, MOMENTOS } = await import('./logic.mjs')
+  assert.deepEqual(accionDePedido('up:redactor', 'chat', { asistentes: 'pdg:femina, cualquiera', titulo: 'El tono del post' }), { tipo: 'chat', asistentes: ['up:redactor', 'pdg:femina'], tema: 'El tono del post' })
+  const { solicitudes } = extraerSolicitudes('Lo hablo con ella.\nPEDIDO: El tono del post | aclararlo | chat | | pdg:femina', 'up:redactor')
+  const { internas, solicitudes: resto, chats } = separarInternas(solicitudes)
+  assert.equal(internas.length + resto.length, 0)
+  assert.deepEqual(chats, [{ agentes: ['up:redactor', 'pdg:femina'], tema: 'El tono del post', detalle: 'aclararlo' }])
+  const p = [{ id: 'up:redactor', c: { nombre: 'Redactor', rol: 'escribe' } }, { id: 'pdg:femina', c: { nombre: 'Femina', rol: 'busca' } }]
+  assert.match(sistemaChatInterno(p, chats[0], 'hoy'), /malentendido[\s\S]*«El tono del post»/)
+  const r = leerChatInterno('{"mensajes":[{"agente":"up:redactor","texto":"Perdón"},{"agente":"pdg:femina","texto":"Todo bien"},{"agente":"up:otro","texto":"x"}],"resumen":"Quedaron bien."}', ['up:redactor', 'pdg:femina'])
+  assert.equal(r.mensajes.length, 2)
+  assert.equal(r.resumen, 'Quedaron bien.')
+  assert.ok(MOMENTOS.chat)
+  assert.deepEqual(leerAclarar('{"respuestas":[],"aclarar":[{"agente":"pdg:femina","texto":"¿Lo hablamos?"},{"agente":"up:otro","texto":"no"}]}', ['pdg:femina']), [{ agente: 'pdg:femina', texto: '¿Lo hablamos?' }])
+  assert.match(sistemaGeneral([{ id: 'pdg:femina', nombre: 'Femina' }], [], [], [], 'hoy'), /"aclarar"/)
+})

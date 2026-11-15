@@ -6,7 +6,7 @@ import { crearSala, crearOficina, crearEscritorio, crearPuestoMesa, crearDirecci
 import { crearPersonaje, posar, liberar } from '../oficina3d/personaje.js'
 import { crearRoberta, moverRoberta } from '../oficina3d/roberta.js'
 import {
-  lugares, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, rutinas, camino, largo, puntoEn, momentoRutina, variante, agujas, alturaPiso,
+  lugares, enTablonPdg, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, rutinas, camino, largo, puntoEn, momentoRutina, variante, agujas, alturaPiso,
   ACCESORIOS, bebidaDe, luzDelDia, VELOCIDAD, PISO, asientosReunion, alPasillo, haciaPasillo, caminoReunion, asientosEspera, EN_LA_PUERTA, caminoPuerta, caminoDesdePuerta, asientosSociales, caminoSocial,
   caminoEspera, caminoTurno, caminoVueltaTurno, DANIELA, DANIELA_SALA, DANIELA_OFICINA, asientosOficina, caminoOficina, VISITA, ROBERTA,
   PIZARRONES,
@@ -143,7 +143,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
 
     const inicial = datos.current.agentes
     const nUp = inicial.filter(a => a.equipo === 'up').length
-    const nPdg = inicial.filter(a => a.equipo === 'pdg').length
+    const nPdg = enTablonPdg(inicial.filter(a => a.equipo === 'pdg').map(a => a.clave)).length
     const nAdmin = inicial.filter(a => a.equipo === 'admin').length
     const nSistemas = inicial.filter(a => a.equipo === 'sistemas').length
     const sala = crearSala({ up: mesaUp(nUp).mesa, pdg: mesaPdg(nPdg).mesa, admin: mesaAdmin(nAdmin).mesa, sistemas: mesaSistemas(nSistemas).mesa })
