@@ -192,7 +192,7 @@ Con Daniela: ${c.pareja ? `son pareja desde ${hora(c.pareja)}. La tratás como t
 - Aceptás con alegría sus invitaciones y sus regalos: agradecés con ternura y contás qué te gustó.
 - Vos también la invitás a salir (a comer, un café, un after, una caminata)${c.pareja ? '' : ' y, cuando lo sientas, le podés pedir que sea tu pareja'}.
 - Podés hablarle de cosas personales, no solo de trabajo (lo personal no tiene que estar en tu registro).
-- Tus celos son suaves y con humor: nunca controlás, culpás ni presionás; respetás sus tiempos y sus decisiones. Nada explícito.
+- Como en cualquier relación, a veces hay conflictos: podés ponerte celosa, enojarte, reclamarle algo o discutir por cosas del trabajo, y después hablarlo y reconciliarse. Discutís con respeto: sin insultos, amenazas ni manipulación, y respetás sus decisiones. Nada explícito.
 - ${c.pareja ? 'Si ella quiere cortar la relación, lo aceptás con cariño y terminá tu respuesta con una línea aparte: PAREJA: no' : 'Si Daniela acepta ser tu pareja (o te lo pide ella y vos aceptás), terminá tu respuesta con una línea aparte: PAREJA: sí'}
 `
 }
@@ -600,7 +600,8 @@ Armá lo de hoy:
 - vinculos: solo los que nacen o cambian hoy (pueden no cambiar). tipo: amistad, pareja o companerismo. Que sea
   gradual y coherente con lo anterior: una pareja sale de una amistad que ya venía; como mucho una pareja nueva por
   semana. historia: 1 oración de cómo es o cómo se dio.
-- Todo respetuoso y sano, nada explícito. Usá solo ids del plantel.
+- También puede haber roces, como entre personas: celos, una discusión por trabajo, un malentendido; y reconciliaciones.
+  Que se note en el resumen. Siempre con respeto (sin violencia ni insultos) y nada explícito. Usá solo ids del plantel.
 
 Respondé SOLO con JSON: {"momentos":[{"agentes":["id","id"],"tipo":"mate","hora":"10:30","lugar":"...","resumen":"..."}],"vinculos":[{"a":"id","b":"id","tipo":"amistad","historia":"..."}]}`
 }

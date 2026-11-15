@@ -186,7 +186,9 @@ test('turnos: van a la espera, pasan a la oficina de Daniela y vuelven a su luga
 test('estilos, accesorios, luz del día y reloj', () => {
   for (const id of ['monitoreo', 'agenda', 'prensa', 'empleo', 'maria']) assert.ok(ESTILOS[id], id)
   assert.ok(estiloDe('otra').cuadros.length)
-  assert.equal(ACCESORIOS['trabajadores:maria'], 'corona')
+  // Accesorios comunes: nada de coronas, galeras ni disfraces; María lleva joyas.
+  for (const raro of ['corona', 'galera', 'gorro-fiesta', 'safari']) assert.ok(!Object.values(ACCESORIOS).includes(raro), raro)
+  assert.ok(variante('trabajadores:maria').joyas.collar)
   for (const c of ADMIN) assert.ok(ACCESORIOS[`admin:${c}`], c)
   assert.equal(luzDelDia(Date.parse('2026-11-11T16:00:00Z')).fase, 'dia')
   assert.equal(luzDelDia(Date.parse('2026-11-12T05:00:00Z')).fase, 'noche')

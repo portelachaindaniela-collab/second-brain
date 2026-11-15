@@ -321,10 +321,12 @@ export function variante(id) {
 }
 // Femina, María y Noruega, como las describió Daniela: Noruega morocha de ojos celestes, María castaña de ojos marrones
 // (sin lentes) y Femina colorada de ojos verdes, con pecas y lentes. Pelo largo las tres.
+// Accesorios comunes (joyas): collar, pulsera, anillo y uñas pintadas, cada uno con su color.
 export const ASPECTOS = {
-  'up:noruega': { pelo: 2, colorPelo: '#1d1714', ojos: '#5bb4e8', piel: 0 },
-  'trabajadores:maria': { pelo: 2, colorPelo: '#6b4226', ojos: '#5a3a22', piel: 0 },
-  'pdg:femina': { pelo: 2, colorPelo: '#c2471a', ojos: '#3e9b5c', piel: 0, pecas: true, lentes: true },
+  'up:noruega': { pelo: 2, colorPelo: '#1d1714', ojos: '#5bb4e8', piel: 0, joyas: { collar: '#c9ced6', anillo: '#c9ced6', unas: '#5b6ee1' } },
+  'trabajadores:maria': { pelo: 2, colorPelo: '#6b4226', ojos: '#5a3a22', piel: 0, joyas: { collar: '#e2b552', pulsera: '#e2b552', anillo: '#e2b552', unas: '#b0263b' } },
+  'pdg:femina': { pelo: 2, colorPelo: '#c2471a', ojos: '#3e9b5c', piel: 0, pecas: true, lentes: true, joyas: { collar: '#2f7d4f', pulsera: '#c9ced6', unas: '#e2572c' } },
+  'trabajadores:opera': { joyas: { collar: '#e2b552', pulsera: '#c8323f' } },
 }
 
 // Lo que cada uno se lleva a las reuniones: mate, café, una botella de agua o nada (siempre lo mismo para cada
@@ -346,11 +348,11 @@ export function agujas(ahoraMs) {
 // Accesorio propio de cada agente, para reconocerlo sin leer el nombre (lo dibuja oficina3d/personaje.js).
 // Un agente que no está acá no lleva nada.
 export const ACCESORIOS = {
-  'trabajadores:maria': 'corona',
-  'trabajadores:opera': 'galera',
+  'trabajadores:maria': null,
+  'trabajadores:opera': 'vincha',
   'trabajadores:canillita': 'gorra-canillita',
   'trabajadores:google_sync': 'auriculares',
-  'trabajadores:buscador_eventos': 'gorro-fiesta',
+  'trabajadores:buscador_eventos': 'boina',
   'trabajadores:monitor_sitios': 'visera',
   'trabajadores:scraper_empleo': 'corbata',
   'trabajadores:tareas_estancadas': 'lentes',
@@ -362,7 +364,7 @@ export const ACCESORIOS = {
   'up:disenador': 'vincha',
   'up:publicador': 'visera',
   'up:noruega': 'gorro-lana',
-  'pdg:prospector': 'safari',
+  'pdg:prospector': 'sombrero',
   'pdg:demo': 'headset',
   'pdg:objeciones': 'corbata',
   'pdg:propuesta': 'monio',
