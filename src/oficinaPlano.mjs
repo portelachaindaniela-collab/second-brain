@@ -473,6 +473,17 @@ export function caminoOficina(hastaPasillo, asiento) {
   const afuera = enMesaOficina(1.75, asiento.ang)
   return ancho([...hastaPasillo, { x: xPaso, y: PASILLO }, { x: xPaso, y: CORREDOR_EJECUTIVO }, { x: P.x, y: CORREDOR_EJECUTIVO }, { ...P }, { x: P.x, y: 5.6 }, afuera, { x: asiento.x, y: asiento.y }])
 }
+// Golpear la puerta: el agente que viene a pedirte algo se para del lado del corredor, frente a tu puerta, mirándola.
+// Si le decís que pase, entra desde ahí hasta su silla en tu mesa.
+export const EN_LA_PUERTA = { x: DIRECCION.puerta.x + 0.7, y: CORREDOR_EJECUTIVO, mira: Math.PI, pose: 'parado' }
+export function caminoPuerta(hastaPasillo, asiento = EN_LA_PUERTA) {
+  const xPaso = (PASO_ESTE.x0 + PASO_ESTE.x1) / 2
+  return ancho([...hastaPasillo, { x: xPaso, y: PASILLO }, { x: xPaso, y: CORREDOR_EJECUTIVO }, { x: asiento.x, y: asiento.y }])
+}
+export function caminoDesdePuerta(asiento) {
+  const P = DIRECCION.puerta
+  return ancho([{ x: EN_LA_PUERTA.x, y: EN_LA_PUERTA.y }, { x: P.x, y: CORREDOR_EJECUTIVO }, { ...P }, { x: P.x, y: 5.6 }, enMesaOficina(1.75, asiento.ang), { x: asiento.x, y: asiento.y }])
+}
 export const MESA_CHICA_MARIA = { dx: 3.7, dy: 4.6 } // relativa a la oficina de María (x0, y0)
 export const PLANTAS_DANIELA = [
   { x: 29.0, y: 6.55, escala: 1.2 }, { x: 31.0, y: 6.4, escala: 1.3 }, { x: 33.6, y: 6.55, escala: 1.0 },

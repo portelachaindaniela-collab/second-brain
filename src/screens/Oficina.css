@@ -79,6 +79,9 @@
 .oficina-mensaje.de-user { align-self: flex-end; background: var(--accent-100); border: 1px solid var(--accent-borde); }
 .oficina-mensaje.de-assistant { align-self: flex-start; background: var(--surface-inset); border: 1px solid var(--gray-200); }
 .oficina-mensaje-lugar { display: block; font-size: var(--letra-11); color: var(--gray-500); margin-bottom: 2px; }
+.oficina-pedido-charla { display: flex; flex-direction: column; gap: 6px; border-color: var(--accent-borde); }
+.oficina-pedido-detalle { font-size: var(--letra-13); color: var(--gray-500); white-space: pre-wrap; max-height: 9em; overflow-y: auto; }
+.oficina-pedido-botones { display: flex; flex-wrap: wrap; gap: var(--esp-8); }
 .oficina-charla-donde { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-8); font-size: var(--letra-12); }
 .oficina-charla-donde select { font-size: var(--letra-13); padding: 4px 8px; }
 .oficina-charla-form { display: flex; gap: var(--esp-8); align-items: flex-end; position: sticky; bottom: calc(-1 * var(--esp-16)); padding: var(--esp-8) 0 var(--esp-16); background: var(--surface); }
