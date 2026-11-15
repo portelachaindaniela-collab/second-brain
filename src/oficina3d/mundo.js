@@ -70,6 +70,45 @@ function textoEnPiso(texto, x, z, ancho = texto.length * 0.3) {
 }
 
 // Piso de tablas de madera dibujado en un canvas (vetas y juntas).
+// Parqué (tablitas de a cuatro, alternando la dirección como un tablero): el piso de las oficinas (el resto del
+// edificio tiene piso flotante). base: [r, g, b] del tono medio de la madera.
+function texturaParque(base = [228, 199, 163], semilla = 7) {
+  const c = document.createElement('canvas')
+  c.width = 1024; c.height = 1024
+  const g = c.getContext('2d')
+  const lado = 128, tablitas = 4, ancho = lado / tablitas
+  const azar = () => { semilla = (semilla * 16807) % 2147483647; return semilla / 2147483647 }
+  const tabla = (x, y, w, h, horizontal) => {
+    const k = 0.9 + azar() * 0.16
+    g.fillStyle = `rgb(${Math.min(255, base[0] * k)}, ${Math.min(255, base[1] * k)}, ${Math.min(255, base[2] * k)})`
+    g.fillRect(x, y, w, h)
+    g.strokeStyle = 'rgba(140, 95, 55, .12)'
+    for (let v = 0; v < 3; v++) {
+      g.beginPath()
+      if (horizontal) { const yy = y + 4 + azar() * (h - 8); g.moveTo(x, yy); g.bezierCurveTo(x + w * 0.3, yy + (azar() - 0.5) * 4, x + w * 0.7, yy + (azar() - 0.5) * 4, x + w, yy) }
+      else { const xx = x + 4 + azar() * (w - 8); g.moveTo(xx, y); g.bezierCurveTo(xx + (azar() - 0.5) * 4, y + h * 0.3, xx + (azar() - 0.5) * 4, y + h * 0.7, xx, y + h) }
+      g.stroke()
+    }
+    g.strokeStyle = 'rgba(110, 72, 40, .38)'
+    g.lineWidth = 1.5
+    g.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5)
+    g.lineWidth = 1
+  }
+  for (let fila = 0; fila < c.height / lado; fila++) {
+    for (let col = 0; col < c.width / lado; col++) {
+      const horizontal = (fila + col) % 2 === 0
+      for (let k = 0; k < tablitas; k++) {
+        if (horizontal) tabla(col * lado, fila * lado + k * ancho, lado, ancho, true)
+        else tabla(col * lado + k * ancho, fila * lado, ancho, lado, false)
+      }
+    }
+  }
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  t.anisotropy = 8
+  return t
+}
 function texturaPiso() {
   const c = document.createElement('canvas')
   c.width = 1024; c.height = 1024
@@ -347,12 +386,22 @@ export function crearPuestoMesa(x, z, giro, color = COLORES.durazno) {
 }
 
 // ---------- Decoración según el área (ESTILOS en oficinaPlano.mjs) ----------
-function alfombraConEstilo(x0, x1, z0, z1, alfombra) {
-  const t = texturaAlfombra(alfombra)
-  if (alfombra.patron !== 'borde') t.repeat.set(Math.max(1, Math.round((x1 - x0) / 1.4)), Math.max(1, Math.round((z1 - z0) / 1.4)))
+// El piso de una oficina: parqué (sin alfombra con dibujo de pared a pared).
+function parqueOficina(x0, x1, z0, z1) {
+  const t = texturaParque([214, 170, 122], 19)
+  t.repeat.set((x1 - x0) / 4, (z1 - z0) / 4)
   const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 }))
   m.rotation.x = -Math.PI / 2
   m.position.set((x0 + x1) / 2, 0.016, (z0 + z1) / 2)
+  m.receiveShadow = true
+  return m
+}
+// Alfombra mediana lisa con guarda (sin dibujos), apoyada sobre el piso.
+function alfombraMediana(x0, x1, z0, z1, [base, guarda]) {
+  const t = texturaAlfombra({ patron: 'borde', colores: [base, guarda] })
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 }))
+  m.rotation.x = -Math.PI / 2
+  m.position.set((x0 + x1) / 2, 0.02, (z0 + z1) / 2)
   m.receiveShadow = true
   return m
 }
@@ -571,9 +620,12 @@ export function crearOficina(o) {
     g.add(caja(o.x1 - 0.08, o.x1, 0, altoMuro, 0, D, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
     if (o.y0 > 0) g.add(caja(o.x0, o.x1, 0, altoMuro, -0.08, 0, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
     g.add(vidriera(o.x0, o.x1, D, 'x', altoTabique, [o.puerta.x - 0.5, o.puerta.x + 0.5]))
-    g.add(alfombraConEstilo(o.x0 + 0.3, o.x1 - 0.3, 0.3, D - 0.3, estilo.alfombra))
-    g.add(caja(o.x0 + 0.08, o.x1 - 0.08, 0.15, altoMuro, 0.004, 0.012, acento, { sombra: false }))
+    g.add(parqueOficina(o.x0 + 0.08, o.x1 - 0.08, 0.02, D - 0.02))
+    // Una alfombra mediana, lisa con guarda, en el medio de la oficina (con los colores de su estilo).
     const cx = (o.x0 + o.x1) / 2
+    { const w = Math.min(3.2, (o.x1 - o.x0) * 0.55), d = Math.min(2.4, D * 0.45), zc = D * 0.62
+      g.add(alfombraMediana(cx - w / 2, cx + w / 2, zc - d / 2, zc + d / 2, estilo.alfombra.colores)) }
+    g.add(caja(o.x0 + 0.08, o.x1 - 0.08, 0.15, altoMuro, 0.004, 0.012, acento, { sombra: false }))
     if (o.y0 === 0) g.add(ventana(cx - 0.9, cx + 0.9, 'fondo'))
     if (o.nombre && !o.jefa) {
       const ancho = Math.min(o.x1 - o.x0 - 1.8, 0.24 * o.nombre.length + 0.6)
@@ -1002,7 +1054,8 @@ export function crearDireccion() {
   raiz.add(g)
   const D = DIRECCION
   const M = MUEBLES_DIRECCION
-  g.add(alfombraConEstilo(31.8, 41.8, 1.2, 6.5, { patron: 'borde', colores: ['#f3e6c4', '#c9a24a'] }))
+  g.add(parqueOficina(D.x0 + 0.06, D.x1 - 0.02, 0.02, D.y1 - 0.02))
+  g.add(alfombraMediana(34.4, 39.0, 3.7, 6.3, ['#f3e6c4', '#c9a24a']))
   g.add(caja(D.x0 - 0.05, D.x0 + 0.05, 0, 2.1, D.y0, D.y1, mat(COLORES.tabique, TABIQUE_CLARO), { r: 0.02 }))
   g.add(vidriera(D.x0, D.x1, D.y1, 'x', 2.1, [D.puerta.x - 0.5, D.puerta.x + 0.5]))
   // Escritorio ejecutivo mirando a la puerta y la silla de las visitas enfrente.
