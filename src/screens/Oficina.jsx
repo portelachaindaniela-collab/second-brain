@@ -295,7 +295,12 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     setCharlas(c => ({ ...c, [x.agente]: [...(c[x.agente] ?? []), { role: 'assistant', content: `Te pedí permiso para «${x.titulo}».${x.detalle ? ` ${x.detalle}` : ''}`, local: true }] }))
     abrir(x.agente, 'charla')
   }
-  const verCalendario = useCallback(() => document.getElementById('oficina-calendario')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), [])
+  // Lo de abajo de la escena va en hojas, como un Excel: una sola a la vista (sin un scroll larguísimo).
+  const [hojaOficina, setHojaOficina] = useState('tetoca')
+  const verCalendario = useCallback(() => {
+    setHojaOficina('calendario')
+    document.getElementById('oficina-hojas')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
   const empezar = useCallback(async () => {
     // Antes de empezar se vuelve a leer todo: vienen con su información más actualizada.
     setReunion(r => (r && r.estado === 'convocada' ? { ...r, estado: 'preparando' } : r))
@@ -538,31 +543,22 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
           </nav>
         </>}
       </Bloque>
-      <Bloque titulo={`Te toca${pendientes.length ? ` · ${pendientes.length}` : ''}`}>
-        {cargando ? <p className="tenue">Revisando…</p> : pendientes.length
-          ? <ul className="oficina-tetoca">{pendientes.map(p => <li key={p.texto} className={`nivel-${p.nivel}`}>
-            <span className="oficina-tetoca-texto">{p.texto}</span>
-            <span className="oficina-tetoca-donde">{p.donde}</span>
-            {p.reunion ? <button type="button" className="btn btn-sm btn-primary" disabled={Boolean(reunion)} onClick={() => setConvocando(p.reunion)}>Convocar</button>
-              : p.agente && agentes.some(a => a.id === p.agente) && <button type="button" className="btn btn-sm" onClick={() => abrir(p.agente)}>Ver agente</button>}
-          </li>)}</ul>
-          : <p className="tenue">Nada pendiente: los agentes no te necesitan por ahora.</p>}
-      </Bloque>
-      <Bloque titulo="Trabajando ahora">
-        {cargando ? <p className="tenue">Revisando…</p> : <ActividadAhora agentes={agentes} abrir={abrir} />}
-      </Bloque>
-      {/* Mensajes a todo el ancho: la tabla de pedidos necesita lugar para sus columnas y los botones. */}
-      <Bloque titulo={`Mensajes${solicitudes.filter(x => x.estado === 'pendiente').length ? ` · ${solicitudes.filter(x => x.estado === 'pendiente').length} para aprobar` : ''}`} ancho="completo">
-        {cargando ? <p className="tenue">Revisando…</p> : <Mensajes solicitudes={solicitudes} agentes={agentes} decidir={decidir} responder={responder} ahora={ahora} />}
-      </Bloque>
-      <Bloque titulo="Calendario de la oficina" ancho="completo">
-        <div id="oficina-calendario">{cargando ? <p className="tenue">Revisando…</p> : <CalendarioOficina eventos={eventos} ahora={ahora} />}</div>
-      </Bloque>
-      <Bloque titulo="Vida de la oficina" ancho="completo">
-        {cargando ? <p className="tenue">Revisando…</p> : <VidaOficina vinculos={vinculos} momentos={momentos} agentes={agentes} corazon={corazon} />}
-      </Bloque>
-      <Bloque titulo="Archivo de la oficina" ancho="completo">
-        {cargando ? <p className="tenue">Revisando…</p> : <Archivo actas={actas} tareas={tareas} agentes={agentes} escribiendo={escribiendoActa} cambiarTarea={cambiarTarea} ahora={ahora} />}
+      <Bloque titulo="Lo de la oficina" ancho="completo">
+        <div id="oficina-hojas">{cargando ? <p className="tenue">Revisando…</p> : <LibroOficina hoja={hojaOficina} setHoja={setHojaOficina} hojas={[
+          { id: 'tetoca', titulo: 'Te toca', num: pendientes.length, contenido: pendientes.length
+            ? <ul className="oficina-tetoca">{pendientes.map(p => <li key={p.texto} className={`nivel-${p.nivel}`}>
+              <span className="oficina-tetoca-texto">{p.texto}</span>
+              <span className="oficina-tetoca-donde">{p.donde}</span>
+              {p.reunion ? <button type="button" className="btn btn-sm btn-primary" disabled={Boolean(reunion)} onClick={() => setConvocando(p.reunion)}>Convocar</button>
+                : p.agente && agentes.some(a => a.id === p.agente) && <button type="button" className="btn btn-sm" onClick={() => abrir(p.agente)}>Ver agente</button>}
+            </li>)}</ul>
+            : <p className="tenue">Nada pendiente: los agentes no te necesitan por ahora.</p> },
+          { id: 'ahora', titulo: 'Trabajando ahora', contenido: <ActividadAhora agentes={agentes} abrir={abrir} /> },
+          { id: 'mensajes', titulo: 'Mensajes', num: solicitudes.filter(x => x.estado === 'pendiente').length, contenido: <Mensajes solicitudes={solicitudes} agentes={agentes} decidir={decidir} responder={responder} ahora={ahora} /> },
+          { id: 'calendario', titulo: 'Calendario', contenido: <CalendarioOficina eventos={eventos} ahora={ahora} /> },
+          { id: 'vida', titulo: 'Vida de la oficina', contenido: <VidaOficina vinculos={vinculos} momentos={momentos} agentes={agentes} corazon={corazon} /> },
+          { id: 'archivo', titulo: 'Archivo', contenido: <Archivo actas={actas} tareas={tareas} agentes={agentes} escribiendo={escribiendoActa} cambiarTarea={cambiarTarea} ahora={ahora} /> },
+        ]} />}</div>
       </Bloque>
     </Bloques>
     {convocando && <ConvocarReunion agentes={agentes} preseleccion={convocando.asistentes ?? null} cerrar={() => setConvocando(false)}
@@ -799,6 +795,19 @@ function Encuentro({ encuentro, agente, decidir, hablar, seguime, despues, conte
 // ---------- Vida de la oficina ----------
 // Cómo se llevan los agentes (parejas, amistades, compañeros) y lo que compartieron estos días: mates, cafés, almuerzos,
 // cenas. Lo arma la IA una vez por día y cada agente lo recuerda cuando charlás con él.
+// Las hojas de la oficina, como en un Excel: una a la vista y las pestañas abajo (con lo que espera respuesta).
+function LibroOficina({ hojas, hoja, setHoja }) {
+  const actual = hojas.find(h => h.id === hoja) ?? hojas[0]
+  return <div className="oficina-libro oficina-libro-principal">
+    <div className="oficina-hoja-principal" role="tabpanel" aria-label={actual.titulo}>{actual.contenido}</div>
+    <div className="oficina-pestanas" role="tablist" aria-label="Hojas de la oficina">
+      {hojas.map(h => <button key={h.id} type="button" role="tab" aria-selected={h.id === actual.id} className={h.id === actual.id ? 'activa' : ''} onClick={() => setHoja(h.id)}>
+        {h.titulo}{h.num > 0 && <span className="oficina-pestana-num" aria-label={`${h.num} esperan tu respuesta`}>{h.num}</span>}
+      </button>)}
+    </div>
+  </div>
+}
+
 // Quién sabe de tu relación con ella: nadie, todos o los que marques.
 function QuienSabe({ saben, cambiar, companeros }) {
   const [modo, setModo] = useState(saben.includes('*') ? 'todos' : saben.length ? 'algunos' : 'nadie')
