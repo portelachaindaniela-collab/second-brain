@@ -703,8 +703,9 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
 
       // Daniela: camina por su ruta; en una reunión por turnos la esperan sentada en su escritorio.
       if (D.volverDaniela !== daniela.volverVisto) { daniela.volverVisto = D.volverDaniela; volverAlEscritorio() }
-      // Cuando convocás una reunión en la sala (o en tu mesa), vas caminando a tu lugar; al terminar, volvés.
-      const reunionEnSala = Boolean(R && !R.propia && (R.modo === 'sala' || R.modo === 'oficina') && R.estado !== 'volviendo')
+      // Cuando convocás una reunión en la sala (o en tu mesa), vas caminando a tu lugar; al terminar, volvés. Lo mismo cuando
+      // alguien viene a tu oficina (te dijo que viene o lo llamaste): vas a la mesa con ellos.
+      const reunionEnSala = Boolean(R && (!R.propia || (R === enVisita && R.modo === 'oficina')) && (R.modo === 'sala' || R.modo === 'oficina') && R.estado !== 'volviendo')
       if (reunionEnSala && daniela.reunionId !== R.id) {
         daniela.reunionId = R.id
         daniela.lugarReunion = R.modo === 'oficina' ? DANIELA_OFICINA : DANIELA_SALA

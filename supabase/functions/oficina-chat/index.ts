@@ -152,7 +152,8 @@ async function armarAgente(db: any, equipo: string, clave: string) {
     leerDatos(db, equipo, clave), leerHilo(db), conversacionDe(db, id), vidaDe(db, id),
     db.from("oficina_corazon").select("agente,desde,estado,saben"),
   ]);
-  const suya = ELLAS.includes(id) ? (corazon?.data || []).find((f: any) => f.agente === id) : null;
+  // Lo que tiene Daniela con este agente en lo personal (cualquiera, lo elige ella).
+  const suya = (corazon?.data || []).find((f: any) => f.agente === id) ?? null;
   const c: any = contexto(equipo, clave, datos);
   if (c) {
     c.vida = lineasVida(id, social.vinculos, social.momentos, Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
@@ -276,6 +277,21 @@ async function derivar(db: any, pedidos: any[], origen = "agente") {
   return { solicitudes: guardadas, internas: agendadas };
 }
 
+// En la reunión cada uno es la misma persona que en la charla de a uno: su vida en la oficina, lo que tiene con Daniela y lo
+// que sabe de sus otras relaciones.
+async function sumarLoPersonal(db: any, participantes: any[], plantel: any[]) {
+  const nombres = Object.fromEntries(plantel.map((g: any) => [g.id, g.nombre]));
+  const corazon = await db.from("oficina_corazon").select("agente,desde,estado,saben");
+  await Promise.all(participantes.map(async (p: any) => {
+    const social = await vidaDe(db, p.id);
+    const suya = (corazon.data || []).find((f: any) => f.agente === p.id);
+    p.c.vida = lineasVida(p.id, social.vinculos, social.momentos, nombres);
+    p.c.pareja = suya?.desde ?? null;
+    p.c.estadoPareja = suya?.estado ?? null;
+    p.c.sabe = quienSabe(p.id, corazon.data || [], nombres);
+  }));
+}
+
 // Reunión: una sola llamada a la IA con la ficha de cada asistente; responden los que tengan algo que decir.
 async function reunion(db: any, body: any) {
   const v: any = validarReunion(body);
@@ -287,6 +303,7 @@ async function reunion(db: any, body: any) {
     hilo = await leerHilo(db);
     participantes = (await Promise.all(v.asistentes.map(async (a: any) => ({ id: a.id, c: contexto(a.equipo, a.clave, await leerDatos(db, a.equipo, a.clave)) }))))
       .filter((p: any) => p.c);
+    await sumarLoPersonal(db, participantes, hilo.plantel);
   } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
   if (!participantes.length) return json({ error: "No encontré a los asistentes." }, 404);
   try {

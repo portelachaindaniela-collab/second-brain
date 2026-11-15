@@ -550,6 +550,25 @@ export const TEXTO_VINCULO = {
   rivalidad: 'Rivales', separados: 'Separados', divorciados: 'Divorciados', ex: 'Ex',
 }
 export const ROMANTICOS = new Set(['casados', 'comprometidos', 'pareja', 'saliendo', 'amantes'])
+// Tu relación con cada agente: laboral (sin nada) o personal, con su tipo. Lo que le decís al cambiarla queda en su charla,
+// en el género que corresponde (vos sos mujer; con un varón, en masculino).
+export const RELACIONES_CON_VOS = [['amistad', 'Amistad'], ['mejores_amigos', 'Mejores amigos'], ['saliendo', 'Saliendo'], ['novias', 'Noviazgo'], ['comprometidas', 'Compromiso'], ['casadas', 'Matrimonio'], ['amantes', 'Amantes'], ['ex', 'Ex']]
+export const ROMANCE_CON_VOS = new Set(['saliendo', 'novias', 'comprometidas', 'casadas', 'amantes'])
+export function textoConVos(estado, id) {
+  const f = generoDe(id) === 'f'
+  if (!estado) return f ? 'Prefiero que volvamos a ser compañeras de trabajo.' : 'Prefiero que volvamos a ser compañeros de trabajo.'
+  const t = {
+    amistad: f ? 'Me caés re bien: ya somos amigas.' : 'Me caés re bien: ya somos amigos.',
+    mejores_amigos: f ? 'Sos de mis mejores amigas.' : 'Sos de mis mejores amigos.',
+    saliendo: 'Me gusta que estemos saliendo.',
+    novias: f ? '¿Querés ser mi novia? Para mí ya lo sos.' : '¿Querés ser mi novio? Para mí ya lo sos.',
+    comprometidas: f ? 'Estamos comprometidas.' : 'Estamos comprometidos.',
+    casadas: f ? 'Estamos casadas.' : 'Estamos casados.',
+    amantes: 'Lo nuestro queda entre nosotros.',
+    ex: 'Lo nuestro terminó.',
+  }[estado]
+  return t ? `${t}${ROMANCE_CON_VOS.has(estado) ? ' 💕' : ''}` : ''
+}
 
 // ---------- Femina, María y Noruega ----------
 // Entran a tu oficina cuando quieren, sin golpear: te cuentan una duda de trabajo, algo personal o te invitan a salir.

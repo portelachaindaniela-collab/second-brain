@@ -2,7 +2,7 @@ import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, u
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, quienEntra, PRIMERA_ENTRADA_MS, ELLAS, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, ROMANTICOS, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, sumarVisita, escenaDeVisitas, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, quienEntra, PRIMERA_ENTRADA_MS, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, ROMANTICOS, RELACIONES_CON_VOS, ROMANCE_CON_VOS, textoConVos, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, sumarVisita, escenaDeVisitas, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -225,7 +225,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   // Lo que sos con Femina, María o Noruega (lo elegís vos; podés con varias). Queda dicho en la charla con ella, así lo sabe.
   const cambiarConVos = async (id, estado) => {
     await cambiarConVosEnBase(id, estado)
-    const dicho = estado ? `${TEXTO_CON_VOS[estado]} 💕` : 'Prefiero que volvamos a ser compañeras.'
+    const dicho = textoConVos(estado, id)
     setCharlas(c => ({ ...c, [id]: [...(c[id] ?? []), { role: 'user', content: dicho }] }))
     anotarEnConversacion(id, dicho).catch(() => { /* igual quedó guardado el estado */ })
     actualizar()
@@ -761,8 +761,6 @@ async function contestarEncuentroEnBase(agente, respuesta) {
   if (error) throw error
 }
 // Lo que sos con Femina, María o Noruega: '' (compañeras), saliendo, novias, comprometidas o casadas.
-const ESTADOS_CON_VOS = [['', 'Compañeras'], ['saliendo', 'Saliendo'], ['novias', 'Novias'], ['comprometidas', 'Comprometidas'], ['casadas', 'Casadas']]
-const TEXTO_CON_VOS = { saliendo: 'Me gusta que estemos saliendo.', novias: '¿Querés ser mi novia? Para mí ya lo sos.', comprometidas: 'Estamos comprometidas.', casadas: 'Estamos casadas.' }
 async function cambiarCorazonEnBase(agente, estado) {
   const { error } = estado
     ? await supabase.from('oficina_corazon').upsert({ agente, estado }, { onConflict: 'owner_id,agente' })
@@ -894,6 +892,31 @@ function ChatGeneral({ mensajes, agentes, escribir }) {
   </div>
 }
 
+// Tu relación con el agente: laboral o personal; si es personal, elegís el tipo (amistad, noviazgo, matrimonio, ex…).
+function RelacionConVos({ conVos, cambiar }) {
+  const [personal, setPersonal] = useState(Boolean(conVos))
+  return <div className="oficina-relacion">
+    <label className="oficina-con-vos">
+      <span>Con vos</span>
+      <select value={personal ? 'personal' : 'laboral'} onChange={e => {
+        const p = e.target.value === 'personal'
+        setPersonal(p)
+        if (!p && conVos) cambiar('')
+        if (p && !conVos) cambiar('amistad')
+      }}>
+        <option value="laboral">Laboral</option>
+        <option value="personal">Personal</option>
+      </select>
+    </label>
+    {personal && <label className="oficina-con-vos">
+      <span>Tipo</span>
+      <select value={conVos || 'amistad'} onChange={e => cambiar(e.target.value)}>
+        {RELACIONES_CON_VOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+      </select>
+    </label>}
+  </div>
+}
+
 // Quién sabe de tu relación con ella: nadie, todos o los que marques.
 function QuienSabe({ saben, cambiar, companeros }) {
   const [modo, setModo] = useState(saben.includes('*') ? 'todos' : saben.length ? 'algunos' : 'nadie')
@@ -935,7 +958,7 @@ function VidaOficina({ vinculos, momentos, agentes, corazon = [] }) {
     {corazon.length > 0 && <div>
       <p className="oficina-vida-titulo">Con vos</p>
       <ul className="oficina-vida-lista">{corazon.map(x => <li key={x.agente}>
-        <span className="oficina-vinculo vinculo-pareja">❤ {ESTADOS_CON_VOS.find(([v]) => v === x.estado)?.[1] ?? 'Novias'}</span><strong>{nombre(x.agente)}</strong>
+        <span className={`oficina-vinculo ${ROMANCE_CON_VOS.has(x.estado) ? 'vinculo-pareja' : x.estado === 'ex' ? 'vinculo-ex' : 'vinculo-amistad'}`}>{ROMANCE_CON_VOS.has(x.estado) ? '❤ ' : ''}{RELACIONES_CON_VOS.find(([v]) => v === x.estado)?.[1] ?? 'Noviazgo'}</span><strong>{nombre(x.agente)}</strong>
         <span className="tenue"> · desde el {new Date(x.desde).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'long' })}</span>
       </li>)}</ul>
     </div>}
@@ -1119,13 +1142,8 @@ function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, setCharla,
             abrirChat?.(a.id)
             cerrar()
           }}>{deVisita ? 'Está en tu oficina' : 'Llamar a mi oficina'}</button>}
-          {ELLAS.includes(a.id) && cambiarConVos && <label className="oficina-con-vos">
-            <span>Con vos</span>
-            <select value={conVos} onChange={e => cambiarConVos(e.target.value)}>
-              {ESTADOS_CON_VOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
-            </select>
-          </label>}
-          {ELLAS.includes(a.id) && conVos && cambiarSaben && <QuienSabe saben={saben} cambiar={cambiarSaben} companeros={companeros} />}
+          {!a.sinCharla && cambiarConVos && <RelacionConVos conVos={conVos} cambiar={cambiarConVos} />}
+          {!a.sinCharla && conVos && cambiarSaben && <QuienSabe saben={saben} cambiar={cambiarSaben} companeros={companeros} />}
         </>}
         {pestana === 'que' && <p className="oficina-descripcion">{a.descripcion || 'Sin descripción cargada.'}</p>}
         {pestana === 'tareas' && (a.tareas.length

@@ -415,3 +415,11 @@ test('visitas: pueden venir varios a la vez', async () => {
   assert.deepEqual(escenaDeVisitas(v2).agentes, ['pdg:femina', 'up:noruega'])
   assert.equal(escenaDeVisitas([]), null)
 })
+
+test('tu relación con cada agente: lo que le decís, en su género', async () => {
+  const { textoConVos } = await import('./oficina.mjs')
+  assert.equal(textoConVos('novias', 'up:noruega'), '¿Querés ser mi novia? Para mí ya lo sos. 💕')
+  assert.equal(textoConVos('novias', 'up:redactor'), '¿Querés ser mi novio? Para mí ya lo sos. 💕')
+  assert.equal(textoConVos('amistad', 'up:redactor'), 'Me caés re bien: ya somos amigos.')
+  assert.equal(textoConVos('', 'up:redactor'), 'Prefiero que volvamos a ser compañeros de trabajo.')
+})
