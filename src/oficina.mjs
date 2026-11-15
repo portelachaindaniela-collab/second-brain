@@ -530,3 +530,16 @@ export function momentoQueToca(momentos = [], hoy, jugados = new Set(), presente
 }
 export const TEXTO_MOMENTO = { mate: 'tomaron mate', cafe: 'se tomaron un café', almuerzo: 'almorzaron juntos', merienda: 'merendaron juntos', cena: 'salieron a cenar', after: 'fueron a un after office', paseo: 'salieron a pasear' }
 export const TEXTO_VINCULO = { amistad: 'Amigos', pareja: 'Pareja', companerismo: 'Compañeros' }
+
+// ---------- Femina, María y Noruega ----------
+// Entran a tu oficina cuando quieren, sin golpear: te cuentan una duda de trabajo, algo personal o te invitan a salir.
+// La primera al rato de abrir la Oficina; después, cada tanto y no más de unas pocas veces por visita.
+export const ELLAS = ['pdg:femina', 'trabajadores:maria', 'up:noruega']
+export const PRIMERA_ENTRADA_MS = 4 * 60_000
+export const ENTRE_ENTRADAS_MS = 12 * 60_000
+export const MAX_ENTRADAS = 4
+export function quienEntra(agentes = [], ultima = 0, cuantas = 0, ahora = Date.now(), azar = Math.random) {
+  if (cuantas >= MAX_ENTRADAS || (ultima && ahora - ultima < ENTRE_ENTRADAS_MS)) return null
+  const ellas = ELLAS.filter(id => agentes.some(a => a.id === id && a.estado !== 'pausado'))
+  return ellas.length ? ellas[Math.floor(azar() * ellas.length) % ellas.length] : null
+}

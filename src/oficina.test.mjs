@@ -389,3 +389,14 @@ test('vida de la oficina: los momentos de hoy que pasan adentro se ven de a uno'
   assert.equal(momentoQueToca(ms, '2026-11-15', new Set([3]))?.id, 4)
   assert.equal(momentoQueToca(ms, '2026-11-15', new Set([3]), new Set(['a:x', 'b:y'])), null)
 })
+
+test('Femina, María y Noruega entran a tu oficina de a una, con pausa y pocas veces', async () => {
+  const { quienEntra, ENTRE_ENTRADAS_MS, MAX_ENTRADAS } = await import('./oficina.mjs')
+  const agentes = [{ id: 'up:noruega', estado: 'libre' }, { id: 'pdg:femina', estado: 'pausado' }, { id: 'up:redactor', estado: 'libre' }]
+  const t = Date.parse('2026-11-15T15:00:00Z')
+  assert.equal(quienEntra(agentes, 0, 0, t, () => 0.9), 'up:noruega')
+  assert.equal(quienEntra(agentes, t - 60_000, 1, t), null)
+  assert.equal(quienEntra(agentes, t - ENTRE_ENTRADAS_MS - 1, 1, t), 'up:noruega')
+  assert.equal(quienEntra(agentes, 0, MAX_ENTRADAS, t), null)
+  assert.equal(quienEntra([{ id: 'up:redactor', estado: 'libre' }], 0, 0, t), null)
+})
