@@ -357,3 +357,11 @@ test('golpear la puerta: de a uno, con pausa y sin repetir', async () => {
   assert.equal(quienGolpea(['up:noruega'], datos, new Set(), t - 60_000, t), null)
   assert.equal(quienGolpea(['up:noruega'], datos, new Set(['p3']), t - ENTRE_GOLPES_MS - 1, t), null)
 })
+
+test('pasillo: el mismo agente no te para de nuevo enseguida', async () => {
+  const { puedenPararte, ENTRE_ENCUENTROS_MS } = await import('./oficina.mjs')
+  const t = Date.parse('2026-11-15T13:00:00Z')
+  const ultimos = new Map([['up:noruega', t - 60_000]])
+  assert.deepEqual(puedenPararte(['up:noruega', 'pdg:femina'], ultimos, t), ['pdg:femina'])
+  assert.deepEqual(puedenPararte(['up:noruega'], ultimos, t + ENTRE_ENCUENTROS_MS), ['up:noruega'])
+})

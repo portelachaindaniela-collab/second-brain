@@ -2,7 +2,7 @@ import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, u
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, VISITA_MS, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, VISITA_MS, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -222,7 +222,8 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const [despues, setDespues] = useState(() => new Map())
   // Lo que ya contestaste (en el pasillo o en tu puerta) no te lo vuelven a plantear: queda en su charla y en Mensajes.
   const [contestados] = useState(() => leerGuardados(CLAVE_CONTESTADOS))
-  const encuentro = primerEncuentro(cercanos, { solicitudes, pendientes }, new Set([...pospuestos(despues, ahora), ...contestados]))
+  const [ultimosEncuentros, setUltimosEncuentros] = useState(() => new Map())
+  const encuentro = primerEncuentro(puedenPararte(cercanos, ultimosEncuentros, ahora), { solicitudes, pendientes }, new Set([...pospuestos(despues, ahora), ...contestados]))
   // El aviso del pasillo queda fijo hasta que lo contestes, aunque el agente o vos se alejen.
   const [fijo, setFijo] = useState(null)
   const sigue = x => !x?.pedido || solicitudes.some(s => s.id === x.pedido.id && s.estado === 'pendiente')
@@ -408,6 +409,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const contestar = async (e, respuesta) => {
     contestados.add(e.clave)
     guardarGuardados(CLAVE_CONTESTADOS, contestados)
+    setUltimosEncuentros(m => new Map(m).set(e.id, Date.now()))
     if (e === fijo) setFijo(null)
     const anotado = await anotados.current[e.clave]
     delete anotados.current[e.clave]
