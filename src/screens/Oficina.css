@@ -134,12 +134,12 @@
 .reunion-punto { width: 8px; height: 8px; border-radius: 50%; background: #6b6680; flex-shrink: 0; }
 .reunion-gente li.habla .reunion-punto { background: #f0a63c; box-shadow: 0 0 0 4px rgba(240, 166, 60, .25); }
 .reunion-sub { grid-area: sub; padding: var(--esp-8) var(--esp-16) 0 var(--esp-16); display: flex; flex-direction: column; gap: var(--esp-8); min-height: 0; }
-.reunion-subtitulo { margin: 0; padding: var(--esp-8) var(--esp-12); border-radius: 8px; background: rgba(0, 0, 0, .55); color: #fff; font-size: var(--letra-14); line-height: 1.45; }
-.reunion-mensajes { max-height: 22vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; font-size: var(--letra-12); color: #d9d3e8; }
+.reunion-subtitulo { margin: 0; padding: var(--esp-8) var(--esp-12); border-radius: 8px; background: rgba(0, 0, 0, .55); color: #fff; font-size: var(--letra-20); line-height: 1.45; }
+.reunion-mensajes { max-height: 22vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: var(--letra-16); line-height: 1.5; color: #d9d3e8; }
 .reunion-mensaje { margin: 0; overflow-wrap: anywhere; }
 .reunion-mensaje.de-yo { color: #f6dd8b; }
 .reunion-escribir { display: flex; gap: var(--esp-8); align-items: center; }
-.reunion-escribir input { flex: 1; min-width: 0; }
+.reunion-escribir input { flex: 1; min-width: 0; font-size: var(--letra-16); }
 .reunion-controles { grid-area: controles; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-8); padding: var(--esp-12) var(--esp-16); border-top: 1px solid rgba(255, 255, 255, .08); color: #9d95b5; font-size: var(--letra-12); }
 .reunion-controles .btn-primary { margin-right: auto; }
 .btn.reunion-salir { background: #e85d6a; border-color: #e85d6a; color: #fff; }
