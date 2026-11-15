@@ -90,7 +90,7 @@ test('pizarrones con rueditas: no pisan muebles y dejan pasar al balcón y por e
   }
   const [pasillo, oficina] = PIZARRONES.map(huellaPizarron)
   assert.ok(pasillo.y0 > LIVING.sillonEste.y1 && pasillo.y1 < RINCON_TABLONES.macetones[1][1] - 0.4, 'el del pasillo queda entre el living y el rincón de PDG')
-  assert.ok(oficina.x0 > MUEBLES_DIRECCION.sillon.x1 + 0.6 && oficina.x1 < DANIELA.escritorio.x - 1.15 - 1.2, 'el de Daniela, entre el sillón y su escritorio')
+  assert.ok(oficina.x0 > MUEBLES_DIRECCION.sillon.x1 + 0.5 && oficina.x1 < DANIELA.escritorio.x - 1.15 - 0.8, 'el de Daniela, entre el sillón y su escritorio')
   // Del escritorio de Daniela al sillón de la tele (pasa por delante del pizarrón).
   const sillon = buscarCamino(g, salida, { x: MUEBLES_DIRECCION.sillon.x1 + 0.4, y: 4.0 })
   assert.ok(sillon && caminable(sillon), 'llega al sillón')

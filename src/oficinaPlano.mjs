@@ -62,7 +62,8 @@ const ancho = l => l.filter((p, i) => i === 0 || p.x !== l[i - 1].x || p.y !== l
 
 // La fila ejecutiva, de izquierda a derecha: la oficina de María, la de Femina y la de Daniela (DIRECCION).
 export const FEMINA = 'femina'
-export const OFICINA_FEMINA = { x0: 23.5, x1: 28.5 }
+// Femina es ejecutiva de segundo nivel: su oficina es más chica que la de María y más grande que las de los trabajadores.
+export const OFICINA_FEMINA = { x0: 23.5, x1: 30.5 }
 // La oficina de María: la de la izquierda de la fila ejecutiva, grande, con zona de estar (`jefa: true`).
 export function oficinaMaria() {
   const x0 = X0, x1 = OFICINA_FEMINA.x0, y0 = EJECUTIVO.y0, y1 = EJECUTIVO.y1
@@ -87,14 +88,15 @@ export function oficinaFemina() {
     salida: ancho([sentado, { x: puerta.x, y: sentado.y }, puerta, { x: puerta.x, y: CORREDOR_EJECUTIVO }]) }
 }
 // Lo que hay en la oficina de Femina además del escritorio (lo dibuja mundo.js y lo esquiva Daniela al caminar):
-// archivero con impresora contra la pared izquierda, un sillón con mesita para las visitas, una pizarra con ruedas,
-// una lámpara de pie y un perchero.
+// archivero con impresora contra la pared izquierda, dos sillones enfrentados con una mesita para las visitas, una
+// biblioteca contra la pared derecha, una pizarra con ruedas, una lámpara de pie y un perchero.
 export const MUEBLES_FEMINA = {
   archivero: { x0: 23.62, x1: 24.22, y0: 0.9, y1: 1.6 },
-  sillon: { x: 24.15, y: 5.3, mira: Math.PI / 2 },
-  mesita: { x: 24.15, y: 4.4, radio: 0.28 },
-  pizarra: { x0: 25.4, x1: 26.9, y: 6.45 },
-  lampara: { x: 28.15, y: 6.4 },
+  sillones: [{ x: 24.1, y: 5.0, mira: Math.PI / 2 }, { x: 25.9, y: 5.0, mira: -Math.PI / 2 }],
+  mesita: { x: 25.0, y: 5.0, radio: 0.28 },
+  biblioteca: { x0: 30.05, x1: 30.42, y0: 1.0, y1: 3.2 },
+  pizarra: { x0: 27.2, x1: 28.7, y: 6.45 },
+  lampara: { x: 30.1, y: 5.2 },
   perchero: { x: 23.8, y: 6.5 },
 }
 // Los de PDG que trabajan en el tablón (Femina tiene su oficina).
@@ -501,7 +503,7 @@ export const PLAZO_REUNION_S = 120
 // ---------- La oficina de Daniela y la sala de espera ----------
 // Daniela es la jefa de todos: la oficina más grande del edificio, a la derecha de la fila ejecutiva, con balcón.
 // Frente a su puerta, del otro lado del corredor, la sala de espera: ahí esperan su turno los agentes que cita.
-export const DIRECCION = { x0: 28.5, x1: PISO.ancho, y0: 0, y1: EJECUTIVO.y1, puerta: { x: 36.5, y: EJECUTIVO.y1 } }
+export const DIRECCION = { x0: OFICINA_FEMINA.x1, x1: PISO.ancho, y0: 0, y1: EJECUTIVO.y1, puerta: { x: 36.5, y: EJECUTIVO.y1 } }
 export const DANIELA = { id: 'yo:daniela', nombre: 'Daniela', escritorio: { x: 36.5, y: 2.9 }, sentado: { x: 36.5, y: 2.0 }, mira: 0 }
 export const VISITA = { x: 36.5, y: 4.3, mira: Math.PI } // la silla frente a su escritorio
 // Roberta, la perra de Daniela: su camita al lado del escritorio. Cuando Daniela camina, la sigue.
@@ -540,17 +542,17 @@ export function caminoDesdePuerta(asiento) {
 }
 export const MESA_CHICA_MARIA = { dx: 3.7, dy: 4.6 } // relativa a la oficina de María (x0, y0)
 export const PLANTAS_DANIELA = [
-  { x: 29.0, y: 6.55, escala: 1.2 }, { x: 31.0, y: 6.4, escala: 1.3 }, { x: 33.6, y: 6.55, escala: 1.0 },
+  { x: 31.0, y: 6.55, escala: 1.2 }, { x: 32.4, y: 6.4, escala: 1.3 }, { x: 33.6, y: 6.55, escala: 1.0 },
   { x: 39.3, y: 6.5, escala: 1.1 }, { x: 41.6, y: 6.4, escala: 1.1 }, { x: 44.5, y: 1.0, escala: 1.2 },
 ]
-export const ROBERTA = { nombre: 'Roberta', cama: { x: 34.3, y: 1.6 } }
+export const ROBERTA = { nombre: 'Roberta', cama: { x: 35.0, y: 1.0 } }
 // Los pizarrones grandes con rueditas que muestran el calendario de la oficina: uno al final del pasillo principal
 // (entre el living y el rincón de PDG) y otro en la oficina de Daniela, entre el sillón de la tele y su escritorio,
 // mirando hacia ella. giro: hacia dónde mira el frente (0 = al sur; π/2 = al este). Los dos miran hacia donde está la
 // cámara de entrada (desde el sureste). ancho y alto del tablero, en metros.
 export const PIZARRONES = [
   { id: 'pasillo', x: 43.2, y: 13.45, ancho: 2.8, alto: 1.7, giro: 0.6 },
-  { id: 'daniela', x: 32.8, y: 2.6, ancho: 2.2, alto: 1.45, giro: Math.PI / 2 - 0.25 },
+  { id: 'daniela', x: 34.15, y: 2.6, ancho: 2.2, alto: 1.45, giro: Math.PI / 2 - 0.1 },
 ]
 export const FONDO_PIZARRON = 0.55 // lo que ocupan las patas con rueditas, de adelante hacia atrás
 // El rectángulo que ocupa en el piso (alineado a los ejes, para la caminata).
@@ -562,9 +564,9 @@ export function huellaPizarron(p) {
 // Lo que hay en su oficina (lo dibuja oficina3d/mundo.js y lo esquiva su caminata): biblioteca en toda la pared del
 // fondo, tele en la pared izquierda con el sillón enfrente, baño privado en el rincón y balcón del lado abierto.
 export const MUEBLES_DIRECCION = {
-  biblioteca: { x0: 28.6, x1: 44.95, y0: 0, y1: 0.5 },
-  sillon: { x0: 30.2, x1: 31.25, y0: 2.8, y1: 5.2 },
-  mesita: { x: 29.55, y: 4.0, radio: 0.35 },
+  biblioteca: { x0: 30.6, x1: 44.95, y0: 0, y1: 0.5 },
+  sillon: { x0: 32.2, x1: 33.25, y0: 2.8, y1: 5.2 },
+  mesita: { x: 31.55, y: 4.0, radio: 0.35 },
   tele: { y0: 3.0, y1: 5.0 },
   bano: { x0: 42.4, x1: 44.95, y0: 4.9, y1: 6.95, puerta: { y0: 5.3, y1: 6.1 } },
   balcon: { x0: 45, x1: 47.2, y0: 0.8, y1: 4.4, puerta: { y0: 1.6, y1: 3.2 },

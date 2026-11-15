@@ -304,8 +304,8 @@ function mueblesFemina(y0) {
   g.add(caja(A.x0 + 0.04, A.x1 - 0.04, 0.85, 1.07, z(A.y0) + 0.08, z(A.y1) - 0.08, mat(COLORES.blanco), { r: 0.03 }))
   g.add(caja(A.x0 + 0.1, A.x1 - 0.1, 1.07, 1.09, z(A.y0) + 0.15, z(A.y1) - 0.2, mat(COLORES.negro)))
   g.add(caja(A.x1 - 0.06, A.x1 + 0.08, 0.95, 0.97, z(A.y0) + 0.2, z(A.y1) - 0.2, mat(COLORES.blanco)))
-  // Sillón para las visitas y su mesita.
-  g.add(sillonChico(F.sillon.x, z(F.sillon.y), F.sillon.mira))
+  // Dos sillones enfrentados para las visitas, con su mesita.
+  for (const x of F.sillones) g.add(sillonChico(x.x, z(x.y), x.mira))
   g.add(cilindro(F.mesita.x, z(F.mesita.y), F.mesita.radio, 0.42, 0.46, mat(COLORES.madera)))
   g.add(cilindro(F.mesita.x, z(F.mesita.y), 0.03, 0, 0.42, mat(COLORES.maderaOscura)))
   g.add(cilindro(F.mesita.x + 0.08, z(F.mesita.y), 0.04, 0.46, 0.55, mat(COLORES.blanco)))
@@ -317,6 +317,12 @@ function mueblesFemina(y0) {
     g.add(caja(x - 0.02, x + 0.02, 0.1, 0.8, z(P.y) - 0.02, z(P.y) + 0.02, mat(COLORES.gris)))
     g.add(caja(x - 0.02, x + 0.02, 0.06, 0.1, z(P.y) - 0.18, z(P.y) + 0.18, mat(COLORES.gris)))
   }
+  // Biblioteca contra la pared derecha, con carpetas y libros.
+  const B = F.biblioteca
+  g.add(caja(B.x0, B.x1, 0, 1.9, z(B.y0), z(B.y1), mat(COLORES.madera), { r: 0.02 }))
+  ;[0.5, 1.1, 1.65].forEach((y, k) => {
+    for (let j = 0; j < 8; j++) g.add(caja(B.x0 + 0.04, B.x0 + 0.3, y - 0.42, y - 0.06 - ((j + k) % 3) * 0.04, z(B.y0) + 0.1 + j * 0.26, z(B.y0) + 0.3 + j * 0.26, mat(['#2f7d4f', '#c9ced6', '#c2471a', '#e9e2d2'][(j + k) % 4]), { sombra: false }))
+  })
   // Lámpara de pie y perchero (con su saco y la cartera).
   g.add(cilindro(F.lampara.x, z(F.lampara.y), 0.16, 0, 0.03, mat(COLORES.negro)))
   g.add(cilindro(F.lampara.x, z(F.lampara.y), 0.018, 0.03, 1.55, mat(COLORES.negro)))
