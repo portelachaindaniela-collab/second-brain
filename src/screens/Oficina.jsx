@@ -68,7 +68,7 @@ async function cargarOficina() {
     leer('relaciones entre agentes', supabase.from('oficina_vinculos').select('id,a,b,tipo,historia,desde,afinidad,secreto').order('actualizado', { ascending: false }).limit(100), []),
     leer('tu pareja', supabase.from('oficina_corazon').select('agente,desde,estado,saben'), []),
     leer('vida de la oficina', supabase.from('oficina_momentos').select('id,agentes,tipo,lugar,resumen,fecha,hora,charla').gte('fecha', new Date(ahora - 7 * DIA_MS).toISOString().slice(0, 10)).order('fecha', { ascending: false }).limit(60), []),
-    leer('chat de la oficina', supabase.from('oficina_chat_general').select('id,autor,texto,tipo,creado').order('creado', { ascending: false }).order('id', { ascending: false }).limit(80), []),
+    leer('chat de la oficina', supabase.from('oficina_chat_general').select('id,autor,texto,tipo,creado').order('creado', { ascending: false }).order('id', { ascending: false }).limit(200), []),
   ])
   const corridasPor = {}
   await Promise.all(trabajadores.map(async t => {
