@@ -230,6 +230,8 @@
 /* Pedidos como un libro de Excel: tabla por hoja y pestañas por agente abajo. */
 .oficina-libro { border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; container-type: inline-size; }
 .oficina-hoja { max-height: 22rem; overflow: auto; }
+/* Las hojas de abajo de la escena: una a la vista, con su propio scroll. */
+.oficina-hoja-principal { max-height: 34rem; overflow: auto; padding: var(--esp-16); }
 .oficina-planilla { width: 100%; border-collapse: collapse; font-size: var(--letra-13); }
 .oficina-planilla th { position: sticky; top: 0; z-index: 1; background: var(--surface-inset); text-align: left; font-weight: 600; font-size: var(--letra-12); color: var(--gray-500, inherit); padding: 6px 8px; border-bottom: 1px solid var(--gray-200); }
 .oficina-planilla td { padding: 5px 8px; border-bottom: 1px solid var(--gray-200); vertical-align: middle; }
