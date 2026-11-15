@@ -465,3 +465,11 @@ test('los ids que escribe la IA en los textos se cambian por el nombre', async (
   assert.equal(v.vinculos[0].historia, 'Diseñador')
   assert.equal(v.noticias[0].texto, '¡Feliz cumple Diseñador!')
 })
+
+test('en el chat de la oficina contestan todos', async () => {
+  const { leerGeneral, sistemaGeneral } = await import('./logic.mjs')
+  const ids = ['up:noruega', 'pdg:femina', 'trabajadores:maria', 'up:redactor']
+  const r = leerGeneral(JSON.stringify({ respuestas: ids.map(autor => ({ autor, texto: '¡Hola!' })) }), ids)
+  assert.equal(r.length, 4)
+  assert.match(sistemaGeneral(ids.map(id => ({ id, nombre: id })), [{ autor: 'daniela', texto: 'hola' }], [], [], 'hoy'), /Contestan TODOS/)
+})

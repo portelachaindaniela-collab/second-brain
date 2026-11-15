@@ -667,7 +667,7 @@ export function cumpleDe(id) {
   return `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
 }
 // El chat de la oficina, para el prompt: los últimos mensajes (el más viejo primero).
-const lineasGeneral = (general, nombre) => general.slice(-15).map(m => `- ${m.autor === 'daniela' ? 'Daniela' : nombre(m.autor)}: ${recortar(m.texto, 200)}`).join('\n')
+const lineasGeneral = (general, nombre) => general.slice(-30).map(m => `- ${m.autor === 'daniela' ? 'Daniela' : nombre(m.autor)}: ${recortar(m.texto, 200)}`).join('\n')
 // Lo de Daniela que saben todos (lo eligió ella): se puede comentar en el chat de la oficina. Lo privado, no.
 const lineasPublicas = (publicas, nombre) => publicas.map(x => `- Daniela y ${nombre(x.agente)} ${textoPareja(x.estado, x.agente)}`).join('\n')
 export const MAX_NOTICIAS = 6
@@ -760,7 +760,7 @@ const leerMensajesGeneral = (lista, validos, max) => (Array.isArray(lista) ? lis
   .filter(n => validos.has(n.autor) && n.texto.length >= 2).slice(0, max)
 
 // ---------- El chat de la oficina ----------
-// Daniela escribe en el chat de todos y contestan los que tienen algo que decir (1 a 3), como en un grupo.
+// Daniela escribe en el chat de todos y contestan todos, como en un grupo.
 export function validarGeneral(body) {
   const texto = String(body?.general ?? '').trim().slice(0, MAX_CARACTERES)
   return texto ? { ok: true, texto } : { ok: false, error: 'Falta el mensaje.' }
@@ -780,8 +780,9 @@ ${publicas.length ? `\nDe Daniela se sabe en la oficina:\n${lineasPublicas(publi
 Lo último del chat (el último mensaje es de Daniela):
 ${lineasGeneral(general, nombre)}
 
-Contestan a Daniela 1 a 3 agentes, los que tengan algo que decir (si nombra a alguien, contesta ese). Cada uno en primera
-persona, en español rioplatense, corto (1 o 2 oraciones), con su personalidad y lo que vive en la oficina: pueden bromear,
+Contestan TODOS los del plantel, uno por uno, como en un grupo de WhatsApp: cada uno una vez (si Daniela nombra a alguien,
+ese contesta primero). Pueden responderse entre ellos y retomar lo que dijo otro. Cada uno en primera
+persona, en español rioplatense, corto (1 oración), con su personalidad y lo que vive en la oficina: pueden bromear,
 chusmear, ponerse celosos o discutir entre ellos, con respeto y nada explícito. Lo privado de Daniela no se dice acá.
 Nadie pide permisos ni claves por este chat. En el texto se nombra a la gente por su nombre, nunca por su id.
 
@@ -792,7 +793,7 @@ export function leerGeneral(texto, idsValidos) {
   const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
   let d = null
   if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
-  return leerMensajesGeneral(d?.respuestas, new Set(idsValidos), 3)
+  return leerMensajesGeneral(d?.respuestas, new Set(idsValidos), idsValidos.length)
 }
 // Lo que un agente sabe de su vida en la oficina: sus relaciones y lo último que compartió (para sus charlas).
 export function lineasVida(id, vinculos = [], momentos = [], nombres = {}) {

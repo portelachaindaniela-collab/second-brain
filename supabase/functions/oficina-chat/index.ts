@@ -112,14 +112,14 @@ async function vida(db: any) {
 
 // El chat de la oficina: los últimos mensajes (el más viejo primero) y lo de Daniela que saben todos.
 async function ultimosGeneral(db: any) {
-  const { data } = await db.from("oficina_chat_general").select("autor,texto,creado").order("creado", { ascending: false }).order("id", { ascending: false }).limit(20);
+  const { data } = await db.from("oficina_chat_general").select("autor,texto,creado").order("creado", { ascending: false }).order("id", { ascending: false }).limit(40);
   return (data || []).reverse();
 }
 async function publicasDeDaniela(db: any) {
   const { data } = await db.from("oficina_corazon").select("agente,estado,saben").contains("saben", ["*"]);
   return data || [];
 }
-// Daniela escribe en el chat de la oficina: se guarda y contestan 1 a 3 agentes (también quedan guardados).
+// Daniela escribe en el chat de la oficina: se guarda y contestan todos los agentes (también quedan guardados).
 async function general(db: any, body: any) {
   const v: any = validarGeneral(body);
   if (!v.ok) return json({ error: v.error }, 400);
@@ -131,7 +131,7 @@ async function general(db: any, body: any) {
   const privadas = (cor.data || []).filter((x: any) => !(x.saben || []).includes("*"));
   const plantel = [...gente.trabajadores, ...gente.up, ...gente.pdg, ...gente.sistemas];
   try {
-    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaGeneral(plantel, g, vin.data || [], pub, hoyLargo(), privadas) }, { role: "user", content: v.texto }], temperature: 0.8, max_tokens: 900 }));
+    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaGeneral(plantel, g, vin.data || [], pub, hoyLargo(), privadas) }, { role: "user", content: v.texto }], temperature: 0.8, max_tokens: 4000 }, { timeoutMs: 110000 }));
     const nombres = Object.fromEntries(plantel.map(x => [x.id, x.nombre]));
     const respuestas = leerGeneral((resultado as any)?.content, plantel.map(x => x.id)).map(r => ({ ...r, texto: conNombres(r.texto, nombres) }));
     if (respuestas.length) {
