@@ -311,7 +311,7 @@ export function VistaTurnos({ reunion, agentes, ahora, hablando, setHablando, ha
     charla.decir([{ de: 'yo', texto }], true)
     setEsperando(true)
     try {
-      const respuesta = await hablar(actual.id, historial)
+      const respuesta = await hablar(actual.id, historial, 'reunion')
       charlaDe.current[actual.id] = [...historial, { role: 'assistant', content: respuesta }]
       charla.decir([{ de: actual.id, texto: respuesta }], true)
     } catch (e) { setError(e.message) }

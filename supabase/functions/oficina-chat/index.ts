@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
@@ -8,7 +8,7 @@ import { AGENTES_UP } from "../_shared/oficina.mjs";
 // { reunion: true, asistentes: [...], mensajes } (reunión: responde con { respuestas: [{ agente, texto }] }),
 // { acta: true, ... } (María escribe el acta), { propuestas: true } (las propuestas del día) o { reunion_interna: id }
 // (los agentes se juntan entre ellos y María escribe el acta). Todas leen el hilo de la
-// oficina (actas, tareas, pedidos y el plantel). Lee con la sesión de la dueña (RLS, nunca con permisos de servicio).
+// oficina (actas, tareas, pedidos y el plantel); la charla con uno lee además toda su conversación guardada con Daniela. Lee con la sesión de la dueña (RLS, nunca con permisos de servicio).
 // Lo que escribe: los pedidos de permiso de los agentes (entran pendientes, la base no deja crearlos de otra forma,
 // hasta que Daniela decide) y el acta de cada reunión con sus tareas.
 
@@ -38,16 +38,20 @@ async function tareasDe(db: any, id: string) {
   return data || [];
 }
 
-// Lo que le dijo a Daniela en el pasillo en los últimos dos días (y lo que ella contestó).
-async function encuentrosDe(db: any, id: string) {
-  const { data } = await db.from("oficina_encuentros").select("texto,respuesta,creado").eq("agente", id).gte("creado", new Date(Date.now() - 2 * 86400000).toISOString()).order("creado", { ascending: false }).limit(5);
-  return data || [];
+// La conversación guardada de un agente con Daniela (chat, pasillo y reuniones), de la más vieja a la más nueva.
+async function conversacionDe(db: any, id: string) {
+  const { data } = await db.from("oficina_conversacion").select("de,texto,lugar,creado").eq("agente", id).order("creado", { ascending: false }).limit(MAX_HISTORIAL);
+  return (data || []).reverse();
+}
+async function guardarConversacion(db: any, filas: any[]) {
+  if (!filas.length) return;
+  const { error } = await db.from("oficina_conversacion").insert(filas.map(f => ({ ...f, texto: String(f.texto).slice(0, 4000) })));
+  if (error) console.error("oficina-chat: no se pudo guardar la conversación", error.message);
 }
 
 async function leerDatos(db: any, equipo: string, clave: string) {
   const datos: any = await leerDatosBase(db, equipo, clave);
-  const [tareas, encuentros] = await Promise.all([tareasDe(db, `${equipo}:${clave}`), encuentrosDe(db, `${equipo}:${clave}`)]);
-  Object.assign(datos, { tareas, encuentros });
+  datos.tareas = await tareasDe(db, `${equipo}:${clave}`);
   return datos;
 }
 
@@ -146,6 +150,9 @@ async function reunion(db: any, body: any) {
     const respuestas = leerRespuestas((resultado as any)?.content, participantes.map((p: any) => p.id));
     if (!respuestas.length) return json({ error: "Nadie respondió. Probá preguntar de nuevo, o nombrá a alguien." }, 502);
     const { solicitudes, internas } = await derivar(db, leerSolicitudes((resultado as any)?.content, participantes.map((p: any) => p.id)), "reunion");
+    // Lo que se dijeron en la reunión queda en la conversación de cada uno que habló.
+    const dijo = v.mensajes.at(-1).content;
+    await guardarConversacion(db, respuestas.flatMap((r: any) => [{ agente: r.agente, de: "daniela", texto: dijo, lugar: "reunion" }, { agente: r.agente, de: "agente", texto: r.texto, lugar: "reunion" }]));
     return json({ respuestas, solicitudes, internas, ia });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
@@ -272,15 +279,17 @@ Deno.serve(async (req: Request) => {
   const provs = proveedores(env);
   if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
 
-  let datos, hilo;
-  try { [datos, hilo] = await Promise.all([leerDatos(db, v.equipo, v.clave), leerHilo(db)]); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
+  const id = `${v.equipo}:${v.clave}`;
+  let datos, hilo, historial;
+  try { [datos, hilo, historial] = await Promise.all([leerDatos(db, v.equipo, v.clave), leerHilo(db), conversacionDe(db, id)]); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
   const c = contexto(v.equipo, v.clave, datos);
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
 
   try {
-    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, v.mensajes, hoyLargo(), hilo), temperature: 0.4, max_tokens: 900 }));
-    const { texto, solicitudes: pedidos } = extraerSolicitudes(String((resultado as any)?.content ?? ""), `${v.equipo}:${v.clave}`);
+    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo), temperature: 0.4, max_tokens: 900 }));
+    const { texto, solicitudes: pedidos } = extraerSolicitudes(String((resultado as any)?.content ?? ""), id);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);
+    await guardarConversacion(db, [{ agente: id, de: "daniela", texto: v.mensajes.at(-1).content, lugar: v.lugar }, { agente: id, de: "agente", texto, lugar: v.lugar }]);
     const { solicitudes, internas } = await derivar(db, pedidos);
     return json({ texto, solicitudes, internas, ia });
   } catch (e) {

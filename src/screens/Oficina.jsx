@@ -179,9 +179,9 @@ async function hablarEnReunion(asistentes, mensajes) {
   return { valor: respuesta.respuestas, solicitudes: respuesta.solicitudes ?? [], internas: respuesta.internas ?? [] }
 }
 
-async function hablarConAgente(agente, mensajes) {
+async function hablarConAgente(agente, mensajes, lugar = 'charla') {
   if (!conversan(agente)) throw new Error('Es una tarea programada: no conversa. Mirá sus corridas en «Tareas».')
-  const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { agente, mensajes } })
+  const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { agente, mensajes, lugar } })
   let respuesta = data
   if (error?.context) { try { respuesta = await error.context.json() } catch { /* queda el error de conexión */ } }
   if (error || !respuesta?.texto) throw new Error(respuesta?.error || 'No pude hablar con el agente. Probá de nuevo.')
@@ -192,11 +192,21 @@ async function hablarConAgente(agente, mensajes) {
 // reloj: de dónde sale la hora para la luz del día (en la app, la actual; se puede cambiar para probar).
 export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now,
   solicitudes = [], actas = [], tareas = [], reuniones = [], decidir = async () => {}, cambiarTarea = async () => {}, marcarPresentada = async () => {}, guardarActa = async () => {},
-  correrInterna = correrReunionInterna, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase }) {
+  correrInterna = correrReunionInterna, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
+  leerConversacion = leerConversacionDeBase }) {
   const [elegidoId, setElegidoId] = useState(null)
   const [pestana, setPestana] = useState('ahora')
   const [charlas, setCharlas] = useState({})
   const elegido = agentes.find(a => a.id === elegidoId) || null
+  // Al abrir un agente se trae toda su conversación guardada con vos (chat, pasillo y reuniones). Lo que se sumó acá y
+  // todavía no está guardado (local) queda al final.
+  useEffect(() => {
+    if (!elegidoId) return
+    let vigente = true
+    leerConversacion(elegidoId).then(h => { if (vigente) setCharlas(c => ({ ...c, [elegidoId]: [...h, ...(c[elegidoId] ?? []).filter(m => m.local)] })) })
+      .catch(() => { /* queda lo de esta sesión */ })
+    return () => { vigente = false }
+  }, [elegidoId, leerConversacion])
   const eventos = useMemo(() => eventosOficina({ actas, tareas, solicitudes, reuniones }), [actas, tareas, solicitudes, reuniones])
   // Encuentros a pie: el agente cercano que tiene algo para vos te lo dice. Lo que dejás para después vuelve en un rato.
   const [cercanos, setCercanos] = useState([])
@@ -231,7 +241,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   }
   // «Responder» un mensaje: abre la charla con ese agente, que arranca con lo que te pidió.
   const responder = x => {
-    setCharlas(c => ({ ...c, [x.agente]: [...(c[x.agente] ?? []), { role: 'assistant', content: `Te pedí permiso para «${x.titulo}».${x.detalle ? ` ${x.detalle}` : ''}` }] }))
+    setCharlas(c => ({ ...c, [x.agente]: [...(c[x.agente] ?? []), { role: 'assistant', content: `Te pedí permiso para «${x.titulo}».${x.detalle ? ` ${x.detalle}` : ''}`, local: true }] }))
     abrir(x.agente, 'charla')
   }
   const verCalendario = useCallback(() => document.getElementById('oficina-calendario')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), [])
@@ -338,9 +348,9 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     anotados.current[visto.clave] = anotarEncuentro(visto.id, visto.texto).catch(() => null)
   }, [visto, anotarEncuentro])
   const contestar = async (e, respuesta) => {
-    const id = await anotados.current[e.clave]
+    const anotado = await anotados.current[e.clave]
     delete anotados.current[e.clave]
-    if (id) contestarEncuentro(id, respuesta).catch(() => { /* la charla sigue igual */ })
+    if (anotado) contestarEncuentro(e.id, respuesta).catch(() => { /* la charla sigue igual */ })
   }
   const sin3D = <p className="oficina-sin-3d">Este equipo no puede mostrar la oficina en 3D. Los agentes están en la lista de abajo.</p>
 
@@ -367,7 +377,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
                 {!superpuesto && interna && <AvisoInterna interna={interna} agentes={agentes} />}
                 {superpuesto ?? (visto && <Encuentro key={visto.clave} encuentro={visto} agente={agentes.find(a => a.id === visto.id)} decidir={decidir}
                   responder={responder} contestar={r => contestar(visto, r)}
-                  hablar={id => { setCharlas(c => ({ ...c, [id]: [...(c[id] ?? []), { role: 'assistant', content: visto.texto }] })); abrir(id, 'charla') }}
+                  hablar={id => abrir(id, 'charla')}
                   despues={() => setDespues(d => new Map(d).set(visto.clave, Date.now() + POSPONER_ENCUENTRO_MS))} />)}
               </Oficina3D>
             </Suspense></SiFalla>
@@ -544,15 +554,22 @@ function AvisoInterna({ interna, agentes }) {
     {dichos.length > 2 && <button type="button" className="btn btn-sm" onClick={() => setVerTodo(v => !v)}>{verTodo ? 'Ver menos' : 'Ver toda la charla'}</button>}
   </div>
 }
-// Encuentros en el pasillo: se guarda lo que te dijo el agente y, cuando contestás, qué le dijiste.
+// La conversación de cada agente con vos queda guardada (oficina_conversacion): el chat y las reuniones las guarda
+// oficina-chat; lo del pasillo, esta pantalla (lo que te dijo y lo que le contestaste).
+const CONTESTO = { ahora_no: 'Ahora no.', hablemos: 'Hablemos.', aprobada: 'Dale, aprobado.', rechazada: 'No.' }
 async function anotarEncuentroEnBase(agente, texto) {
-  const { data, error } = await supabase.from('oficina_encuentros').insert({ agente, texto: String(texto).slice(0, 1500) }).select('id').single()
+  const { error } = await supabase.from('oficina_conversacion').insert({ agente, de: 'agente', texto: String(texto).slice(0, 4000), lugar: 'pasillo' })
   if (error) throw error
-  return data.id
+  return true
 }
-async function contestarEncuentroEnBase(id, respuesta) {
-  const { error } = await supabase.from('oficina_encuentros').update({ respuesta, respondido: new Date().toISOString() }).eq('id', id)
+async function contestarEncuentroEnBase(agente, respuesta) {
+  const { error } = await supabase.from('oficina_conversacion').insert({ agente, de: 'daniela', texto: CONTESTO[respuesta] ?? respuesta, lugar: 'pasillo' })
   if (error) throw error
+}
+async function leerConversacionDeBase(agente) {
+  const { data, error } = await supabase.from('oficina_conversacion').select('de,texto,lugar,creado').eq('agente', agente).order('creado', { ascending: false }).limit(60)
+  if (error) throw error
+  return (data || []).reverse().map(f => ({ role: f.de === 'daniela' ? 'user' : 'assistant', content: f.texto, lugar: f.lugar, creado: f.creado }))
 }
 
 async function correrReunionInterna(id) {
@@ -583,7 +600,7 @@ function Encuentro({ encuentro, agente, decidir, responder, hablar, despues, con
         <button type="button" className="btn btn-sm btn-primary" disabled={ocupado} onClick={() => decidirlo('aprobada')}>{TEXTO_APROBAR[x.accion?.tipo] ?? 'Dale, aprobado'}</button>
         <button type="button" className="btn btn-sm" disabled={ocupado} onClick={() => decidirlo('rechazada')}>No</button>
       </>}
-      {charla && <button type="button" className="btn btn-sm" onClick={() => { contestar('hablemos'); if (x) responder(x); else hablar(encuentro.id) }}>Hablemos</button>}
+      {charla && <button type="button" className="btn btn-sm" onClick={() => { contestar('hablemos'); hablar(encuentro.id) }}>Hablemos</button>}
       <button type="button" className="btn btn-sm" onClick={() => { contestar('ahora_no'); despues() }}>Ahora no</button>
     </div>
   </div>
@@ -759,6 +776,7 @@ function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, se
   </>
 }
 
+const LUGAR_MENSAJE = { pasillo: 'En el pasillo', reunion: 'En una reunión' }
 function Charla({ agente, mensajes, setMensajes, hablar }) {
   const [texto, setTexto] = useState('')
   const [esperando, setEsperando] = useState(false)
@@ -780,10 +798,11 @@ function Charla({ agente, mensajes, setMensajes, hablar }) {
   }
 
   return <div className="oficina-charla">
-    <p className="tenue oficina-charla-nota">Responde con lo que dice su registro. No cambia nada; la charla se borra al cerrar la app.</p>
+    <p className="tenue oficina-charla-nota">Responde con lo que dice su registro. No cambia nada. Queda guardado todo lo que hablan: acá, en el pasillo y en las reuniones.</p>
     <div className="oficina-mensajes" aria-live="polite">
       {!mensajes.length && <p className="tenue">Por ejemplo: «¿qué hiciste hoy?», «¿por qué fallaste?», «¿qué necesitás de mí?»</p>}
-      {mensajes.map((m, i) => <p key={i} className={`oficina-mensaje de-${m.role}`}>{m.content}</p>)}
+      {mensajes.map((m, i) => <p key={i} className={`oficina-mensaje de-${m.role}`}>
+        {LUGAR_MENSAJE[m.lugar] && <span className="oficina-mensaje-lugar">{LUGAR_MENSAJE[m.lugar]}{m.creado ? ` · ${haceCuanto(m.creado)}` : ''}</span>}{m.content}</p>)}
       {esperando && <p className="oficina-mensaje de-assistant tenue">{agente.nombre} está escribiendo…</p>}
       <span ref={fin} />
     </div>

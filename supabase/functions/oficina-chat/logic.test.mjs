@@ -231,12 +231,20 @@ test('reuniones internas: se agendan sin pedir permiso, solo entre agentes que c
   assert.equal(validarActa({ asistentes: ['up:noruega'], mensajes: [{ de: 'Noruega', texto: 'hola' }], modo: 'interna', inicio: '2026-11-14T10:00:00Z' }).ok, true)
 })
 
-test('encuentros en el pasillo: el agente sabe qué le dijo a Daniela y qué le contestó', async () => {
-  const { lineasEncuentros } = await import('./logic.mjs')
-  const c = contexto('up', 'noruega', { chequeos: [], encuentros: [{ texto: '¿Tenés un minuto? Te quería pedir permiso para «Frenar la pieza».', respuesta: 'ahora_no', creado: '2026-11-15T13:00:00Z' }] })
-  assert.match(c.registro[0], /en el pasillo paraste a Daniela/)
-  assert.match(c.registro[0], /Frenar la pieza/)
-  assert.match(c.registro[0], /ahora no/)
-  assert.match(lineasEncuentros([{ texto: 'Hola', respuesta: null, creado: '2026-11-15T13:00:00Z' }])[0], /sin contestarte/)
-  assert.match(sistema(c, 'hoy', {}), /qué le querías decir/)
+test('conversación: el agente lee todo lo que habló con Daniela (chat, pasillo y reuniones)', async () => {
+  const { conHistorial } = await import('./logic.mjs')
+  const filas = [
+    { de: 'agente', texto: '¿Tenés un minuto? Te quería pedir permiso para «Frenar la pieza».', lugar: 'pasillo', creado: '2026-11-15T13:00:00Z' },
+    { de: 'daniela', texto: 'Ahora no.', lugar: 'pasillo', creado: '2026-11-15T13:00:10Z' },
+  ]
+  const m = conHistorial(filas, [{ role: 'user', content: 'viejo' }, { role: 'user', content: '¿Qué me querías decir en el pasillo?' }])
+  assert.equal(m.length, 2)
+  assert.equal(m[0].role, 'assistant')
+  assert.match(m[0].content, /^\[en el pasillo, .*Frenar la pieza/)
+  assert.equal(m[1].role, 'user')
+  assert.match(m[1].content, /Ahora no\.\n\n¿Qué me querías decir en el pasillo\?/)
+  assert.doesNotMatch(JSON.stringify(m), /viejo/)
+  assert.equal(validar({ agente: 'up:noruega', mensajes: [{ role: 'user', content: 'hola' }], lugar: 'reunion' }).lugar, 'reunion')
+  assert.equal(validar({ agente: 'up:noruega', mensajes: [{ role: 'user', content: 'hola' }] }).lugar, 'charla')
+  assert.match(sistema(contexto('up', 'noruega', { chequeos: [] }), 'hoy', {}), /toda tu conversación con Daniela/)
 })
