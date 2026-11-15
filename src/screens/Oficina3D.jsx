@@ -7,7 +7,7 @@ import { crearPersonaje, posar, liberar } from '../oficina3d/personaje.js'
 import { crearRoberta, moverRoberta } from '../oficina3d/roberta.js'
 import {
   lugares, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, rutinas, camino, largo, puntoEn, momentoRutina, variante, agujas, alturaPiso,
-  ACCESORIOS, bebidaDe, luzDelDia, VELOCIDAD, PISO, asientosReunion, alPasillo, haciaPasillo, caminoReunion, asientosEspera, EN_LA_PUERTA, caminoPuerta, caminoDesdePuerta,
+  ACCESORIOS, bebidaDe, luzDelDia, VELOCIDAD, PISO, asientosReunion, alPasillo, haciaPasillo, caminoReunion, asientosEspera, EN_LA_PUERTA, caminoPuerta, caminoDesdePuerta, asientosSociales, caminoSocial,
   caminoEspera, caminoTurno, caminoVueltaTurno, DANIELA, DANIELA_SALA, DANIELA_OFICINA, asientosOficina, caminoOficina, VISITA, ROBERTA,
   PIZARRONES,
 } from '../oficinaPlano.mjs'
@@ -64,7 +64,7 @@ function etiqueta(clase, texto, alClic) {
 // pantallaCompleta: la vista tipo videollamada (la arma Oficina.jsx con children encima de la escena).
 export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, hablando = null, alPlanificar, alVolvieron,
   volverDaniela = 0, alMoverDaniela, pantallaCompleta = false, reloj = Date.now, calendario = [], alTocarPizarron = null, alCruzarse = null,
-  reunionInterna = null, alTerminoInterna = null, visita = null, alLlegoVisita = null, children }) {
+  reunionInterna = null, alTerminoInterna = null, visita = null, alLlegoVisita = null, social = null, children }) {
   const marco = useRef(null)
   const pizarron = useRef(null) // la textura del calendario que comparten los pizarrones
   const escenario = useRef(null)
@@ -72,7 +72,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
   datos.current ??= { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, calendario }
   // Cada render deja a mano lo último: el cuadro de animación lo lee sin rearmar la escena.
   useEffect(() => {
-    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, alTocarPizarron, calendario, alCruzarse, reunionInterna, alTerminoInterna, visita, alLlegoVisita }
+    datos.current = { agentes, elegidoId, abrir, rut: rutinas(agentes), reunion, hablando, alPlanificar, alVolvieron, volverDaniela, alMoverDaniela, reloj, alTocarPizarron, calendario, alCruzarse, reunionInterna, alTerminoInterna, visita, alLlegoVisita, social }
   })
   // Los pizarrones muestran el mes actual con lo que pasa en la oficina: se redibujan cuando cambia el calendario.
   const firmaCalendario = calendario.map(e => `${e.id}${e.tipo}${e.fecha}`).join('|')
@@ -434,6 +434,8 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     let reunionUp = null
     // Visita: un agente que te dijo que iba a tu oficina camina hasta tu mesa, se sienta y, cuando termina, vuelve.
     let enVisita = null
+    // Momento entre compañeros: los que comparten un mate, un café o un almuerzo van juntos a la sala común y vuelven.
+    let enSocial = null
     const situacion = (ac, r, t) => {
       if (r?.tipo === 'rutina' && !sinMovimiento) {
         if (ac.descansoId !== r.descanso.id) { ac.camino = camino(ac.lugar, r.descanso); ac.largo = largo(ac.camino); ac.descansoId = r.descanso.id }
@@ -444,7 +446,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       return alPasillo(ac.lugar)
     }
     const planificar = (R, t) => {
-      const asientos = R.modo === 'puerta' ? [EN_LA_PUERTA] : R.modo === 'turnos' ? asientosEspera() : R.modo === 'oficina' ? asientosOficina() : asientosReunion()
+      const asientos = R.modo === 'social' ? asientosSociales(R.tipo, R.asistentes.length) : R.modo === 'puerta' ? [EN_LA_PUERTA] : R.modo === 'turnos' ? asientosEspera() : R.modo === 'oficina' ? asientosOficina() : asientosReunion()
       const p = { id: R.id, modo: R.modo, por: new Map(), avisado: false }
       const llegadas = {}
       R.asistentes.forEach((id, k) => {
@@ -459,7 +461,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
     const itemDelPlan = (R, id, asiento, k, t) => {
       const ac = actores.get(id)
       if (!ac) return null
-      const ir = R.modo === 'puerta' ? caminoPuerta : R.modo === 'turnos' ? caminoEspera : R.modo === 'oficina' ? caminoOficina : caminoReunion
+      const ir = R.modo === 'social' ? caminoSocial : R.modo === 'puerta' ? caminoPuerta : R.modo === 'turnos' ? caminoEspera : R.modo === 'oficina' ? caminoOficina : caminoReunion
       const desde = situacion(ac, datos.current.rut[id], t)
       // El que estaba en tu puerta y le dijiste que pase entra desde ahí, sin volver a su lugar.
       const ruta = R.desdePuerta ? caminoDesdePuerta(asiento) : ir(desde, asiento)
@@ -568,7 +570,10 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
       if (D.visita && !D.reunion && enVisita?.origen !== D.visita.id) enVisita = { id: `visita-${D.visita.id}`, origen: D.visita.id, propia: true, modo: D.visita.destino === 'puerta' ? 'puerta' : 'oficina', desdePuerta: Boolean(D.visita.desdePuerta), estado: 'convocada', inicio: Date.now(), asistentes: [D.visita.agente] }
       if (D.reunion) enVisita = null
       else if (enVisita && enVisita.estado !== 'volviendo' && D.visita?.id !== enVisita.origen) enVisita = { ...enVisita, estado: 'volviendo', vuelta: Date.now() }
-      const R = D.reunion ?? D.reunionInterna ?? enVisita ?? reunionUp
+      if (D.social && !D.reunion && enSocial?.origen !== D.social.id) enSocial = { id: `social-${D.social.id}`, origen: D.social.id, propia: true, modo: 'social', tipo: D.social.tipo, estado: 'convocada', inicio: Date.now(), asistentes: D.social.agentes }
+      if (D.reunion) enSocial = null
+      else if (enSocial && enSocial.estado !== 'volviendo' && D.social?.id !== enSocial.origen) enSocial = { ...enSocial, estado: 'volviendo', vuelta: Date.now() }
+      const R = D.reunion ?? D.reunionInterna ?? enVisita ?? enSocial ?? reunionUp
       if (t - ultimaLuz > 2) { aplicarLuz(); ultimaLuz = t }
       if (R && (!plan || plan.id !== R.id)) plan = planificar(R, t)
       else if (R && plan && R.modo !== 'turnos' && R.estado !== 'volviendo' && (R.asistentes.some(id => { const x = plan.por.get(id); return !x || x.retiro || x.listo }) || [...plan.por].some(([id, x]) => !x.listo && !x.retiro && !R.asistentes.includes(id)))) ajustarPlan(R, t)
@@ -623,7 +628,8 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
               const s = pr.asiento
               if (R === enVisita && !pr.llego) { pr.llego = true; D.alLlegoVisita?.(R.origen) }
               pose = s.pose
-              pos = { x: s.x, y: s.pose === 'sentado' ? 0.08 : 0, z: s.y }
+              pos = { x: s.x, y: R.modo === 'social' ? s.altura ?? 0 : s.pose === 'sentado' ? 0.08 : 0, z: s.y }
+              if (R.modo === 'social') objeto = s.objeto
               giro = R.estado === 'en_curso' && R.modo === 'sala' ? Math.atan2(camaraReunion.x - s.x, camaraReunion.z - s.y) : s.mira
               habla = (R.estado === 'en_curso' || R.propia) && D.hablando === id
               if (R.modo === 'turnos') numero = pr.numero
@@ -681,6 +687,7 @@ export default function Oficina3D({ agentes, elegidoId, abrir, reunion = null, h
         plan.avisado = true
         if (R.id === D.reunionInterna?.id) D.alTerminoInterna?.(R.id)
         else if (R === enVisita) enVisita = null
+        else if (R === enSocial) enSocial = null
         else if (R.propia) reunionUp = null
         else D.alVolvieron?.(R.id)
       }

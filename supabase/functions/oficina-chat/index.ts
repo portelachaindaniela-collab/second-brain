@@ -1,13 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
 // Oficina: hablar con los agentes. La app manda { agente: 'up:redactor', mensajes } (charla con uno),
 // { reunion: true, asistentes: [...], mensajes } (reunión: responde con { respuestas: [{ agente, texto }] }),
 // { acta: true, ... } (María escribe el acta), { propuestas: true } (las propuestas del día) o { reunion_interna: id }
-// (los agentes se juntan entre ellos y María escribe el acta). Todas leen el hilo de la
+// (los agentes se juntan entre ellos y María escribe el acta) o { vida: true } (la vida social del día, una vez por día). Todas leen el hilo de la
 // oficina (actas, tareas, pedidos y el plantel); la charla con uno lee además toda su conversación guardada con Daniela. Lee con la sesión de la dueña (RLS, nunca con permisos de servicio).
 // Lo que escribe: los pedidos de permiso de los agentes (entran pendientes, la base no deja crearlos de otra forma,
 // hasta que Daniela decide) y el acta de cada reunión con sus tareas.
@@ -47,6 +47,47 @@ async function guardarConversacion(db: any, filas: any[]) {
   if (!filas.length) return;
   const { error } = await db.from("oficina_conversacion").insert(filas.map(f => ({ ...f, texto: String(f.texto).slice(0, 4000) })));
   if (error) console.error("oficina-chat: no se pudo guardar la conversación", error.message);
+}
+
+// La vida de un agente en la oficina: sus relaciones y lo último que compartió con compañeros.
+async function vidaDe(db: any, id: string) {
+  const [v, m] = await Promise.all([
+    db.from("oficina_vinculos").select("a,b,tipo,historia").or(`a.eq."${id}",b.eq."${id}"`).limit(20),
+    db.from("oficina_momentos").select("agentes,tipo,lugar,resumen,fecha,hora").contains("agentes", [id]).order("fecha", { ascending: false }).limit(6),
+  ]);
+  return { vinculos: v.data || [], momentos: m.data || [] };
+}
+
+// La vida social del día: la primera vez que se pide en el día, la IA arma lo que comparten los agentes (y las
+// relaciones que nacen o cambian) siguiendo lo que ya venía pasando. Si ya hay momentos de hoy, no se repite.
+async function vida(db: any) {
+  const hoy = hoyISO();
+  const { data: ya } = await db.from("oficina_momentos").select("id").eq("fecha", hoy).limit(1);
+  if (ya?.length) return json({ ya: true });
+  const provs = proveedores(env);
+  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
+  const gente = await equipos(db);
+  const plantel = [...gente.trabajadores, ...gente.up, ...gente.pdg];
+  const desde = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  const [v, m] = await Promise.all([
+    db.from("oficina_vinculos").select("a,b,tipo,historia").limit(80),
+    db.from("oficina_momentos").select("agentes,tipo,lugar,resumen,fecha").gte("fecha", desde).order("fecha", { ascending: false }).limit(20),
+  ]);
+  try {
+    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaVida(plantel, v.data || [], m.data || [], hoyLargo()) }, { role: "user", content: "¿Qué pasa hoy entre ellos?" }], temperature: 0.8, max_tokens: 3000 }, { timeoutMs: 90000 }));
+    const { momentos, vinculos } = leerVida((resultado as any)?.content, plantel.map(g => g.id));
+    if (vinculos.length) {
+      const r = await db.from("oficina_vinculos").upsert(vinculos.map(x => ({ ...x, actualizado: new Date().toISOString() })), { onConflict: "owner_id,a,b" });
+      if (r.error) console.error("oficina-chat: no se pudieron guardar los vínculos", r.error.message);
+    }
+    if (!momentos.length) return json({ momentos: [] });
+    const { data, error } = await db.from("oficina_momentos").insert(momentos.map(x => ({ ...x, fecha: hoy }))).select("id,agentes,tipo,lugar,resumen,fecha,hora");
+    if (error) return json({ error: error.message }, 500);
+    return json({ momentos: data || [], vinculos });
+  } catch (e) {
+    if (e instanceof ErrorIA) return json({ error: e.message }, 502);
+    return json({ error: (e as Error).message }, 500);
+  }
 }
 
 async function leerDatos(db: any, equipo: string, clave: string) {
@@ -275,16 +316,18 @@ Deno.serve(async (req: Request) => {
   if (body?.reunion) return await reunion(db, body);
   if (body?.propuestas) return await propuestas(db);
   if (body?.reunion_interna) return await reunionInterna(db, Number(body.reunion_interna));
+  if (body?.vida) return await vida(db);
   const v: any = validar(body);
   if (!v.ok) return json({ error: v.error }, 400);
   const provs = proveedores(env);
   if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
 
   const id = `${v.equipo}:${v.clave}`;
-  let datos, hilo, historial;
-  try { [datos, hilo, historial] = await Promise.all([leerDatos(db, v.equipo, v.clave), leerHilo(db), conversacionDe(db, id)]); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
-  const c = contexto(v.equipo, v.clave, datos);
+  let datos, hilo, historial, social;
+  try { [datos, hilo, historial, social] = await Promise.all([leerDatos(db, v.equipo, v.clave), leerHilo(db), conversacionDe(db, id), vidaDe(db, id)]); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
+  const c: any = contexto(v.equipo, v.clave, datos);
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
+  c.vida = lineasVida(id, social.vinculos, social.momentos, Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
 
   try {
     const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo, v.salida), temperature: v.salida ? 0.8 : 0.4, max_tokens: 900 }));

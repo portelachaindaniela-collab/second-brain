@@ -516,3 +516,17 @@ export function quienGolpea(ids = [], datos = {}, descartados = new Set(), ultim
   if (ahora - ultimo < (ultimo ? ENTRE_GOLPES_MS : 0)) return null
   return primerEncuentro(ids, datos, descartados)
 }
+
+// ---------- La vida de la oficina ----------
+// Los momentos de hoy que pasan adentro (mate, café, almuerzo, merienda) se ven en la escena: los que lo comparten van
+// juntos a la sala común un rato. De a uno, con pausa, y cada uno una sola vez por visita.
+export const PRIMER_SOCIAL_MS = 3 * 60_000
+export const ENTRE_SOCIALES_MS = 7 * 60_000
+export const DURA_SOCIAL_MS = 150_000
+const ADENTRO = ['mate', 'cafe', 'almuerzo', 'merienda']
+export function momentoQueToca(momentos = [], hoy, jugados = new Set(), presentes = null) {
+  return momentos.find(m => m.fecha === hoy && ADENTRO.includes(m.tipo) && !jugados.has(m.id)
+    && (!presentes || m.agentes.every(id => presentes.has(id)))) ?? null
+}
+export const TEXTO_MOMENTO = { mate: 'tomaron mate', cafe: 'se tomaron un café', almuerzo: 'almorzaron juntos', merienda: 'merendaron juntos', cena: 'salieron a cenar', after: 'fueron a un after office', paseo: 'salieron a pasear' }
+export const TEXTO_VINCULO = { amistad: 'Amigos', pareja: 'Pareja', companerismo: 'Compañeros' }

@@ -274,3 +274,12 @@
 /* Reunión interna: el cartel con lo último que se dijo. */
 .o3-interna { max-width: min(380px, calc(100% - 20px)); }
 .o3-interna-linea { line-height: 1.4; }
+
+/* Vida de la oficina */
+.oficina-vida { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--esp-16); }
+.oficina-vida-titulo { margin: 0 0 var(--esp-8); font-size: var(--letra-11); text-transform: uppercase; letter-spacing: .06em; color: var(--gray-500); }
+.oficina-vida-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: var(--letra-13); }
+.oficina-vida-lista li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.oficina-vinculo { font-size: var(--letra-11); padding: 1px 8px; border-radius: 999px; background: var(--surface-inset); border: 1px solid var(--gray-200); }
+.oficina-vinculo.vinculo-pareja { color: #d4483b; border-color: rgba(212, 72, 59, .4); }
+.oficina-vinculo.vinculo-amistad { color: #2f9e5e; border-color: rgba(47, 158, 94, .4); }

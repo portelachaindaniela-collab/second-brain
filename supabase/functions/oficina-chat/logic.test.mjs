@@ -270,3 +270,21 @@ test('salidas: charlas fuera de la oficina, sin pedidos y marcadas en la convers
   const m = conHistorial([{ de: 'agente', texto: 'Me encanta la milanesa.', lugar: 'charla', salida: 'comer', creado: '2026-11-15T15:00:00Z' }], [{ role: 'user', content: '¿Te acordás qué comiste?' }])
   assert.match(m[0].content, /^\[salieron a comer, /)
 })
+
+test('vida de la oficina: relaciones y momentos entre agentes, y cada uno los recuerda', async () => {
+  const { leerVida, lineasVida, sistemaVida } = await import('./logic.mjs')
+  const ids = ['up:noruega', 'trabajadores:maria', 'pdg:femina']
+  const r = leerVida(JSON.stringify({
+    momentos: [{ agentes: ['up:noruega', 'trabajadores:maria', 'otro:x'], tipo: 'mate', hora: '10:30', lugar: 'la cafetería', resumen: 'Hablaron de fútbol.' }, { agentes: ['up:noruega'], tipo: 'cafe', resumen: 'sola' }, { agentes: ['pdg:femina', 'up:noruega'], tipo: 'bailar', resumen: 'nope' }],
+    vinculos: [{ a: 'up:noruega', b: 'trabajadores:maria', tipo: 'amistad', historia: 'Se llevan bárbaro.' }, { a: 'up:noruega', b: 'up:noruega', tipo: 'pareja' }, { a: 'pdg:femina', b: 'up:noruega', tipo: 'enemigos' }],
+  }), ids)
+  assert.equal(r.momentos.length, 1)
+  assert.deepEqual(r.momentos[0].agentes, ['up:noruega', 'trabajadores:maria'])
+  assert.deepEqual(r.vinculos, [{ a: 'trabajadores:maria', b: 'up:noruega', tipo: 'amistad', historia: 'Se llevan bárbaro.' }])
+  const lineas = lineasVida('up:noruega', r.vinculos, [{ ...r.momentos[0], fecha: '2026-11-15' }], { 'trabajadores:maria': 'María' })
+  assert.match(lineas[0], /amistad con María/)
+  assert.match(lineas[1], /con María tomaron mate \(la cafetería\)/)
+  assert.match(sistemaVida([{ id: 'up:noruega', nombre: 'Noruega' }], [], [], 'hoy'), /SOLO con JSON/)
+  const c = { ...contexto('up', 'noruega', { chequeos: [] }), vida: lineas }
+  assert.match(sistema(c, 'hoy', {}), /Tu vida en la oficina/)
+})

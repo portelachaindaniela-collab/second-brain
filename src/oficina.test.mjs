@@ -376,3 +376,16 @@ test('llamarlo: si le pedís que venga a tu oficina, va', async () => {
   assert.equal(lePedisQueVenga('¿Cómo viene la cadena?'), false)
   assert.equal(lePedisQueVenga('Mi oficina está muy linda.'), false)
 })
+
+test('vida de la oficina: los momentos de hoy que pasan adentro se ven de a uno', async () => {
+  const { momentoQueToca } = await import('./oficina.mjs')
+  const ms = [
+    { id: 1, fecha: '2026-11-15', tipo: 'cena', agentes: ['a:x', 'b:y'] },
+    { id: 2, fecha: '2026-11-14', tipo: 'mate', agentes: ['a:x', 'b:y'] },
+    { id: 3, fecha: '2026-11-15', tipo: 'mate', agentes: ['a:x', 'b:y'] },
+    { id: 4, fecha: '2026-11-15', tipo: 'cafe', agentes: ['a:x', 'c:z'] },
+  ]
+  assert.equal(momentoQueToca(ms, '2026-11-15')?.id, 3)
+  assert.equal(momentoQueToca(ms, '2026-11-15', new Set([3]))?.id, 4)
+  assert.equal(momentoQueToca(ms, '2026-11-15', new Set([3]), new Set(['a:x', 'b:y'])), null)
+})

@@ -218,6 +218,18 @@ export const DESCANSOS = [
   d('barra-3', 5.2, 9.9, 'sentado', Math.PI, { altura: 0.22, zona: 'cafeteria', tanda: 154, carril: 11.0 }),
   d('comedor-4', 7.75, 14.85, 'sentado', 0, { zona: 'comedor', tanda: 168, carril: 14.1 }),
 ]
+// Momentos entre compañeros (la vida de la oficina): el mate en los sillones del ocio, el café en la barra de la
+// cafetería, el almuerzo y la merienda en el comedor. Devuelve los lugares, uno al lado del otro, con lo que tienen en
+// la mano.
+const LUGAR_MOMENTO = { mate: ['ocio', 'mate'], cafe: ['cafeteria', 'taza'], almuerzo: ['comedor', null], merienda: ['comedor', 'taza'] }
+export function asientosSociales(tipo, n) {
+  const [zona, objeto] = LUGAR_MOMENTO[tipo] ?? LUGAR_MOMENTO.cafe
+  return DESCANSOS.filter(x => x.zona === zona && x.pose === 'sentado').sort((p, q) => p.x - q.x).slice(0, Math.max(1, n)).map(x => ({ ...x, objeto }))
+}
+export const MOMENTOS_ADENTRO = Object.keys(LUGAR_MOMENTO)
+export function caminoSocial(hastaPasillo, asiento) {
+  return ancho([...hastaPasillo, { x: VX, y: PASILLO }, ...asiento.llegada])
+}
 // La cocina: mesada con anafe y pileta y la heladera, contra el costado del pasillo.
 export const COCINA = { x0: 11.8, x1: 12.8, y0: 14.6, y1: 18.6 }
 export const PUFS = [{ x: 6.3, y: 5 }, { x: 5.0, y: 6.2 }, { x: 6.9, y: 6.4 }]
