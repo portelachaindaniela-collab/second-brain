@@ -78,6 +78,7 @@
 .oficina-mensaje { max-width: 88%; padding: var(--esp-8) var(--esp-12); border-radius: var(--radius); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
 .oficina-mensaje.de-user { align-self: flex-end; background: var(--accent-100); border: 1px solid var(--accent-borde); }
 .oficina-mensaje.de-assistant { align-self: flex-start; background: var(--surface-inset); border: 1px solid var(--gray-200); }
+.oficina-mensaje-lugar { display: block; font-size: var(--letra-11); color: var(--gray-500); margin-bottom: 2px; }
 .oficina-charla-form { display: flex; gap: var(--esp-8); align-items: flex-end; position: sticky; bottom: calc(-1 * var(--esp-16)); padding: var(--esp-8) 0 var(--esp-16); background: var(--surface); }
 .oficina-charla-form textarea { flex: 1; resize: vertical; min-height: 40px; }
 
