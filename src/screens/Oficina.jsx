@@ -4,6 +4,7 @@ import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
 import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, quienEntra, PRIMERA_ENTRADA_MS, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, ROMANTICOS, RELACIONES_CON_VOS, ROMANCE_CON_VOS, textoConVos, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, sumarVisita, escenaDeVisitas, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
+import { limpiarMarcas } from '../../supabase/functions/_shared/oficina.mjs'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
 import './Oficina.css'
@@ -66,7 +67,7 @@ async function cargarOficina() {
     leer('reuniones internas', supabase.from('oficina_reuniones').select('id,convoca,asistentes,tema,detalle,fecha,estado,acta_id').order('fecha', { ascending: false }).limit(60), []),
     leer('relaciones entre agentes', supabase.from('oficina_vinculos').select('id,a,b,tipo,historia,desde,afinidad,secreto').order('actualizado', { ascending: false }).limit(100), []),
     leer('tu pareja', supabase.from('oficina_corazon').select('agente,desde,estado,saben'), []),
-    leer('vida de la oficina', supabase.from('oficina_momentos').select('id,agentes,tipo,lugar,resumen,fecha,hora').gte('fecha', new Date(ahora - 7 * DIA_MS).toISOString().slice(0, 10)).order('fecha', { ascending: false }).limit(60), []),
+    leer('vida de la oficina', supabase.from('oficina_momentos').select('id,agentes,tipo,lugar,resumen,fecha,hora,charla').gte('fecha', new Date(ahora - 7 * DIA_MS).toISOString().slice(0, 10)).order('fecha', { ascending: false }).limit(60), []),
     leer('chat de la oficina', supabase.from('oficina_chat_general').select('id,autor,texto,tipo,creado').order('creado', { ascending: false }).order('id', { ascending: false }).limit(80), []),
   ])
   const corridasPor = {}
@@ -258,7 +259,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
       .catch(() => { /* queda lo de esta sesión */ })
   }, [leerConversacion])
   const abrirChat = id => {
-    if (!chats.some(c => c.id === id)) cargarConversacion(id)
+    if (id !== 'general' && !chats.some(c => c.id === id)) cargarConversacion(id)
     setChats(cs => (cs.some(c => c.id === id) ? cs.map(c => (c.id === id ? { ...c, min: false } : c)) : [...cs, { id, min: false }].slice(-MAX_CHATS)))
   }
   const eventos = useMemo(() => eventosOficina({ actas, tareas, solicitudes, reuniones }), [actas, tareas, solicitudes, reuniones])
@@ -517,8 +518,10 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
       ]} />
     {errores.map(e => <p key={e} role="alert" className="feedback-error">{e}</p>)}
     <Bloques disposicion="principal">
-      <Bloque titulo="La oficina" ancho="completo" accion={!cargando && tres && <button type="button" className="btn btn-sm btn-primary"
-        disabled={Boolean(reunion)} onClick={() => setConvocando(true)}>{reunion ? 'Reunión en curso' : 'Convocar reunión'}</button>}>
+      <Bloque titulo="La oficina" ancho="completo" accion={!cargando && <span className="oficina-acciones">
+        <button type="button" className="btn btn-sm" onClick={() => abrirChat('general')}>💬 Chat de la oficina</button>
+        {tres && <button type="button" className="btn btn-sm btn-primary" disabled={Boolean(reunion)} onClick={() => setConvocando(true)}>{reunion ? 'Reunión en curso' : 'Convocar reunión'}</button>}
+      </span>}>
         {cargando ? <p className="empty-state">Abriendo la oficina…</p> : <>
           {tres
             ? <SiFalla respaldo={sin3D}><Suspense fallback={<p className="oficina-sin-3d">Abriendo la oficina…</p>}>
@@ -529,7 +532,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
                 {!superpuesto && cartel && <AvisoInterna interna={cartel} agentes={agentes} cerrar={() => { cerrados.current.add(cartel.id); setCartel(null) }} />}
                 {avisoEntrada && <EntraSola entrada={avisoEntrada} agente={agentes.find(a => a.id === avisoEntrada.agente)}
                   contestar={() => { setEntrada(null); abrir(avisoEntrada.agente, 'charla') }}
-                  despues={() => { setEntrada(null); sacarVisita(avisoEntrada.agente) }} />}
+                  despues={() => { anotarEnConversacion(avisoEntrada.agente, 'Ahora no puedo, después hablamos.').catch(() => { /* igual se va */ }); setEntrada(null); sacarVisita(avisoEntrada.agente) }} />}
                 {superpuesto ?? (!avisoEntrada && visto && <Encuentro key={`${visto.clave}${visto === enPuerta ? '-puerta' : ''}`} encuentro={visto} agente={agentes.find(a => a.id === visto.id)} decidir={decidir}
                   puerta={visto === enPuerta} responder={responder}
                   contestar={r => { contestar(visto, r); if (visto === enPuerta && r !== 'hablemos') setGolpe(null) }}
@@ -585,6 +588,11 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
       setCharla={m => setCharlas(c => ({ ...c, [elegido.id]: typeof m === 'function' ? m(c[elegido.id] ?? []) : m }))} />}
     {chats.length > 0 && <div className={`oficina-chats${elegido ? ' con-panel' : ''}`}>
       {chats.map(ch => {
+        if (ch.id === 'general') return <VentanaChat key="general" titulo="Chat de la oficina" min={ch.min}
+          minimizar={() => setChats(cs => cs.map(c => (c.id === 'general' ? { ...c, min: !c.min } : c)))}
+          cerrar={() => setChats(cs => cs.filter(c => c.id !== 'general'))}>
+          <ChatGeneral mensajes={general} agentes={agentes} escribir={escribirGeneral} />
+        </VentanaChat>
         const a = agentes.find(x => x.id === ch.id)
         if (!a) return null
         return <VentanaChat key={ch.id} agente={a} min={ch.min}
@@ -601,13 +609,14 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
 // Cuántos chats abiertos a la vez (el más viejo se cierra al abrir otro).
 const MAX_CHATS = 4
 // Una ventana de chat, abajo como en un mensajero: se minimiza tocando el nombre y se cierra con ×.
-function VentanaChat({ agente, min, minimizar, cerrar, children }) {
-  return <section className={`oficina-chat${min ? ' is-min' : ''}`} aria-label={`Chat con ${agente.nombre}`}>
+function VentanaChat({ agente = null, titulo = null, min, minimizar, cerrar, children }) {
+  const nombre = titulo ?? agente.nombre
+  return <section className={`oficina-chat${min ? ' is-min' : ''}`} aria-label={titulo ?? `Chat con ${nombre}`}>
     <header className="oficina-chat-cabeza">
       <button type="button" className="oficina-chat-nombre" onClick={minimizar} aria-expanded={!min} title={min ? 'Abrir' : 'Minimizar'}>
-        <Avatar agente={agente} /><span>{nombreCorto(agente.nombre)}</span>
+        {agente ? <Avatar agente={agente} /> : <span aria-hidden="true">💬</span>}<span>{titulo ?? nombreCorto(nombre)}</span>
       </button>
-      <button type="button" className="oficina-chat-cerrar" onClick={cerrar} aria-label={`Cerrar el chat con ${agente.nombre}`}>×</button>
+      <button type="button" className="oficina-chat-cerrar" onClick={cerrar} aria-label={`Cerrar ${titulo ?? `el chat con ${nombre}`}`}>×</button>
     </header>
     {!min && <div className="oficina-chat-cuerpo">{children}</div>}
   </section>
@@ -778,7 +787,7 @@ async function anotarEnConversacionDeBase(agente, texto) {
 async function leerConversacionDeBase(agente) {
   const { data, error } = await supabase.from('oficina_conversacion').select('de,texto,lugar,salida,creado').eq('agente', agente).order('creado', { ascending: false }).order('id', { ascending: false }).limit(60)
   if (error) throw error
-  return (data || []).reverse().map(f => ({ role: f.de === 'daniela' ? 'user' : 'assistant', content: f.texto, lugar: f.lugar, salida: f.salida, creado: f.creado }))
+  return (data || []).reverse().map(f => ({ role: f.de === 'daniela' ? 'user' : 'assistant', content: limpiarMarcas(f.texto), lugar: f.lugar, salida: f.salida, creado: f.creado })).filter(m => m.content)
 }
 
 async function correrReunionInterna(id) {
@@ -977,6 +986,10 @@ function VidaOficina({ vinculos, momentos, agentes, corazon = [] }) {
       <ul className="oficina-vida-lista">{momentos.slice(0, 12).map(m => <li key={m.id}>
         <span className="tenue">{new Date(`${m.fecha}T12:00:00Z`).toLocaleDateString('es-AR', { timeZone: 'UTC', weekday: 'short', day: 'numeric' })}{m.hora ? ` ${m.hora}` : ''}</span>
         <strong>{m.agentes.map(nombre).join(', ')}</strong> {TEXTO_MOMENTO[m.tipo] ?? m.tipo}{m.lugar ? ` (${m.lugar})` : ''}. <span className="tenue">{m.resumen}</span>
+        {m.charla?.length > 0 && <details className="oficina-momento-charla">
+          <summary>Leer la charla</summary>
+          {m.charla.map((x, i) => <p key={i}><strong>{nombre(x.agente)}:</strong> {x.texto}</p>)}
+        </details>}
       </li>)}</ul>
     </div>}
   </div>

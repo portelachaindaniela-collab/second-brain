@@ -238,11 +238,13 @@ test('conversación: el agente lee todo lo que habló con Daniela (chat, pasillo
     { de: 'daniela', texto: 'Ahora no.', lugar: 'pasillo', creado: '2026-11-15T13:00:10Z' },
   ]
   const m = conHistorial(filas, [{ role: 'user', content: 'viejo' }, { role: 'user', content: '¿Qué me querías decir en el pasillo?' }])
-  assert.equal(m.length, 2)
-  assert.equal(m[0].role, 'assistant')
-  assert.match(m[0].content, /^\[en el pasillo, .*Frenar la pieza/)
-  assert.equal(m[1].role, 'user')
-  assert.match(m[1].content, /Ahora no\.\n\n¿Qué me querías decir en el pasillo\?/)
+  assert.equal(m.length, 3)
+  assert.equal(m[0].role, 'user')
+  assert.match(m[0].content, /^\[en el pasillo, [^\]]+\]$/)
+  assert.equal(m[1].role, 'assistant')
+  assert.match(m[1].content, /^¿Tenés un minuto\?.*Frenar la pieza/)
+  assert.equal(m[2].role, 'user')
+  assert.match(m[2].content, /^\[en el pasillo, .*Ahora no\.\n\n¿Qué me querías decir en el pasillo\?/)
   assert.doesNotMatch(JSON.stringify(m), /viejo/)
   assert.equal(validar({ agente: 'up:noruega', mensajes: [{ role: 'user', content: 'hola' }], lugar: 'reunion' }).lugar, 'reunion')
   assert.equal(validar({ agente: 'up:noruega', mensajes: [{ role: 'user', content: 'hola' }] }).lugar, 'charla')
@@ -269,6 +271,7 @@ test('salidas: charlas fuera de la oficina, sin pedidos y marcadas en la convers
   assert.doesNotMatch(armarMensajes(c, [], 'hoy', {}, null)[0].content, /salieron a comer/)
   const m = conHistorial([{ de: 'agente', texto: 'Me encanta la milanesa.', lugar: 'charla', salida: 'comer', creado: '2026-11-15T15:00:00Z' }], [{ role: 'user', content: '¿Te acordás qué comiste?' }])
   assert.match(m[0].content, /^\[salieron a comer, /)
+  assert.equal(m[1].content, 'Me encanta la milanesa.')
 })
 
 test('vida de la oficina: relaciones y momentos entre agentes, y cada uno los recuerda', async () => {
@@ -407,4 +410,22 @@ test('En la reunión cada agente es la misma persona que en la charla: personali
   assert.match(p, /Su vida en la oficina: amistad con María/)
   assert.match(p, /no programas/)
   assert.match(sistema(femina, 'hoy', {}), /nunca digas que sos «un agente automatizado»/)
+})
+
+test('Lo que se dicen los agentes entre ellos queda guardado y cada uno lo recuerda', async () => {
+  const { leerVida, lineasVida } = await import('./logic.mjs')
+  const ids = ['up:noruega', 'trabajadores:maria', 'pdg:femina']
+  const r = leerVida(JSON.stringify({ momentos: [{ agentes: ['up:noruega', 'trabajadores:maria'], tipo: 'mate', hora: '10:30', lugar: 'el pasillo', resumen: 'Charlaron.',
+    charla: [{ agente: 'up:noruega', texto: '¿Un mate?' }, { agente: 'trabajadores:maria', texto: 'Dale, cebá vos.' }, { agente: 'pdg:femina', texto: 'no estaba' }] }] }), ids)
+  assert.deepEqual(r.momentos[0].charla, [{ agente: 'up:noruega', texto: '¿Un mate?' }, { agente: 'trabajadores:maria', texto: 'Dale, cebá vos.' }])
+  const l = lineasVida('trabajadores:maria', [], [{ ...r.momentos[0], fecha: '2026-11-15' }], { 'up:noruega': 'Noruega' })
+  assert.match(l[0], /Se dijeron: Noruega: «¿Un mate\?» vos: «Dale, cebá vos\.»/)
+})
+
+test('Las marcas de lugar y hora no se copian en las respuestas ni se muestran', async () => {
+  const { limpiarMarcas, conHistorial } = await import('./logic.mjs')
+  assert.equal(limpiarMarcas('[en la oficina de Daniela, 15/11/26, 1:56 p. m.] [en el pasillo, 15/11/26, 1:55 p. m.] [salieron a comer, 15/11/26, 1:49 p. m.] Hola, ¿todo bien?'), 'Hola, ¿todo bien?')
+  assert.equal(limpiarMarcas('Te espero [en serio] mañana.'), 'Te espero [en serio] mañana.')
+  const m = conHistorial([{ de: 'agente', texto: '[en el pasillo, 15/11/26, 1:54 p. m.] [en un after office, 15/11/26, 1:48 p. m.]', lugar: 'charla' }, { de: 'agente', texto: 'Buen día.', lugar: 'charla' }], [{ role: 'user', content: 'hola' }])
+  assert.deepEqual(m, [{ role: 'assistant', content: 'Buen día.' }, { role: 'user', content: 'hola' }])
 })

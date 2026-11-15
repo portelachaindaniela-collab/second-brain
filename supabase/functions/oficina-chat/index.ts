@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, cumpleDe, validarGeneral, sistemaGeneral, leerGeneral } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, limpiarMarcas, cumpleDe, validarGeneral, sistemaGeneral, leerGeneral } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
@@ -65,7 +65,7 @@ async function guardarConversacion(db: any, filas: any[]) {
 async function vidaDe(db: any, id: string) {
   const [v, m] = await Promise.all([
     db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto").or(`a.eq."${id}",b.eq."${id}"`).limit(20),
-    db.from("oficina_momentos").select("agentes,tipo,lugar,resumen,fecha,hora").contains("agentes", [id]).order("fecha", { ascending: false }).limit(6),
+    db.from("oficina_momentos").select("agentes,tipo,lugar,resumen,fecha,hora,charla").contains("agentes", [id]).order("fecha", { ascending: false }).limit(6),
   ]);
   return { vinculos: v.data || [], momentos: m.data || [] };
 }
@@ -90,7 +90,7 @@ async function vida(db: any) {
   // Los que cumplen años hoy (cada agente tiene su día fijo): los saludan en el chat de la oficina.
   const cumples = plantel.filter(x => cumpleDe(x.id) === hoy.slice(5)).map(x => x.id);
   try {
-    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaVida(plantel, v.data || [], m.data || [], hoyLargo(), { cumples, publicas: pub, general: g }) }, { role: "user", content: "¿Qué pasa hoy entre ellos?" }], temperature: 0.8, max_tokens: 3500 }, { timeoutMs: 90000 }));
+    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaVida(plantel, v.data || [], m.data || [], hoyLargo(), { cumples, publicas: pub, general: g }) }, { role: "user", content: "¿Qué pasa hoy entre ellos?" }], temperature: 0.8, max_tokens: 6000 }, { timeoutMs: 110000 }));
     const { momentos, vinculos, noticias } = leerVida((resultado as any)?.content, plantel.map(g => g.id));
     if (vinculos.length) {
       const r = await db.from("oficina_vinculos").upsert(vinculos.map(x => ({ ...x, actualizado: new Date().toISOString() })), { onConflict: "owner_id,a,b" });
@@ -101,7 +101,7 @@ async function vida(db: any) {
       if (r.error) console.error("oficina-chat: no se pudieron guardar las noticias", r.error.message);
     }
     if (!momentos.length) return json({ momentos: [] });
-    const { data, error } = await db.from("oficina_momentos").insert(momentos.map(x => ({ ...x, fecha: hoy }))).select("id,agentes,tipo,lugar,resumen,fecha,hora");
+    const { data, error } = await db.from("oficina_momentos").insert(momentos.map(x => ({ ...x, fecha: hoy }))).select("id,agentes,tipo,lugar,resumen,fecha,hora,charla");
     if (error) return json({ error: error.message }, 500);
     return json({ momentos: data || [], vinculos });
   } catch (e) {
@@ -183,7 +183,7 @@ async function entra(db: any, id: string) {
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
   try {
     const { resultado } = await conRespaldo(provs, (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, [{ role: "user", content: ENTRA_SOLA }]), hoyLargo(), hilo), temperature: 0.8, max_tokens: 600 }));
-    const { texto: sinPareja } = extraerPareja(String((resultado as any)?.content ?? ""));
+    const { texto: sinPareja } = extraerPareja(limpiarMarcas((resultado as any)?.content));
     const { texto } = extraerSolicitudes(sinPareja, id);
     if (!texto) return json({ error: "La IA no devolvió texto." }, 502);
     await guardarConversacion(db, [{ agente: id, de: "agente", texto, lugar: "charla" }]);
@@ -451,7 +451,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const { resultado, ia } = await conRespaldo(provs, (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo, v.salida), temperature: v.salida ? 0.8 : 0.4, max_tokens: 900 }));
-    const { texto: sinPareja, pareja } = extraerPareja(String((resultado as any)?.content ?? ""));
+    const { texto: sinPareja, pareja } = extraerPareja(limpiarMarcas((resultado as any)?.content));
     const { texto, solicitudes: pedidos } = extraerSolicitudes(sinPareja, id);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);
     if (pareja !== null && ELLAS.includes(id)) await cambiarPareja(db, id, pareja);

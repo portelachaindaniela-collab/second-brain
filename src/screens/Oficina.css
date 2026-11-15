@@ -330,3 +330,10 @@
 .oficina-general-quien { font-size: var(--letra-12); font-weight: 600; }
 
 .oficina-relacion { display: flex; flex-wrap: wrap; gap: var(--esp-12); }
+
+.oficina-momento-charla { margin-top: 4px; font-size: var(--letra-12); }
+.oficina-momento-charla summary { cursor: pointer; color: var(--accent); }
+.oficina-momento-charla p { margin: 2px 0 0 var(--esp-12); }
+
+.oficina-acciones { display: inline-flex; gap: var(--esp-8); flex-wrap: wrap; }
+.oficina-chat-cuerpo .oficina-general-msj { max-width: 100%; }
