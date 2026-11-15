@@ -82,8 +82,20 @@ export function oficinaFemina() {
   const oficina = { id: FEMINA, nombre: 'Femina', jefa: false, x0, x1, y0, y1, puerta, puestos: 1 }
   const escritorio = { x: (x0 + x1) / 2 - 0.5, y: 3.0 }
   const sentado = { x: escritorio.x, y: 2.1 }
-  return { tipo: 'oficina', oficina, jefa: false, x0, x1, y0, y1, escritorio, sentado, mira: 0, puerta,
+  // Su escritorio es más ancho: tres monitores (mesa: medio ancho y medio fondo).
+  return { tipo: 'oficina', oficina, jefa: false, x0, x1, y0, y1, escritorio, sentado, mira: 0, puerta, mesa: { a: 1.05, f: 0.48 },
     salida: ancho([sentado, { x: puerta.x, y: sentado.y }, puerta, { x: puerta.x, y: CORREDOR_EJECUTIVO }]) }
+}
+// Lo que hay en la oficina de Femina además del escritorio (lo dibuja mundo.js y lo esquiva Daniela al caminar):
+// archivero con impresora contra la pared izquierda, un sillón con mesita para las visitas, una pizarra con ruedas,
+// una lámpara de pie y un perchero.
+export const MUEBLES_FEMINA = {
+  archivero: { x0: 23.62, x1: 24.22, y0: 0.9, y1: 1.6 },
+  sillon: { x: 24.15, y: 5.3, mira: Math.PI / 2 },
+  mesita: { x: 24.15, y: 4.4, radio: 0.28 },
+  pizarra: { x0: 25.4, x1: 26.9, y: 6.45 },
+  lampara: { x: 28.15, y: 6.4 },
+  perchero: { x: 23.8, y: 6.5 },
 }
 // Los de PDG que trabajan en el tablón (Femina tiene su oficina).
 export const enTablonPdg = claves => claves.filter(c => c !== FEMINA)

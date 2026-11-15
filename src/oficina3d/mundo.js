@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import {
   PISO, ZONAS, PUFS, MESA_REUNION, DANIELA_SALA, LIVING, COCINA, MESA_CHICA_DANIELA, DANIELA_OFICINA, asientosOficina, MESA_CHICA_MARIA, PLANTAS_DANIELA, RINCON_ENTRADA, SALA_SERVIDORES, ARCHIVO, MACETONES, RINCON_TABLONES, EXPENDEDORAS, PUERTA_REUNION, asientosReunion, DIRECCION, DANIELA, VISITA, estiloDe, CUADROS_PDG,
-  MUEBLES_DIRECCION, ROBERTA, EJECUTIVO, X0, OFICINAS, DIVISOR, ENTRADA, alturaPiso, FONDO_PIZARRON,
+  MUEBLES_DIRECCION, MUEBLES_FEMINA, ROBERTA, EJECUTIVO, X0, OFICINAS, DIVISOR, ENTRADA, alturaPiso, FONDO_PIZARRON,
 } from '../oficinaPlano.mjs'
 import { texturaCuadro, texturaAlfombra, texturaCamiseta, texturaPosterOasis, texturaPelota, texturaPosterPinkFloyd, texturaPosterFrida, texturaPosterJugador } from './cuadros.js'
 export { texturaPizarron, dibujarPizarron } from './cuadros.js'
@@ -212,9 +212,9 @@ function monitor(alto = 0.74) {
 
 // Escritorio de una oficina: mesa, silla, PC. giro: hacia dónde mira el que se sienta (0 = hacia adelante).
 // ejecutivo: el de la jefa (más grande, de nogal, silla de cuero).
-export function crearEscritorio(x, z, giro, { ejecutivo = false, decoracion = 0 } = {}) {
+export function crearEscritorio(x, z, giro, { ejecutivo = false, decoracion = 0, mesa = null, completo = false } = {}) {
   const g = new THREE.Group()
-  const a = ejecutivo ? 1.15 : 0.82, f = ejecutivo ? 0.55 : 0.42
+  const a = mesa?.a ?? (ejecutivo ? 1.15 : 0.82), f = mesa?.f ?? (ejecutivo ? 0.55 : 0.42)
   const madera = mat(ejecutivo ? COLORES.nogal : COLORES.madera)
   g.add(caja(-a, a, 0.7, 0.76, -f, f, madera, { r: 0.025 }))
   if (ejecutivo) g.add(caja(-a + 0.05, a - 0.05, 0, 0.7, f - 0.12, f - 0.04, madera))
@@ -223,7 +223,8 @@ export function crearEscritorio(x, z, giro, { ejecutivo = false, decoracion = 0 
   const pc = monitor(0.76)
   pc.grupo.position.z = 0.12
   g.add(pc.grupo)
-  if (decoracion % 2) g.add(cilindro(a - 0.25, 0.15, 0.06, 0.76, 0.88, mat(COLORES.rosa), 0.065))
+  if (completo) equiparEscritorio(g, a, f)
+  else if (decoracion % 2) g.add(cilindro(a - 0.25, 0.15, 0.06, 0.76, 0.88, mat(COLORES.rosa), 0.065))
   else {
     g.add(cilindro(a - 0.22, 0.12, 0.07, 0.76, 0.88, mat(COLORES.maceta), 0.08))
     const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), mat(COLORES.hoja, { flatShading: true }))
@@ -233,7 +234,7 @@ export function crearEscritorio(x, z, giro, { ejecutivo = false, decoracion = 0 
   if (ejecutivo) g.add(caja(-a + 0.2, -a + 0.5, 0.76, 0.8, -0.1, 0.2, mat(COLORES.dorado)))
   // Lámpara de escritorio: se prende de noche si el agente está en su lugar.
   const lampara = materialLampara()
-  const lx = -a + 0.25, lz = 0.25
+  const lx = completo ? -a + 0.15 : -a + 0.25, lz = completo ? -f + 0.15 : 0.25
   g.add(cilindro(lx, lz, 0.08, 0.76, 0.79, mat(ejecutivo ? COLORES.dorado : COLORES.gris)))
   g.add(cilindro(lx, lz, 0.015, 0.79, 1.12, mat(ejecutivo ? COLORES.dorado : COLORES.gris)))
   const pantallaLampara = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.13, 18, 1, true), mat(ejecutivo ? COLORES.dorado : COLORES.lila, { side: THREE.DoubleSide }))
@@ -245,6 +246,86 @@ export function crearEscritorio(x, z, giro, { ejecutivo = false, decoracion = 0 
   g.position.set(x, 0, z)
   g.rotation.y = giro
   return { grupo: g, pantalla: pc.pantalla, lampara }
+}
+
+// El escritorio completo (el de Femina): dos monitores más a los costados, inclinados hacia ella, con sus cables por la
+// bandeja de abajo hasta la pata; soporte con el teléfono, mouse, cuaderno, taza y una plantita.
+function equiparEscritorio(g, a, f) {
+  const negro = mat(COLORES.negro)
+  for (const lado of [-1, 1]) {
+    const m = monitor(0.76)
+    m.grupo.scale.setScalar(0.88)
+    m.grupo.position.set(lado * 0.74, 0.76 * 0.12, 0.02)
+    m.grupo.rotation.y = -lado * 0.42
+    m.grupo.children.at(-1).visible = false // sin otro teclado
+    g.add(m.grupo)
+  }
+  // Cables: de cada monitor bajan por atrás a la bandeja y de ahí por la pata hasta el piso (el del tercer monitor también).
+  g.add(caja(-a + 0.15, a - 0.15, 0.56, 0.6, f - 0.2, f - 0.06, mat(COLORES.gris)))
+  for (const cx of [-0.68, 0, 0.68]) {
+    g.add(caja(cx - 0.01, cx + 0.01, 0.6, 0.98, 0.16, 0.18, negro))
+    g.add(caja(cx - 0.012, cx + 0.012, 0.58, 0.6, 0.18, f - 0.08, negro))
+  }
+  g.add(caja(a - 0.13, a - 0.1, 0.02, 0.58, f - 0.14, f - 0.1, negro))
+  g.add(caja(a - 0.4, a - 0.1, 0.0, 0.02, f - 0.16, f - 0.08, negro))
+  // Soporte del teléfono con el celular apoyado (la pantalla prendida).
+  const soporte = new THREE.Group()
+  soporte.add(caja(-0.06, 0.06, 0, 0.012, -0.05, 0.05, mat(COLORES.grisClaro)))
+  const cel = caja(-0.04, 0.04, 0, 0.16, -0.006, 0.006, negro, { r: 0.004 })
+  cel.position.set(0, 0.09, 0.01); cel.rotation.x = 0.35
+  soporte.add(cel)
+  const brillo = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.14), new THREE.MeshStandardMaterial({ color: '#2f7d4f', emissive: '#1d4d31', emissiveIntensity: 0.6 }))
+  brillo.position.set(0, 0.09, 0.003); brillo.rotation.set(0.35, Math.PI, 0)
+  soporte.add(brillo)
+  soporte.position.set(-0.52, 0.76, -0.18); soporte.rotation.y = 0.3
+  g.add(soporte)
+  // Cable de carga del teléfono hasta la bandeja.
+  g.add(caja(-0.53, -0.51, 0.76, 0.768, -0.12, f - 0.08, negro))
+  // Mouse, cuaderno con lapicera, taza y una plantita.
+  g.add(caja(0.36, 0.44, 0.76, 0.79, -0.42, -0.3, negro, { r: 0.015 }))
+  g.add(caja(0.55, 0.85, 0.76, 0.775, -0.38, -0.12, mat('#2f7d4f'), { r: 0.005 }))
+  g.add(caja(0.6, 0.82, 0.775, 0.783, -0.3, -0.29, mat(COLORES.dorado)))
+  g.add(cilindro(-0.82, -0.3, 0.045, 0.76, 0.86, mat(COLORES.blanco)))
+  g.add(cilindro(a - 0.14, f - 0.16, 0.05, 0.76, 0.84, mat(COLORES.maceta), 0.06))
+  const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 1), mat(COLORES.hoja, { flatShading: true }))
+  h.position.set(a - 0.14, 0.9, f - 0.16); h.castShadow = true
+  g.add(h)
+}
+
+// Lo de la oficina de Femina además del escritorio (MUEBLES_FEMINA en oficinaPlano.mjs). Coordenadas del piso.
+function mueblesFemina(y0) {
+  const F = MUEBLES_FEMINA
+  const g = new THREE.Group()
+  const z = y => y - y0
+  // Archivero de tres cajones con la impresora arriba.
+  const A = F.archivero
+  g.add(caja(A.x0, A.x1, 0, 0.85, z(A.y0), z(A.y1), mat(COLORES.grisClaro), { r: 0.02 }))
+  for (const y of [0.18, 0.45, 0.72]) g.add(caja(A.x1 - 0.005, A.x1 + 0.01, y - 0.02, y + 0.02, z(A.y0) + 0.25, z(A.y1) - 0.25, mat(COLORES.gris)))
+  g.add(caja(A.x0 + 0.04, A.x1 - 0.04, 0.85, 1.07, z(A.y0) + 0.08, z(A.y1) - 0.08, mat(COLORES.blanco), { r: 0.03 }))
+  g.add(caja(A.x0 + 0.1, A.x1 - 0.1, 1.07, 1.09, z(A.y0) + 0.15, z(A.y1) - 0.2, mat(COLORES.negro)))
+  g.add(caja(A.x1 - 0.06, A.x1 + 0.08, 0.95, 0.97, z(A.y0) + 0.2, z(A.y1) - 0.2, mat(COLORES.blanco)))
+  // Sillón para las visitas y su mesita.
+  g.add(sillonChico(F.sillon.x, z(F.sillon.y), F.sillon.mira))
+  g.add(cilindro(F.mesita.x, z(F.mesita.y), F.mesita.radio, 0.42, 0.46, mat(COLORES.madera)))
+  g.add(cilindro(F.mesita.x, z(F.mesita.y), 0.03, 0, 0.42, mat(COLORES.maderaOscura)))
+  g.add(cilindro(F.mesita.x + 0.08, z(F.mesita.y), 0.04, 0.46, 0.55, mat(COLORES.blanco)))
+  // Pizarra con ruedas, con el embudo de prospectos dibujado.
+  const P = F.pizarra
+  g.add(caja(P.x0, P.x1, 0.8, 1.75, z(P.y) - 0.02, z(P.y) + 0.02, mat(COLORES.blanco), { r: 0.01 }))
+  ;[[0.95, '#2f7d4f'], [0.75, '#3fa66b'], [0.55, '#7cc49a'], [0.35, '#b9e0c8']].forEach(([w, c], k) => g.add(caja((P.x0 + P.x1) / 2 - w / 2, (P.x0 + P.x1) / 2 + w / 2, 1.55 - k * 0.17, 1.66 - k * 0.17, z(P.y) - 0.03, z(P.y) - 0.02, mat(c))))
+  for (const x of [P.x0 + 0.08, P.x1 - 0.08]) {
+    g.add(caja(x - 0.02, x + 0.02, 0.1, 0.8, z(P.y) - 0.02, z(P.y) + 0.02, mat(COLORES.gris)))
+    g.add(caja(x - 0.02, x + 0.02, 0.06, 0.1, z(P.y) - 0.18, z(P.y) + 0.18, mat(COLORES.gris)))
+  }
+  // Lámpara de pie y perchero (con su saco y la cartera).
+  g.add(cilindro(F.lampara.x, z(F.lampara.y), 0.16, 0, 0.03, mat(COLORES.negro)))
+  g.add(cilindro(F.lampara.x, z(F.lampara.y), 0.018, 0.03, 1.55, mat(COLORES.negro)))
+  g.add(cilindro(F.lampara.x, z(F.lampara.y), 0.2, 1.5, 1.72, mat(COLORES.blanco), 0.13))
+  g.add(cilindro(F.perchero.x, z(F.perchero.y), 0.18, 0, 0.03, mat(COLORES.nogal)))
+  g.add(cilindro(F.perchero.x, z(F.perchero.y), 0.025, 0.03, 1.7, mat(COLORES.nogal)))
+  g.add(caja(F.perchero.x - 0.17, F.perchero.x + 0.17, 0.95, 1.6, z(F.perchero.y) + 0.03, z(F.perchero.y) + 0.12, mat('#2f7d4f'), { r: 0.04 }))
+  g.add(caja(F.perchero.x - 0.12, F.perchero.x + 0.06, 0.85, 1.12, z(F.perchero.y) - 0.12, z(F.perchero.y) - 0.04, mat('#c2471a'), { r: 0.03 }))
+  return g
 }
 
 // Puesto en un tablón (UP o PDG): silla y PC (la mesa la arma crearSala).
@@ -463,6 +544,7 @@ export function crearOficina(o) {
       })
       if (estilo.objeto === 'diarios') g.add(mesitaConDiarios(o.x0 + 1.25, 0.4))
       if (estilo.objeto === 'maletin') g.add(maletin(o.x0 + 0.55, D - 0.45))
+      if (o.id === 'femina') g.add(mueblesFemina(o.y0))
     }
   }
   if (o.jefa) {

@@ -3,7 +3,7 @@
 // línea recta donde puede. Las medidas de los muebles son las de oficina3d/mundo.js.
 import {
   PISO, ZONAS, PUFS, MESA_REUNION, PUERTA_REUNION, DIRECCION, DANIELA, VISITA, ROBERTA, MUEBLES_DIRECCION, OFICINAS, DIVISOR,
-  asientosReunion, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RINCON_TABLONES, EXPENDEDORAS, SALA_SERVIDORES, ARCHIVO, MACETONES, PIZARRONES, huellaPizarron,
+  asientosReunion, MUEBLES_FEMINA, LIVING, COCINA, MESA_CHICA_DANIELA, MESA_CHICA_MARIA, PLANTAS_DANIELA, mesaUp, mesaPdg, mesaAdmin, mesaSistemas, RINCON_ENTRADA, RINCON_TABLONES, EXPENDEDORAS, SALA_SERVIDORES, ARCHIVO, MACETONES, PIZARRONES, huellaPizarron,
 } from './oficinaPlano.mjs'
 
 export const CELDA = 0.25
@@ -34,6 +34,15 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
     }
   }
   rect(OFICINAS.x0, OFICINAS.x1, OFICINAS.y0 - pared, OFICINAS.y0 + pared)
+  if (oficinas.has('femina')) {
+    const F = MUEBLES_FEMINA
+    rect(F.archivero.x0, F.archivero.x1, F.archivero.y0, F.archivero.y1)
+    circulo(F.sillon.x, F.sillon.y, 0.45)
+    circulo(F.mesita.x, F.mesita.y, F.mesita.radio)
+    rect(F.pizarra.x0, F.pizarra.x1, F.pizarra.y - 0.2, F.pizarra.y + 0.2)
+    circulo(F.lampara.x, F.lampara.y, 0.2)
+    circulo(F.perchero.x, F.perchero.y, 0.2)
+  }
   for (const o of oficinas.values()) if (o.sofa) rect(o.sofa.x0, o.sofa.x1, o.sofa.y0, o.sofa.y1)
   const RT = RINCON_TABLONES
   circulo(RT.mesa.x, RT.mesa.y, RT.mesa.radio)
@@ -50,7 +59,7 @@ export function obstaculos(lugares, nUp, nPdg = 0, nAdmin = 0, nSistemas = 0) {
   // Escritorios y sillas de cada agente.
   for (const l of lugares) {
     if (l.escritorio) {
-      const a = l.jefa ? 1.15 : 0.82, f = l.jefa ? 0.55 : 0.42
+      const a = l.mesa?.a ?? (l.jefa ? 1.15 : 0.82), f = l.mesa?.f ?? (l.jefa ? 0.55 : 0.42)
       rect(l.escritorio.x - a, l.escritorio.x + a, l.escritorio.y - f, l.escritorio.y + f)
     }
     circulo(l.sentado.x, l.sentado.y, 0.3)
