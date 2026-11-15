@@ -453,3 +453,15 @@ test('Lo que un agente dice que publica en el grupo se publica de verdad y sabe 
   assert.match(g, /En privado \(NO se cuenta en este chat/)
   assert.match(g, /Daniela y Noruega son novias/)
 })
+
+test('los ids que escribe la IA en los textos se cambian por el nombre', async () => {
+  const { conNombres, nombrarVida } = await import('./logic.mjs')
+  const nombres = { 'up:disenador': 'Diseñador', 'trabajadores:google_sync': 'Google (calendario y mail)' }
+  assert.equal(conNombres('Le interesa a up:disenador y a trabajadores:google_sync; up:otro no.', nombres), 'Le interesa a Diseñador y a Google; up:otro no.')
+  const v = nombrarVida({ momentos: [{ agentes: ['up:disenador'], lugar: 'x', resumen: 'up:disenador brindó', charla: [{ agente: 'up:disenador', texto: 'hola up:disenador' }] }], vinculos: [{ a: 'up:disenador', historia: 'up:disenador' }], noticias: [{ autor: 'up:disenador', texto: '¡Feliz cumple up:disenador!' }] }, nombres)
+  assert.equal(v.momentos[0].resumen, 'Diseñador brindó')
+  assert.equal(v.momentos[0].agentes[0], 'up:disenador')
+  assert.equal(v.momentos[0].charla[0].texto, 'hola Diseñador')
+  assert.equal(v.vinculos[0].historia, 'Diseñador')
+  assert.equal(v.noticias[0].texto, '¡Feliz cumple Diseñador!')
+})
