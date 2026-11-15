@@ -65,7 +65,7 @@ async function cargarOficina() {
     leer('lo que encontró Femina', supabase.from('pdg_hallazgos').select('tipo,titulo,estado,created_at').eq('estado', 'nuevo').order('created_at', { ascending: false }).limit(60), []),
     leer('reuniones internas', supabase.from('oficina_reuniones').select('id,convoca,asistentes,tema,detalle,fecha,estado,acta_id').order('fecha', { ascending: false }).limit(60), []),
     leer('relaciones entre agentes', supabase.from('oficina_vinculos').select('id,a,b,tipo,historia,desde').order('actualizado', { ascending: false }).limit(100), []),
-    leer('tu pareja', supabase.from('oficina_corazon').select('agente,desde,estado'), []),
+    leer('tu pareja', supabase.from('oficina_corazon').select('agente,desde,estado,saben'), []),
     leer('vida de la oficina', supabase.from('oficina_momentos').select('id,agentes,tipo,lugar,resumen,fecha,hora').gte('fecha', new Date(ahora - 7 * DIA_MS).toISOString().slice(0, 10)).order('fecha', { ascending: false }).limit(60), []),
   ])
   const corridasPor = {}
@@ -214,7 +214,7 @@ async function entrarSola(agente) {
 // reloj: de dónde sale la hora para la luz del día (en la app, la actual; se puede cambiar para probar).
 export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now,
   solicitudes = [], actas = [], tareas = [], reuniones = [], decidir = async () => {}, cambiarTarea = async () => {}, marcarPresentada = async () => {}, guardarActa = async () => {},
-  vinculos = [], momentos = [], corazon = [], cambiarConVosEnBase = cambiarCorazonEnBase, correrInterna = correrReunionInterna, entrar = entrarSola, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
+  vinculos = [], momentos = [], corazon = [], cambiarConVosEnBase = cambiarCorazonEnBase, cambiarSabenEnBase = cambiarSabenDeBase, correrInterna = correrReunionInterna, entrar = entrarSola, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
   leerConversacion = leerConversacionDeBase, anotarEnConversacion = anotarEnConversacionDeBase }) {
   const [elegidoId, setElegidoId] = useState(null)
   const [pestana, setPestana] = useState('ahora')
@@ -226,6 +226,11 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     const dicho = estado ? `${TEXTO_CON_VOS[estado]} 💕` : 'Prefiero que volvamos a ser compañeras.'
     setCharlas(c => ({ ...c, [id]: [...(c[id] ?? []), { role: 'user', content: dicho }] }))
     anotarEnConversacion(id, dicho).catch(() => { /* igual quedó guardado el estado */ })
+    actualizar()
+  }
+  // Quién sabe de esa relación: nadie, todos ('*') o algunos (sus ids). Cada agente sabe solo lo que elegís acá.
+  const cambiarSaben = async (id, saben) => {
+    await cambiarSabenEnBase(id, saben)
     actualizar()
   }
   // Visita: si en la charla un agente dice que va a tu oficina, la escena lo hace caminar hasta tu mesa (un rato).
@@ -568,7 +573,8 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
       }} />}
     {elegido && <PanelAgente key={elegido.id} agente={elegido} pestana={pestana} setPestana={setPestana} ahora={ahora} cerrar={() => setElegidoId(null)}
       venir={venir} deVisita={visita?.agente === elegido.id}
-      conVos={corazon.find(x => x.agente === elegido.id)?.estado ?? ''} cambiarConVos={estado => cambiarConVos(elegido.id, estado)} pedidos={solicitudes.filter(x => x.agente === elegido.id && x.estado === 'pendiente')} decidir={decidir} anotar={anotarEnConversacion}
+      conVos={corazon.find(x => x.agente === elegido.id)?.estado ?? ''} cambiarConVos={estado => cambiarConVos(elegido.id, estado)}
+      saben={corazon.find(x => x.agente === elegido.id)?.saben ?? []} cambiarSaben={saben => cambiarSaben(elegido.id, saben)} companeros={agentes.filter(x => x.id !== elegido.id)} pedidos={solicitudes.filter(x => x.agente === elegido.id && x.estado === 'pendiente')} decidir={decidir} anotar={anotarEnConversacion}
       charla={charlas[elegido.id] ?? []} setCharla={m => setCharlas(c => ({ ...c, [elegido.id]: typeof m === 'function' ? m(c[elegido.id] ?? []) : m }))} hablar={hablar} />}
   </div>
 }
@@ -729,12 +735,16 @@ async function cambiarCorazonEnBase(agente, estado) {
     : await supabase.from('oficina_corazon').delete().eq('agente', agente)
   if (error) throw error
 }
+async function cambiarSabenDeBase(agente, saben) {
+  const { error } = await supabase.from('oficina_corazon').update({ saben }).eq('agente', agente)
+  if (error) throw error
+}
 async function anotarEnConversacionDeBase(agente, texto) {
   const { error } = await supabase.from('oficina_conversacion').insert({ agente, de: 'daniela', texto: String(texto).slice(0, 4000), lugar: 'charla' })
   if (error) throw error
 }
 async function leerConversacionDeBase(agente) {
-  const { data, error } = await supabase.from('oficina_conversacion').select('de,texto,lugar,salida,creado').eq('agente', agente).order('creado', { ascending: false }).limit(60)
+  const { data, error } = await supabase.from('oficina_conversacion').select('de,texto,lugar,salida,creado').eq('agente', agente).order('creado', { ascending: false }).order('id', { ascending: false }).limit(60)
   if (error) throw error
   return (data || []).reverse().map(f => ({ role: f.de === 'daniela' ? 'user' : 'assistant', content: f.texto, lugar: f.lugar, salida: f.salida, creado: f.creado }))
 }
@@ -789,6 +799,31 @@ function Encuentro({ encuentro, agente, decidir, hablar, seguime, despues, conte
 // ---------- Vida de la oficina ----------
 // Cómo se llevan los agentes (parejas, amistades, compañeros) y lo que compartieron estos días: mates, cafés, almuerzos,
 // cenas. Lo arma la IA una vez por día y cada agente lo recuerda cuando charlás con él.
+// Quién sabe de tu relación con ella: nadie, todos o los que marques.
+function QuienSabe({ saben, cambiar, companeros }) {
+  const [modo, setModo] = useState(saben.includes('*') ? 'todos' : saben.length ? 'algunos' : 'nadie')
+  const elegir = m => {
+    setModo(m)
+    if (m === 'nadie') cambiar([]).catch(() => {})
+    if (m === 'todos') cambiar(['*']).catch(() => {})
+    if (m === 'algunos') cambiar(saben.filter(x => x !== '*')).catch(() => {})
+  }
+  const marcar = (id, si) => cambiar(si ? [...saben.filter(x => x !== '*'), id] : saben.filter(x => x !== id && x !== '*')).catch(() => {})
+  return <div className="oficina-quien-sabe">
+    <label className="oficina-con-vos">
+      <span>Quién lo sabe</span>
+      <select value={modo} onChange={e => elegir(e.target.value)}>
+        <option value="nadie">Nadie más</option>
+        <option value="todos">Todos</option>
+        <option value="algunos">Algunos</option>
+      </select>
+    </label>
+    {modo === 'algunos' && <ul className="oficina-quien-sabe-lista">{companeros.map(g => <li key={g.id}>
+      <label><input type="checkbox" checked={saben.includes(g.id)} onChange={e => marcar(g.id, e.target.checked)} /> {g.nombre}</label>
+    </li>)}</ul>}
+  </div>
+}
+
 function VidaOficina({ vinculos, momentos, agentes, corazon = [] }) {
   const nombre = id => nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)
   if (!vinculos.length && !momentos.length && !corazon.length) return <p className="tenue">Todavía no pasó nada entre ellos: la primera vez que abras la Oficina cada día, se arma lo que comparten.</p>
@@ -939,7 +974,7 @@ function Avatar({ agente }) {
 // ---------- Panel del agente ----------
 const PESTANAS = [['ahora', 'Ahora'], ['que', 'Qué hace'], ['tareas', 'Tareas'], ['herramientas', 'Herramientas'], ['charla', 'Conversación']]
 
-function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, setCharla, hablar, venir, deVisita = false, pedidos = [], decidir, anotar, conVos = '', cambiarConVos }) {
+function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, setCharla, hablar, venir, deVisita = false, pedidos = [], decidir, anotar, conVos = '', cambiarConVos, saben = [], cambiarSaben, companeros = [] }) {
   const panel = useRef(null)
   // cerrar cambia en cada render: se guarda en una ref para que el efecto corra una sola vez (al abrir el panel)
   // y no le saque el foco al cuadro de la charla cada vez que llega una respuesta.
@@ -983,6 +1018,7 @@ function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla, se
               {ESTADOS_CON_VOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
             </select>
           </label>}
+          {ELLAS.includes(a.id) && conVos && cambiarSaben && <QuienSabe saben={saben} cambiar={cambiarSaben} companeros={companeros} />}
         </>}
         {pestana === 'que' && <p className="oficina-descripcion">{a.descripcion || 'Sin descripción cargada.'}</p>}
         {pestana === 'tareas' && (a.tareas.length
