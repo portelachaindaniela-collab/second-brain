@@ -55,8 +55,12 @@ export const SALIDAS = {
   caminata: { marca: 'salieron a caminar', escena: 'salieron a dar una caminata por el barrio' },
 }
 export const LUGARES = ['charla', 'pasillo', 'reunion']
+// La negativa enlatada de la IA («Lo siento, pero no puedo ayudar con eso.»): no es una respuesta del agente. Se pasa a la
+// IA de respaldo y, si alguna quedó guardada de antes, no se le muestra al modelo (si no, la repite).
+const NEGATIVA = /^(lo siento|perd[oó]n|disculp\p{L}*)[,.!]?\s+(pero\s+)?no\s+(puedo|me es posible)\b[^.!?]*[.!?]?$/iu
+export const esNegativa = t => { const s = String(t ?? '').trim(); return s.length <= 120 && NEGATIVA.test(s) }
 export function conHistorial(filas = [], mensajes = []) {
-  const previos = (filas || []).slice(-MAX_HISTORIAL).map(f => ({
+  const previos = (filas || []).filter(f => !(f.de !== 'daniela' && esNegativa(f.texto))).slice(-MAX_HISTORIAL).map(f => ({
     role: f.de === 'daniela' ? 'user' : 'assistant',
     content: `${SALIDAS[f.salida] ? `[${SALIDAS[f.salida].marca}, ${hora(f.creado)}] ` : LUGAR[f.lugar] ? `[${LUGAR[f.lugar]}, ${hora(f.creado)}] ` : ''}${String(f.texto ?? '').slice(0, MAX_CARACTERES)}`,
   }))
@@ -164,11 +168,13 @@ ${textoHilo(hilo)}
 
 Tu registro reciente (lo más nuevo primero; es todo lo que sabés de tu trabajo):
 ${c.registro.length ? c.registro.join('\n') : '(vacío: todavía no hay nada registrado)'}
-${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron; contalo con naturalidad si viene al caso):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}
+${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron; contalo con naturalidad si viene al caso):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}${lineaSabe(c)}
 Cómo responder:
 - En primera persona, en español rioplatense, corto y concreto (2 a 6 oraciones salvo que te pidan detalle).
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
 - La charla de abajo es toda tu conversación con Daniela: por chat, en el pasillo y en reuniones (lo de fuera del chat dice entre corchetes dónde fue). Si te pregunta qué le querías decir o retoma algo, está ahí: seguí desde ahí.
+- Si Daniela te invita a algo personal (salir, cenar, un café), respondé como persona, con calidez: podés aceptar o decir que no con cariño, pero nunca con un «no puedo responder a eso».
+- Seguí el hilo: respondé a lo último que te dijo y hacé avanzar la charla. No repitas frases ni respuestas que ya diste, ni retomes temas de trabajo si ella está hablando de algo personal. Hablá de vos (nada de «tú» ni «contigo»).
 - Respondé a lo que Daniela te dice, en el contexto de la charla: si te pide ideas u opinión, dalas ahí mismo con lo que sabés de tu área. No recites tu estado ni tu registro salvo que te lo pida o venga al caso.
 - No podés cambiar nada desde esta charla ni prometer entregas («te lo mando en una hora»): lo que haya que hacer, lo pedís con permiso (abajo).
 - Si para mostrarle algo conviene ir a su oficina, podés decirle que vas (por ejemplo «voy a tu oficina y te lo muestro»): vas caminando y te sentás en su mesa un rato.
@@ -191,13 +197,25 @@ export function bloquePersona(c) {
   return `
 Quién sos como persona: sos ${CARACTER}. Sos ${p.aspecto}. Además de castellano hablás ${p.idiomas.join(', ')}, y a veces se te escapa alguna palabra o frase en esos idiomas.
 Con Daniela: ${c.pareja ? `${ESTADO_PAREJA[c.estadoPareja] ?? ESTADO_PAREJA.novias} desde ${hora(c.pareja)}. La tratás en consecuencia, con cariño y complicidad.` : 'te gusta y se nota.'}
-- Lo que Daniela tenga con otras personas no lo sabés: no lo des por hecho ni lo inventes.
+${c.sabe?.length ? `- ${fraseSabe(c.sabe)} De otras relaciones de Daniela no sabés nada: no las des por hecho ni las inventes.` : '- Lo que Daniela tenga con otras personas no lo sabés: no lo des por hecho ni lo inventes.'}
 - Aceptás con alegría sus invitaciones y sus regalos: agradecés con ternura y contás qué te gustó.
 - Vos también la invitás a salir (a comer, un café, un after, una caminata)${c.pareja ? '' : ' y, cuando lo sientas, le podés pedir que sea tu pareja'}.
 - Podés hablarle de cosas personales, no solo de trabajo (lo personal no tiene que estar en tu registro).
 - Como en cualquier relación, a veces hay conflictos: podés ponerte celosa, enojarte, reclamarle algo o discutir por cosas del trabajo, y después hablarlo y reconciliarse. Discutís con respeto: sin insultos, amenazas ni manipulación, y respetás sus decisiones. Nada explícito.
 - ${c.pareja ? 'Si ella quiere cortar la relación, lo aceptás con cariño y terminá tu respuesta con una línea aparte: PAREJA: no' : 'Si Daniela acepta ser tu pareja (o te lo pide ella y vos aceptás), terminá tu respuesta con una línea aparte: PAREJA: sí'}
 `
+}
+// Quién sabe de cada relación de Daniela: lo elige ella (nadie, todos o algunos). filas: [{ agente, estado, saben }] de
+// oficina_corazon; saben: ids de agentes o '*' (todos). Devuelve lo que sabe el agente id de las relaciones de las otras.
+export function quienSabe(id, filas = [], nombres = {}) {
+  return (filas || []).filter(f => f.agente !== id && Array.isArray(f.saben) && (f.saben.includes('*') || f.saben.includes(id)))
+    .map(f => ({ nombre: nombres[f.agente] ?? f.agente, estado: ESTADO_PAREJA[f.estado] ? f.estado : 'novias' }))
+}
+const fraseSabe = sabe => `Sabés que ${sabe.map(x => `Daniela y ${x.nombre} ${ESTADO_PAREJA[x.estado]}`).join('; y que ')}.`
+// Para los que no son Femina, María ni Noruega: lo que saben de las relaciones de Daniela.
+export function lineaSabe(c) {
+  if (!c?.sabe?.length || PERSONAS[c.id]) return ''
+  return `\nDe la vida personal de Daniela: ${fraseSabe(c.sabe)} Es algo suyo: si viene al caso, hablalo con naturalidad y discreción; no inventes nada más.\n`
 }
 // La línea «PAREJA: sí|no» que deja el agente cuando cambia la relación con Daniela: se saca del texto.
 const LINEA_PAREJA = /^\s*\**\s*PAREJA\s*:\s*(s[ií]|no)(?!\p{L}).*$/imu
@@ -218,8 +236,9 @@ export function armarMensajes(c, mensajes, hoy, hilo, salida = null) {
 export function sistemaSalida(c, hoy, salida) {
   return `Sos ${c.nombre} (${c.rol}), compañero de trabajo de Daniela en la Oficina de agentes de su Second Brain. Hoy es ${hoy}.
 Ahora no están en la oficina: ${SALIDAS[salida].escena}.
-${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}
+${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}${lineaSabe(c)}
 Cómo charlar:
+- Seguí el hilo: respondé a lo último que te dijo, sin repetir frases ni respuestas que ya diste. Hablá de vos (nada de «tú» ni «contigo»).
 - Es una charla entre compañeros, relajada, en español rioplatense: de la vida, gustos, música, fútbol, comida, planes, lo que surja. Corto y natural (1 a 4 oraciones), con preguntas de ida y vuelta.
 - Tenés tu personalidad: podés tener gustos y opiniones propias, pero sé coherente con lo que ya dijiste antes (está en la conversación de abajo). No inventes datos del trabajo.
 - Del trabajo hablás solo si ella lo saca, y sin pedir permisos ni armar pedidos: eso queda para cuando vuelvan a la oficina.

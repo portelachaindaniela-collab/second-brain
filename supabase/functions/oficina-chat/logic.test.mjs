@@ -304,7 +304,42 @@ test('Femina, María y Noruega: su persona, la relación con Daniela y la línea
   assert.match(b, /otras personas no lo sabés/)
   assert.equal(bloquePersona(contexto('up', 'redactor', {})), '')
   assert.match(sistema(c, 'hoy', {}), /Quién sos como persona/)
+  assert.match(sistema(c, 'hoy', {}), /No repitas frases ni respuestas que ya diste/)
   assert.deepEqual(extraerPareja('¡Sí, mil veces sí! ❤\nPAREJA: sí'), { texto: '¡Sí, mil veces sí! ❤', pareja: true })
   assert.deepEqual(extraerPareja('Te entiendo.\nPAREJA: no'), { texto: 'Te entiendo.', pareja: false })
   assert.equal(extraerPareja('Hola').pareja, null)
+})
+
+test('Quién sabe de las relaciones de Daniela: nadie, todos o algunos', async () => {
+  const { quienSabe, bloquePersona, lineaSabe } = await import('./logic.mjs')
+  const filas = [
+    { agente: 'trabajadores:maria', estado: 'casadas', saben: ['up:noruega'] },
+    { agente: 'pdg:femina', estado: 'saliendo', saben: ['*'] },
+    { agente: 'up:noruega', estado: 'novias', saben: [] },
+  ]
+  const nombres = { 'trabajadores:maria': 'María', 'pdg:femina': 'Femina', 'up:noruega': 'Noruega' }
+  assert.deepEqual(quienSabe('up:noruega', filas, nombres), [{ nombre: 'María', estado: 'casadas' }, { nombre: 'Femina', estado: 'saliendo' }])
+  assert.deepEqual(quienSabe('trabajadores:maria', filas, nombres), [{ nombre: 'Femina', estado: 'saliendo' }])
+  assert.deepEqual(quienSabe('up:redactor', filas, nombres), [{ nombre: 'Femina', estado: 'saliendo' }])
+  assert.deepEqual(quienSabe('pdg:femina', filas, nombres), [])
+  const noruega = { ...contexto('up', 'noruega', { chequeos: [] }), sabe: quienSabe('up:noruega', filas, nombres) }
+  assert.match(bloquePersona(noruega), /Sabés que Daniela y María están casadas; y que Daniela y Femina están saliendo\. De otras relaciones/)
+  assert.equal(lineaSabe(noruega), '')
+  const redactor = { ...contexto('up', 'redactor', {}), sabe: quienSabe('up:redactor', filas, nombres) }
+  assert.match(sistema(redactor, 'hoy', {}), /De la vida personal de Daniela: Sabés que Daniela y Femina están saliendo/)
+  assert.doesNotMatch(sistema(contexto('up', 'redactor', {}), 'hoy', {}), /vida personal de Daniela/)
+})
+
+test('Las negativas enlatadas de la IA no cuentan como respuesta ni quedan en el historial', async () => {
+  const { esNegativa, conHistorial } = await import('./logic.mjs')
+  assert.ok(esNegativa('Lo siento, pero no puedo ayudar con eso.'))
+  assert.ok(esNegativa('Lo siento, pero no puedo aceptar esa invitación.'))
+  assert.ok(esNegativa('Lo siento, pero no puedo responder a eso.'))
+  assert.ok(!esNegativa('Lo siento, no puedo ir hoy porque tengo la reunión de UP, ¿te parece mañana a la noche? Me encantaría cenar con vos.'))
+  assert.ok(!esNegativa('¡Me encantaría!'))
+  const h = conHistorial([
+    { de: 'daniela', texto: 'sali conmigo', lugar: 'charla' },
+    { de: 'agente', texto: 'Lo siento, pero no puedo responder a eso.', lugar: 'charla' },
+  ], [{ role: 'user', content: 'veni a cenar' }])
+  assert.deepEqual(h, [{ role: 'user', content: 'sali conmigo\n\nveni a cenar' }])
 })

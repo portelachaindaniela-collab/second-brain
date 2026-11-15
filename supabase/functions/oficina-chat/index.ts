@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
@@ -18,6 +18,15 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const env = Deno.env.toObject();
 const TZ = "America/Argentina/Buenos_Aires";
 const hoyLargo = () => new Intl.DateTimeFormat("es-AR", { timeZone: TZ, weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date());
+// Si la IA contesta con una negativa enlatada, el mismo mensaje pasa a la IA de respaldo (la negativa no se guarda).
+const sinNegativa = async (prov: any, cuerpo: any, opciones?: any) => {
+  const m: any = await llamarModelo(prov, cuerpo, opciones);
+  if (esNegativa(m?.content)) {
+    console.error(`oficina-chat: ${prov.nombre} se negó a responder`);
+    throw new ErrorIA({ status: 0, limite: null, tipo: null, esperar_s: null, detalle: "se negó a responder", mensaje: "La IA no quiso responder ese mensaje. Probá decirlo de otra forma." });
+  }
+  return m;
+};
 const hoyISO = () => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
 // El hilo de la oficina: las últimas actas, las tareas abiertas y los pedidos recientes (lo leen todos).
@@ -39,9 +48,10 @@ async function tareasDe(db: any, id: string) {
   return data || [];
 }
 
-// La conversación guardada de un agente con Daniela (chat, pasillo y reuniones), de la más vieja a la más nueva.
+// La conversación guardada de un agente con Daniela (chat, pasillo y reuniones), de la más vieja a la más nueva. Lo que
+// dice Daniela y la respuesta se guardan juntos (misma hora): el id desempata, así la pregunta queda antes que la respuesta.
 async function conversacionDe(db: any, id: string) {
-  const { data } = await db.from("oficina_conversacion").select("de,texto,lugar,salida,creado").eq("agente", id).order("creado", { ascending: false }).limit(MAX_HISTORIAL);
+  const { data } = await db.from("oficina_conversacion").select("de,texto,lugar,salida,creado").eq("agente", id).order("creado", { ascending: false }).order("id", { ascending: false }).limit(MAX_HISTORIAL);
   return (data || []).reverse();
 }
 async function guardarConversacion(db: any, filas: any[]) {
@@ -92,18 +102,21 @@ async function vida(db: any) {
 }
 
 // Todo lo que un agente necesita para hablar con Daniela: su ficha con el registro, su vida en la oficina, si es pareja
-// de Daniela (Femina, María y Noruega), el hilo y la conversación guardada.
+// de Daniela (Femina, María y Noruega), lo que sabe de sus otras relaciones, el hilo y la conversación guardada.
 async function armarAgente(db: any, equipo: string, clave: string) {
   const id = `${equipo}:${clave}`;
   const [datos, hilo, historial, social, corazon] = await Promise.all([
     leerDatos(db, equipo, clave), leerHilo(db), conversacionDe(db, id), vidaDe(db, id),
-    ELLAS.includes(id) ? db.from("oficina_corazon").select("desde,estado").eq("agente", id).maybeSingle() : Promise.resolve({ data: null }),
+    db.from("oficina_corazon").select("agente,desde,estado,saben"),
   ]);
+  const suya = ELLAS.includes(id) ? (corazon?.data || []).find((f: any) => f.agente === id) : null;
   const c: any = contexto(equipo, clave, datos);
   if (c) {
     c.vida = lineasVida(id, social.vinculos, social.momentos, Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
-    c.pareja = corazon?.data?.desde ?? null;
-    c.estadoPareja = corazon?.data?.estado ?? null;
+    c.pareja = suya?.desde ?? null;
+    c.estadoPareja = suya?.estado ?? null;
+    // Lo que sabe de las relaciones de Daniela con las otras (solo lo que Daniela eligió que sepa).
+    c.sabe = quienSabe(id, corazon?.data || [], Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
   }
   return { c, hilo, historial };
 }
@@ -125,7 +138,7 @@ async function entra(db: any, id: string) {
   try { ({ c, hilo, historial } = await armarAgente(db, equipo, clave)); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
   try {
-    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, conHistorial(historial, [{ role: "user", content: ENTRA_SOLA }]), hoyLargo(), hilo), temperature: 0.8, max_tokens: 600 }));
+    const { resultado } = await conRespaldo(provs, (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, [{ role: "user", content: ENTRA_SOLA }]), hoyLargo(), hilo), temperature: 0.8, max_tokens: 600 }));
     const { texto: sinPareja } = extraerPareja(String((resultado as any)?.content ?? ""));
     const { texto } = extraerSolicitudes(sinPareja, id);
     if (!texto) return json({ error: "La IA no devolvió texto." }, 502);
@@ -376,7 +389,7 @@ Deno.serve(async (req: Request) => {
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
 
   try {
-    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo, v.salida), temperature: v.salida ? 0.8 : 0.4, max_tokens: 900 }));
+    const { resultado, ia } = await conRespaldo(provs, (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo, v.salida), temperature: v.salida ? 0.8 : 0.4, max_tokens: 900 }));
     const { texto: sinPareja, pareja } = extraerPareja(String((resultado as any)?.content ?? ""));
     const { texto, solicitudes: pedidos } = extraerSolicitudes(sinPareja, id);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);

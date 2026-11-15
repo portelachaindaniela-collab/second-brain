@@ -284,3 +284,4 @@
 .oficina-vinculo.vinculo-pareja { color: #d4483b; border-color: rgba(212, 72, 59, .4); }
 .oficina-vinculo.vinculo-amistad { color: #2f9e5e; border-color: rgba(47, 158, 94, .4); }
 .oficina-con-vos { display: flex; align-items: center; gap: var(--esp-8); font-size: var(--letra-13); }
+.oficina-quien-sabe-lista { list-style: none; margin: var(--esp-4) 0 0; padding: 0; max-height: 10rem; overflow-y: auto; font-size: var(--letra-13); }
