@@ -220,7 +220,12 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   // Encuentros a pie: el agente cercano que tiene algo para vos te lo dice. Lo que dejás para después vuelve en un rato.
   const [cercanos, setCercanos] = useState([])
   const [despues, setDespues] = useState(() => new Map())
-  const encuentro = primerEncuentro(cercanos, { solicitudes, pendientes }, pospuestos(despues, ahora))
+  // Lo que ya contestaste (en el pasillo o en tu puerta) no te lo vuelven a plantear: queda en su charla y en Mensajes.
+  const [contestados] = useState(() => leerGuardados(CLAVE_CONTESTADOS))
+  const encuentro = primerEncuentro(cercanos, { solicitudes, pendientes }, new Set([...pospuestos(despues, ahora), ...contestados]))
+  // El aviso del pasillo queda fijo hasta que lo contestes, aunque el agente o vos se alejen.
+  const [fijo, setFijo] = useState(null)
+  const sigue = x => !x?.pedido || solicitudes.some(s => s.id === x.pedido.id && s.estado === 'pendiente')
   const cuenta = contarEstados(agentes)
   const abrir = (id, p = 'ahora') => { setElegidoId(id); setPestana(p) }
   const [tres] = useState(hayWebGL)
@@ -338,6 +343,17 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     return () => clearTimeout(t)
   }, [interna?.id, interna?.estado]) // eslint-disable-line react-hooks/exhaustive-deps
   const alTerminoInterna = useCallback(id => setInterna(x => (x?.id === id ? null : x)), [])
+  // El cartel de la reunión interna queda hasta que lo cerrás (aunque los agentes ya hayan vuelto). Si una reunión ya
+  // falló antes, el reintento no te avisa de nuevo: solo vas a ver el cartel si esta vez sale.
+  const [cartel, setCartel] = useState(null)
+  const cerrados = useRef(new Set())
+  useEffect(() => {
+    if (!interna || cerrados.current.has(interna.id)) return
+    const fallidas = leerGuardados(CLAVE_INTERNAS_FALLIDAS)
+    if (fallidas.has(String(interna.reunionId)) && (interna.fase === 'llegando' || interna.fase === 'error')) return
+    if (interna.fase === 'error') { fallidas.add(String(interna.reunionId)); guardarGuardados(CLAVE_INTERNAS_FALLIDAS, fallidas) }
+    setCartel(interna)
+  }, [interna])
   const hablaInterna = interna?.fase === 'charlando' ? interna.mensajes[interna.vistos - 1]?.agente ?? null : null
 
   const alPlanificar = useCallback((id, ll) => setReunion(r => { if (r?.id === id) setLlegadas(ll); return r }), [])
@@ -360,30 +376,39 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   useEffect(() => { abierta.current = Date.now() }, [])
   useEffect(() => {
     if (!tres || golpe || visita || reunion || interna || Date.now() - abierta.current < PRIMER_GOLPE_MS) return
-    const fuera = new Set([...pospuestos(despues, ahora), ...golpeados.current])
+    const fuera = new Set([...pospuestos(despues, ahora), ...golpeados.current, ...contestados, ...(fijo ? [fijo.clave] : [])])
     const quien = quienGolpea(agentes.filter(a => !a.sinCharla).map(a => a.id), { solicitudes, pendientes }, fuera, ultimoGolpe.current, Date.now())
     if (!quien) return
     ultimoGolpe.current = Date.now()
     golpeados.current.add(quien.clave)
     setGolpe({ ...quien, golpe: Date.now(), llego: false, texto: `Toc, toc. ${quien.texto}` })
-  }, [ahora, tres, golpe, visita, reunion, interna, despues, agentes, solicitudes, pendientes])
+  }, [ahora, tres, golpe, visita, reunion, interna, despues, agentes, solicitudes, pendientes, fijo, contestados])
   // Si la escena no avisa que llegó (por ejemplo, sin 3D), el aviso aparece igual al rato.
   useEffect(() => {
     if (!golpe || golpe.llego) return
     const t = setTimeout(() => setGolpe(g => (g && g.golpe === golpe.golpe ? { ...g, llego: true } : g)), 45_000)
     return () => clearTimeout(t)
   }, [golpe])
+  // Si lo decidiste por otro lado (en la charla o en Mensajes), el aviso se cierra; si no, queda hasta que contestes.
+  useEffect(() => {
+    if (fijo && !sigue(fijo)) setFijo(null)
+    else if (!fijo && encuentro && !golpe) setFijo(encuentro)
+    if (golpe && !sigue(golpe)) setGolpe(null)
+  }, [fijo, encuentro?.clave, golpe, solicitudes]) // eslint-disable-line react-hooks/exhaustive-deps
   const alLlegoVisita = useCallback(origen => setGolpe(g => (g && g.golpe === origen ? { ...g, llego: true } : g)), [])
   const visitaEscena = golpe ? { id: golpe.golpe, agente: golpe.id, destino: 'puerta' } : visita
   // Lo que te dicen en el pasillo (o en tu puerta) queda guardado con lo que contestás: después, en la charla, el agente lo sabe.
   const enPuerta = !superpuesto && golpe?.llego && !elegido ? golpe : null
-  const visto = enPuerta ?? (!superpuesto && encuentro && !elegido && !golpe ? encuentro : null)
+  const visto = enPuerta ?? (!superpuesto && fijo && sigue(fijo) && !elegido && !golpe ? fijo : null)
   const anotados = useRef({})
   useEffect(() => {
     if (!visto || anotados.current[visto.clave]) return
     anotados.current[visto.clave] = anotarEncuentro(visto.id, visto.texto).catch(() => null)
   }, [visto, anotarEncuentro])
   const contestar = async (e, respuesta) => {
+    contestados.add(e.clave)
+    guardarGuardados(CLAVE_CONTESTADOS, contestados)
+    if (e === fijo) setFijo(null)
     const anotado = await anotados.current[e.clave]
     delete anotados.current[e.clave]
     if (anotado) contestarEncuentro(e.id, respuesta).catch(() => { /* la charla sigue igual */ })
@@ -410,11 +435,11 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
                 reunionInterna={interna} alTerminoInterna={alTerminoInterna} visita={visitaEscena} alLlegoVisita={alLlegoVisita}
                 alPlanificar={alPlanificar} alVolvieron={alVolvieron} volverDaniela={volverDaniela} alMoverDaniela={setLejos}
                 pantallaCompleta={enCurso} reloj={relojLuz} calendario={eventos} alTocarPizarron={verCalendario} alCruzarse={setCercanos}>
-                {!superpuesto && interna && <AvisoInterna interna={interna} agentes={agentes} />}
+                {!superpuesto && cartel && <AvisoInterna interna={cartel} agentes={agentes} cerrar={() => { cerrados.current.add(cartel.id); setCartel(null) }} />}
                 {superpuesto ?? (visto && <Encuentro key={`${visto.clave}${visto === enPuerta ? '-puerta' : ''}`} encuentro={visto} agente={agentes.find(a => a.id === visto.id)} decidir={decidir}
                   puerta={visto === enPuerta} responder={responder}
                   contestar={r => { contestar(visto, r); if (visto === enPuerta && r !== 'hablemos') setGolpe(null) }}
-                  hablar={id => { if (visto === enPuerta) { setGolpe(null); venir(id, true) } abrir(id, 'charla') }}
+                  hablar={id => { if (visto === enPuerta) { setGolpe(null); venir(id, true) } else setFijo(null); abrir(id, 'charla') }}
                   despues={() => { setDespues(d => new Map(d).set(visto.clave, Date.now() + POSPONER_ENCUENTRO_MS)); if (visto === enPuerta) setGolpe(null) }} />)}
               </Oficina3D>
             </Suspense></SiFalla>
@@ -575,13 +600,22 @@ function Mensajes({ solicitudes, agentes, decidir, responder, ahora }) {
   </>
 }
 
+// Lo que ya te mostraron y contestaste se recuerda en este equipo (si el navegador no deja guardar, vale para esta visita).
+const CLAVE_CONTESTADOS = 'oficina-avisos-contestados'
+const CLAVE_INTERNAS_FALLIDAS = 'oficina-internas-fallidas'
+function leerGuardados(clave) {
+  try { return new Set(JSON.parse(localStorage.getItem(clave) || '[]')) } catch { return new Set() }
+}
+function guardarGuardados(clave, conjunto) {
+  try { localStorage.setItem(clave, JSON.stringify([...conjunto].slice(-500))) } catch { /* sin almacenamiento: vale para esta visita */ }
+}
 // El cartel de una reunión interna: quiénes están, de qué hablan y lo último que se dijo (con la charla entera a mano).
 const LLEGAR_INTERNA_MS = 20000
-function AvisoInterna({ interna, agentes }) {
+function AvisoInterna({ interna, agentes, cerrar }) {
   const [verTodo, setVerTodo] = useState(false)
   const nombre = id => nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)
   const dichos = interna.mensajes.slice(0, interna.vistos)
-  const estado = interna.fase === 'error' ? `No se pudo hacer la reunión: ${interna.error}. Se vuelve a intentar la próxima vez que abras la Oficina.`
+  const estado = interna.fase === 'error' ? `No se pudo hacer la reunión: ${interna.error}. Se vuelve a intentar sola la próxima vez que abras la Oficina; si sale, te aviso.`
     : interna.fase === 'lista' ? 'Terminaron. María dejó el acta en el Archivo y lo que decidieron te llega como pedidos.'
       : dichos.length ? null : 'Van llegando a la sala…'
   return <div className="reunion-aviso o3-interna" role="status" aria-live="polite">
@@ -589,7 +623,10 @@ function AvisoInterna({ interna, agentes }) {
     <p className="tenue">{interna.asistentes.map(nombre).join(', ')}</p>
     {estado && <p>{estado}</p>}
     {(verTodo ? dichos : dichos.slice(-2)).map((m, i) => <p key={i} className="o3-interna-linea"><strong>{nombre(m.agente)}:</strong> {m.texto}</p>)}
-    {dichos.length > 2 && <button type="button" className="btn btn-sm" onClick={() => setVerTodo(v => !v)}>{verTodo ? 'Ver menos' : 'Ver toda la charla'}</button>}
+    <div className="o3-encuentro-botones">
+      {dichos.length > 2 && <button type="button" className="btn btn-sm" onClick={() => setVerTodo(v => !v)}>{verTodo ? 'Ver menos' : 'Ver toda la charla'}</button>}
+      <button type="button" className="btn btn-sm" onClick={cerrar}>Cerrar</button>
+    </div>
   </div>
 }
 // La conversación de cada agente con vos queda guardada (oficina_conversacion): el chat y las reuniones las guarda
