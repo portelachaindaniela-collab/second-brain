@@ -21,7 +21,7 @@ const esfera = (r, material, seg = 20) => {
 }
 
 // ropa: color CSS (los trabajadores, su color de identidad). v: { pelo, colorPelo, piel } de variante().
-// accesorio: el de ACCESORIOS en oficinaPlano.mjs (galera, corona, auriculares…), o null.
+// accesorio: el de ACCESORIOS en oficinaPlano.mjs (gorros, vinchas, lentes, auriculares…), o null.
 export function crearPersonaje({ ropa, v, accesorio = null }) {
   const grupo = new THREE.Group()
   const cuerpo = new THREE.Group() // todo lo que se balancea al caminar
@@ -175,6 +175,19 @@ export function crearPersonaje({ ropa, v, accesorio = null }) {
       cabeza.add(peca)
     }
   }
+  // Joyas (accesorios comunes): collar con dije, pulsera, anillo y uñas pintadas.
+  const j = v.joyas
+  if (j?.collar) {
+    const mCollar = mat(j.collar, { metalness: 0.5, roughness: 0.3 })
+    cuerpo.add(en(aro(0.14, 0.012, mCollar), 0, 0.86, 0.01, Math.PI / 2 - 0.25))
+    cuerpo.add(en(esfera(0.022, mCollar, 10), 0, 0.8, 0.15))
+  }
+  if (j?.pulsera) brazoI.grupo.add(en(aro(0.072, 0.014, mat(j.pulsera, { metalness: 0.5, roughness: 0.3 })), 0, -0.27, 0, Math.PI / 2))
+  if (j?.anillo) brazoD.grupo.add(en(aro(0.022, 0.007, mat(j.anillo, { metalness: 0.6, roughness: 0.25 })), 0.02, -0.39, 0.03, Math.PI / 2))
+  if (j?.unas) {
+    const mUna = mat(j.unas, { roughness: 0.3 })
+    for (const b of [brazoI, brazoD]) for (const x of [-0.03, 0, 0.03]) b.grupo.add(en(esfera(0.012, mUna, 6), x, -0.4, 0.035))
+  }
   if (v.lentes && accesorio !== 'lentes') {
     const mMarco = mat('#3a2a22', { roughness: 0.4 })
     for (const x of [-0.09, 0.09]) cabeza.add(en(aro(0.058, 0.011, mMarco), x, 0.0, 0.258))
@@ -206,20 +219,6 @@ function ponerAccesorio({ cabeza, cuerpo }, tipo, v) {
     return g
   }
   switch (tipo) {
-    case 'corona': {
-      const g = new THREE.Group()
-      g.add(en(cil(0.17, 0.16, 0.09, oro, 28), 0, 0.25, 0))
-      for (let k = 0; k < 6; k++) {
-        const a = (k / 6) * Math.PI * 2
-        const punta = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.1, 10), oro)
-        g.add(en(punta, Math.sin(a) * 0.155, 0.34, Math.cos(a) * 0.155))
-        const gema = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), mat(['#e85d6a', '#6ea8ff', '#3fb878'][k % 3], { roughness: 0.2 }))
-        g.add(en(gema, Math.sin(a) * 0.172, 0.25, Math.cos(a) * 0.172))
-      }
-      g.rotation.z = 0.08
-      cabeza.add(g)
-      break
-    }
     case 'galera': { const g = sombrero('#2a2236', '#c8323f', 0.29, 0.3); cabeza.add(g); break }
     case 'sombrero': { const g = sombrero('#7a5a3a', '#3b2a22'); g.rotation.x = -0.08; cabeza.add(g); break }
     case 'safari': {
