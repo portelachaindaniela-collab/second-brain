@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, cumpleDe, validarGeneral, sistemaGeneral, leerGeneral } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
@@ -8,7 +8,8 @@ import { AGENTES_UP } from "../_shared/oficina.mjs";
 // { reunion: true, asistentes: [...], mensajes } (reunión: responde con { respuestas: [{ agente, texto }] }),
 // { acta: true, ... } (María escribe el acta), { propuestas: true } (las propuestas del día) o { reunion_interna: id }
 // (los agentes se juntan entre ellos y María escribe el acta), { vida: true } (la vida social del día, una vez por día) o
-// { entra: id } (Femina, María o Noruega entran a la oficina de Daniela por su cuenta y le dicen algo). Todas leen el hilo de la
+// { entra: id } (Femina, María o Noruega entran a la oficina de Daniela por su cuenta y le dicen algo) o { general: texto } (Daniela
+// escribe en el chat de la oficina y contestan algunos). Todas leen el hilo de la
 // oficina (actas, tareas, pedidos y el plantel); la charla con uno lee además toda su conversación guardada con Daniela. Lee con la sesión de la dueña (RLS, nunca con permisos de servicio).
 // Lo que escribe: los pedidos de permiso de los agentes (entran pendientes, la base no deja crearlos de otra forma,
 // hasta que Daniela decide) y el acta de cada reunión con sus tareas.
@@ -63,7 +64,7 @@ async function guardarConversacion(db: any, filas: any[]) {
 // La vida de un agente en la oficina: sus relaciones y lo último que compartió con compañeros.
 async function vidaDe(db: any, id: string) {
   const [v, m] = await Promise.all([
-    db.from("oficina_vinculos").select("a,b,tipo,historia").or(`a.eq."${id}",b.eq."${id}"`).limit(20),
+    db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto").or(`a.eq."${id}",b.eq."${id}"`).limit(20),
     db.from("oficina_momentos").select("agentes,tipo,lugar,resumen,fecha,hora").contains("agentes", [id]).order("fecha", { ascending: false }).limit(6),
   ]);
   return { vinculos: v.data || [], momentos: m.data || [] };
@@ -80,22 +81,64 @@ async function vida(db: any) {
   const gente = await equipos(db);
   const plantel = [...gente.trabajadores, ...gente.up, ...gente.pdg];
   const desde = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
-  const [v, m] = await Promise.all([
-    db.from("oficina_vinculos").select("a,b,tipo,historia").limit(80),
+  const [v, m, g, pub] = await Promise.all([
+    db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto").limit(80),
     db.from("oficina_momentos").select("agentes,tipo,lugar,resumen,fecha").gte("fecha", desde).order("fecha", { ascending: false }).limit(20),
+    ultimosGeneral(db),
+    publicasDeDaniela(db),
   ]);
+  // Los que cumplen años hoy (cada agente tiene su día fijo): los saludan en el chat de la oficina.
+  const cumples = plantel.filter(x => cumpleDe(x.id) === hoy.slice(5)).map(x => x.id);
   try {
-    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaVida(plantel, v.data || [], m.data || [], hoyLargo()) }, { role: "user", content: "¿Qué pasa hoy entre ellos?" }], temperature: 0.8, max_tokens: 3000 }, { timeoutMs: 90000 }));
-    const { momentos, vinculos } = leerVida((resultado as any)?.content, plantel.map(g => g.id));
+    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaVida(plantel, v.data || [], m.data || [], hoyLargo(), { cumples, publicas: pub, general: g }) }, { role: "user", content: "¿Qué pasa hoy entre ellos?" }], temperature: 0.8, max_tokens: 3500 }, { timeoutMs: 90000 }));
+    const { momentos, vinculos, noticias } = leerVida((resultado as any)?.content, plantel.map(g => g.id));
     if (vinculos.length) {
       const r = await db.from("oficina_vinculos").upsert(vinculos.map(x => ({ ...x, actualizado: new Date().toISOString() })), { onConflict: "owner_id,a,b" });
       if (r.error) console.error("oficina-chat: no se pudieron guardar los vínculos", r.error.message);
+    }
+    if (noticias.length) {
+      const r = await db.from("oficina_chat_general").insert(noticias.map((x: any) => ({ ...x, tipo: "noticia" })));
+      if (r.error) console.error("oficina-chat: no se pudieron guardar las noticias", r.error.message);
     }
     if (!momentos.length) return json({ momentos: [] });
     const { data, error } = await db.from("oficina_momentos").insert(momentos.map(x => ({ ...x, fecha: hoy }))).select("id,agentes,tipo,lugar,resumen,fecha,hora");
     if (error) return json({ error: error.message }, 500);
     return json({ momentos: data || [], vinculos });
   } catch (e) {
+    if (e instanceof ErrorIA) return json({ error: e.message }, 502);
+    return json({ error: (e as Error).message }, 500);
+  }
+}
+
+// El chat de la oficina: los últimos mensajes (el más viejo primero) y lo de Daniela que saben todos.
+async function ultimosGeneral(db: any) {
+  const { data } = await db.from("oficina_chat_general").select("autor,texto,creado").order("creado", { ascending: false }).order("id", { ascending: false }).limit(20);
+  return (data || []).reverse();
+}
+async function publicasDeDaniela(db: any) {
+  const { data } = await db.from("oficina_corazon").select("agente,estado,saben").contains("saben", ["*"]);
+  return data || [];
+}
+// Daniela escribe en el chat de la oficina: se guarda y contestan 1 a 3 agentes (también quedan guardados).
+async function general(db: any, body: any) {
+  const v: any = validarGeneral(body);
+  if (!v.ok) return json({ error: v.error }, 400);
+  const provs = proveedores(env);
+  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
+  const r0 = await db.from("oficina_chat_general").insert({ autor: "daniela", texto: v.texto });
+  if (r0.error) return json({ error: r0.error.message }, 500);
+  const [gente, g, vin, pub] = await Promise.all([equipos(db), ultimosGeneral(db), db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto").limit(60), publicasDeDaniela(db)]);
+  const plantel = [...gente.trabajadores, ...gente.up, ...gente.pdg, ...gente.sistemas];
+  try {
+    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaGeneral(plantel, g, vin.data || [], pub, hoyLargo()) }, { role: "user", content: v.texto }], temperature: 0.8, max_tokens: 900 }));
+    const respuestas = leerGeneral((resultado as any)?.content, plantel.map(x => x.id));
+    if (respuestas.length) {
+      const r = await db.from("oficina_chat_general").insert(respuestas);
+      if (r.error) console.error("oficina-chat: no se pudieron guardar las respuestas del chat", r.error.message);
+    }
+    return json({ respuestas });
+  } catch (e) {
+    // Lo que escribió Daniela ya quedó; si nadie contesta, se avisa.
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);
     return json({ error: (e as Error).message }, 500);
   }
@@ -378,6 +421,7 @@ Deno.serve(async (req: Request) => {
   if (body?.reunion_interna) return await reunionInterna(db, Number(body.reunion_interna));
   if (body?.vida) return await vida(db);
   if (body?.entra) return await entra(db, String(body.entra));
+  if (body?.general) return await general(db, body);
   const v: any = validar(body);
   if (!v.ok) return json({ error: v.error }, 400);
   const provs = proveedores(env);

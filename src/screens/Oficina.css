@@ -285,6 +285,17 @@
 .oficina-vinculo { font-size: var(--letra-11); padding: 1px 8px; border-radius: 999px; background: var(--surface-inset); border: 1px solid var(--gray-200); }
 .oficina-vinculo.vinculo-pareja { color: #d4483b; border-color: rgba(212, 72, 59, .4); }
 .oficina-vinculo.vinculo-amistad { color: #2f9e5e; border-color: rgba(47, 158, 94, .4); }
+.oficina-vinculo.vinculo-casados, .oficina-vinculo.vinculo-comprometidos, .oficina-vinculo.vinculo-saliendo { color: #d4483b; border-color: rgba(212, 72, 59, .4); }
+.oficina-vinculo.vinculo-amantes { color: #b04fc7; border-color: rgba(176, 79, 199, .45); }
+.oficina-vinculo.vinculo-mejores_amigos { color: #2f9e5e; border-color: rgba(47, 158, 94, .6); font-weight: 600; }
+.oficina-vinculo.vinculo-rivalidad { color: #c2410c; border-color: rgba(194, 65, 12, .45); }
+.oficina-vinculo.vinculo-separados, .oficina-vinculo.vinculo-divorciados, .oficina-vinculo.vinculo-ex { color: var(--gray-500); }
+.oficina-vinculo-secreto { font-size: var(--letra-12); color: #b04fc7; }
+/* Afinidad: barrita centrada en 0, hacia la derecha si se quieren y hacia la izquierda si no. */
+.oficina-afinidad { position: relative; display: inline-block; width: 60px; height: 6px; margin: 0 6px; vertical-align: middle; border-radius: 3px; background: var(--gray-200); }
+.oficina-afinidad > span { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.oficina-afinidad.positiva > span { background: #2f9e5e; }
+.oficina-afinidad.negativa > span { background: #d4483b; }
 .oficina-con-vos { display: flex; align-items: center; gap: var(--esp-8); font-size: var(--letra-13); }
 .oficina-quien-sabe-lista { list-style: none; margin: var(--esp-4) 0 0; padding: 0; max-height: 10rem; overflow-y: auto; font-size: var(--letra-13); }
 
@@ -306,3 +317,14 @@
   .oficina-chat { width: 100%; }
   .oficina-chat.is-min { width: auto; }
 }
+
+/* Chat de la oficina: como un grupo; las noticias del día con un borde de color. */
+.oficina-general { display: flex; flex-direction: column; gap: var(--esp-8); }
+.oficina-general-mensajes { display: flex; flex-direction: column; gap: var(--esp-8); }
+.oficina-general-msj { display: flex; gap: var(--esp-8); align-items: flex-start; max-width: 680px; }
+.oficina-general-msj > div { background: var(--surface-raised); border-radius: var(--radius); padding: 6px 10px; font-size: var(--letra-13); }
+.oficina-general-msj p { margin: 0; }
+.oficina-general-msj .oficina-avatar { width: 28px; height: 28px; flex-shrink: 0; }
+.oficina-general-msj.es-noticia > div { border-left: 3px solid var(--accent); }
+.oficina-general-msj.de-vos { align-self: flex-end; }
+.oficina-general-quien { font-size: var(--letra-12); font-weight: 600; }

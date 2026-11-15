@@ -280,7 +280,7 @@ test('vida de la oficina: relaciones y momentos entre agentes, y cada uno los re
   }), ids)
   assert.equal(r.momentos.length, 1)
   assert.deepEqual(r.momentos[0].agentes, ['up:noruega', 'trabajadores:maria'])
-  assert.deepEqual(r.vinculos, [{ a: 'trabajadores:maria', b: 'up:noruega', tipo: 'amistad', historia: 'Se llevan bárbaro.' }])
+  assert.deepEqual(r.vinculos, [{ a: 'trabajadores:maria', b: 'up:noruega', tipo: 'amistad', afinidad: 0, secreto: false, historia: 'Se llevan bárbaro.' }])
   const lineas = lineasVida('up:noruega', r.vinculos, [{ ...r.momentos[0], fecha: '2026-11-15' }], { 'trabajadores:maria': 'María' })
   assert.match(lineas[0], /amistad con María/)
   assert.match(lineas[1], /con María tomaron mate \(la cafetería\)/)
@@ -342,4 +342,43 @@ test('Las negativas enlatadas de la IA no cuentan como respuesta ni quedan en el
     { de: 'agente', texto: 'Lo siento, pero no puedo responder a eso.', lugar: 'charla' },
   ], [{ role: 'user', content: 'veni a cenar' }])
   assert.deepEqual(h, [{ role: 'user', content: 'sali conmigo\n\nveni a cenar' }])
+})
+
+test('Chat de la oficina: noticias del día, cumpleaños y respuestas', async () => {
+  const { sistemaVida, leerVida, cumpleDe, sistemaGeneral, leerGeneral, validarGeneral, proveedores } = await import('./logic.mjs')
+  assert.match(cumpleDe('up:noruega'), /^\d{2}-\d{2}$/)
+  assert.equal(cumpleDe('up:noruega'), cumpleDe('up:noruega'))
+  const plantel = [{ id: 'up:noruega', nombre: 'Noruega' }, { id: 'pdg:femina', nombre: 'Femina' }]
+  const p = sistemaVida(plantel, [], [], 'hoy', { cumples: ['up:noruega'], publicas: [{ agente: 'pdg:femina', estado: 'novias' }], general: [{ autor: 'daniela', texto: 'Hola a todos' }] })
+  assert.match(p, /Hoy cumplen años: Noruega/)
+  assert.match(p, /Daniela y Femina son novias/)
+  assert.match(p, /infidelidad/)
+  assert.match(p, /Daniela: Hola a todos/)
+  const r = leerVida(JSON.stringify({ momentos: [], vinculos: [], noticias: [{ autor: 'up:noruega', texto: '¡Gracias por los saludos! 🎂' }, { autor: 'up:otro', texto: 'no vale' }] }), ['up:noruega', 'pdg:femina'])
+  assert.deepEqual(r.noticias, [{ autor: 'up:noruega', texto: '¡Gracias por los saludos! 🎂' }])
+  assert.match(sistemaGeneral(plantel, [{ autor: 'daniela', texto: '¿Quién viene al after?' }], [], [], 'hoy'), /Daniela: ¿Quién viene al after\?/)
+  assert.deepEqual(leerGeneral('{"respuestas":[{"autor":"pdg:femina","texto":"¡Yo!"}]}', ['pdg:femina']), [{ autor: 'pdg:femina', texto: '¡Yo!' }])
+  assert.equal(validarGeneral({ general: '  ' }).ok, false)
+  const or = proveedores({ OPENROUTER_API_KEY: 'x' }).find(x => x.nombre === 'openrouter')
+  assert.equal(or.modelo, 'deepseek/deepseek-chat-v3.1')
+})
+
+test('Relaciones como en un simulador de vida: escalones, afinidad e infidelidades en secreto', async () => {
+  const { leerVida, lineasVida, sistemaVida, sistemaGeneral } = await import('./logic.mjs')
+  const ids = ['up:noruega', 'trabajadores:maria', 'pdg:femina']
+  const r = leerVida(JSON.stringify({ vinculos: [
+    { a: 'up:noruega', b: 'pdg:femina', tipo: 'casados', afinidad: 140, historia: 'Se casaron.' },
+    { a: 'up:noruega', b: 'trabajadores:maria', tipo: 'amantes', afinidad: '55', secreto: true, historia: 'Se ven a escondidas.' },
+  ] }), ids)
+  assert.deepEqual(r.vinculos.map(v => [v.tipo, v.afinidad, v.secreto]), [['casados', 100, false], ['amantes', 55, true]])
+  const nombres = { 'trabajadores:maria': 'María', 'pdg:femina': 'Femina' }
+  assert.match(lineasVida('up:noruega', r.vinculos, [], nombres).join('\n'), /amantes con María \(en secreto: no se lo contás a nadie\)/)
+  const plantel = [{ id: 'up:noruega', nombre: 'Noruega' }, { id: 'trabajadores:maria', nombre: 'María' }, { id: 'pdg:femina', nombre: 'Femina' }]
+  const p = sistemaVida(plantel, r.vinculos, [], 'hoy')
+  assert.match(p, /María y Noruega: amantes, afinidad 55, EN SECRETO/)
+  assert.match(p, /divorcio/)
+  // En el chat de todos lo secreto no aparece.
+  const g = sistemaGeneral(plantel, [{ autor: 'daniela', texto: 'hola' }], r.vinculos, [], 'hoy')
+  assert.match(g, /Femina y Noruega: casados/)
+  assert.doesNotMatch(g, /amantes/)
 })

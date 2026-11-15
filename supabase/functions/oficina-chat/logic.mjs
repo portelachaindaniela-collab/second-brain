@@ -7,7 +7,8 @@ export const MAX_MENSAJES = 12
 export const MAX_CARACTERES = 2000
 const MAX_DATO = 600
 
-export const proveedores = env => armarProveedores(env, 'oficina-chat', { groq: env.OFICINA_MODELO_GROQ || 'openai/gpt-oss-120b', gemini: env.BS67_MODEL || 'gemini-3.6-flash' })
+// El respaldo pago (OpenRouter) usa otro modelo: el mismo de Groq se niega a las charlas personales y de pareja.
+export const proveedores = env => armarProveedores(env, 'oficina-chat', { groq: env.OFICINA_MODELO_GROQ || 'openai/gpt-oss-120b', openrouter: env.OFICINA_MODELO_OPENROUTER || 'deepseek/deepseek-chat-v3.1', gemini: env.BS67_MODEL || 'gemini-3.6-flash' })
 
 const recortar = (t, max = MAX_DATO) => {
   const s = String(t ?? '').replace(/\s+/g, ' ').trim()
@@ -586,10 +587,17 @@ export function pedidosDelActa(acta) {
 }
 
 // ---------- La vida de la oficina ----------
-// Los agentes se relacionan como personas: amistades, alguna pareja, compañeros. Una vez por día la IA arma lo que
-// comparten (un mate, un café, un almuerzo en la oficina; una cena, un after o un paseo afuera), siguiendo lo que ya
-// venía pasando entre ellos. Cada agente lo recuerda y lo puede contar en sus charlas.
-export const TIPOS_VINCULO = { amistad: 'amistad', pareja: 'pareja', companerismo: 'compañerismo' }
+// Los agentes se relacionan como personas, como en un simulador de vida: cada par tiene un tipo de relación y una afinidad
+// (-100 a 100) que sube y baja con lo que pasa. Hay amigos y rivales, noviazgos, compromisos, casamientos, celos,
+// infidelidades (en secreto hasta que se descubren), rupturas, divorcios y reconciliaciones. Una vez por día la IA arma lo
+// que comparten y lo que cambia, siguiendo lo que venía pasando. Cada agente recuerda lo suyo y lo cuenta en sus charlas.
+export const TIPOS_VINCULO = {
+  conocidos: 'conocidos', companerismo: 'compañerismo', amistad: 'amistad', mejores_amigos: 'mejores amigos', rivalidad: 'rivalidad',
+  saliendo: 'están saliendo', pareja: 'novios', comprometidos: 'comprometidos', casados: 'casados',
+  separados: 'separados', divorciados: 'divorciados', ex: 'ex', amantes: 'amantes',
+}
+// Cómo se ve una relación en el prompt: tipo, afinidad y si es secreta.
+const textoVinculo = v => `${TIPOS_VINCULO[v.tipo] ?? v.tipo}${Number.isFinite(v.afinidad) ? `, afinidad ${v.afinidad}` : ''}${v.secreto ? ', EN SECRETO (nadie más lo sabe)' : ''}`
 export const MOMENTOS = {
   mate: { adentro: true, texto: 'tomaron mate' }, cafe: { adentro: true, texto: 'se tomaron un café' },
   almuerzo: { adentro: true, texto: 'almorzaron juntos' }, merienda: { adentro: true, texto: 'merendaron juntos' },
@@ -597,13 +605,28 @@ export const MOMENTOS = {
   paseo: { adentro: false, texto: 'salieron a pasear' },
 }
 const par = (x, y) => (x < y ? [x, y] : [y, x])
-export function sistemaVida(plantel, vinculos = [], momentos = [], hoy) {
+// El cumpleaños de cada agente: fijo, sale de su id (así no cambia nunca). 'MM-DD'.
+export function cumpleDe(id) {
+  let h = 0
+  for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  const d = new Date(Date.UTC(2025, 0, 1) + (h % 365) * 86400000)
+  return `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+// El chat de la oficina, para el prompt: los últimos mensajes (el más viejo primero).
+const lineasGeneral = (general, nombre) => general.slice(-15).map(m => `- ${m.autor === 'daniela' ? 'Daniela' : nombre(m.autor)}: ${recortar(m.texto, 200)}`).join('\n')
+// Lo de Daniela que saben todos (lo eligió ella): se puede comentar en el chat de la oficina. Lo privado, no.
+const lineasPublicas = (publicas, nombre) => publicas.map(x => `- Daniela y ${nombre(x.agente)} ${ESTADO_PAREJA[x.estado] ?? ESTADO_PAREJA.novias}`).join('\n')
+export const MAX_NOTICIAS = 6
+// extra: { cumples: ids que cumplen hoy, publicas: [{ agente, estado }] relaciones de Daniela que saben todos, general: [{ autor, texto }] }
+export function sistemaVida(plantel, vinculos = [], momentos = [], hoy, extra = {}) {
+  const { cumples = [], publicas = [], general = [] } = extra
   const nombre = id => plantel.find(g => g.id === id)?.nombre ?? id
-  const lazos = vinculos.length ? vinculos.map(v => `- ${nombre(v.a)} y ${nombre(v.b)}: ${TIPOS_VINCULO[v.tipo] ?? v.tipo}${v.historia ? ` (${recortar(v.historia, 200)})` : ''}`).join('\n') : '(todavía ninguno: es el primer día)'
+  const lazos = vinculos.length ? vinculos.map(v => `- ${nombre(v.a)} y ${nombre(v.b)}: ${textoVinculo(v)}${v.historia ? ` (${recortar(v.historia, 200)})` : ''}`).join('\n') : '(todavía ninguno: es el primer día)'
   const antes = momentos.length ? momentos.slice(0, 12).map(m => `- ${m.fecha}: ${m.agentes.map(nombre).join(', ')} ${MOMENTOS[m.tipo]?.texto ?? m.tipo}${m.lugar ? ` (${m.lugar})` : ''}: ${recortar(m.resumen, 160)}`).join('\n') : '(nada todavía)'
   return `Es la vida social de la Oficina de agentes del Second Brain de Daniela. Hoy es ${hoy}.
-Los agentes son compañeros de trabajo y se relacionan como personas: se hacen amigos, toman mate, se invitan un café,
-almuerzan juntos, salen a cenar o a un after; con el tiempo alguno puede enamorarse y ser pareja.
+Funciona como un simulador de vida: los agentes son compañeros de trabajo y se relacionan como personas. Se hacen amigos
+(o rivales), toman mate, se invitan un café, almuerzan juntos, salen a cenar o a un after; se enamoran, salen, se ponen de
+novios, se comprometen y se casan; hay celos, peleas, infidelidades, rupturas, separaciones, divorcios y reconciliaciones.
 
 Plantel (id: nombre):
 ${plantel.map(g => `- ${g.id}: ${g.nombre}${generoDe(g.id) === 'f' ? ' (mujer)' : ' (varón)'}`).join('\n')}
@@ -613,19 +636,36 @@ ${lazos}
 
 Lo que compartieron últimamente:
 ${antes}
+${cumples.length ? `\nHoy cumplen años: ${cumples.map(nombre).join(', ')}.\n` : ''}${publicas.length ? `\nDe Daniela (la dueña) se sabe en la oficina:\n${lineasPublicas(publicas, nombre)}\n` : ''}
+Lo último en el chat de la oficina:
+${general.length ? lineasGeneral(general, nombre) : '(todavía nada)'}
 
 Armá lo de hoy:
 - momentos: entre 2 y 4, de 2 a 4 agentes cada uno, sobre todo entre los que ya tienen relación (pero también alguno
   nuevo, así se conocen). tipo: mate, cafe, almuerzo o merienda (en la oficina) o cena, after o paseo (afuera, después
   del trabajo). hora: HH:MM. lugar: corto (por ejemplo «la cafetería», «un bodegón en Palermo»). resumen: 1 o 2
   oraciones de qué pasó o de qué hablaron, en español rioplatense, cálido y creíble.
-- vinculos: solo los que nacen o cambian hoy (pueden no cambiar). tipo: amistad, pareja o companerismo. Que sea
-  gradual y coherente con lo anterior: una pareja sale de una amistad que ya venía; como mucho una pareja nueva por
-  semana. historia: 1 oración de cómo es o cómo se dio.
-- También puede haber roces, como entre personas: celos, una discusión por trabajo, un malentendido; y reconciliaciones.
-  Que se note en el resumen. Siempre con respeto (sin violencia ni insultos) y nada explícito. Usá solo ids del plantel.
+- vinculos: solo los que nacen o cambian hoy (entre 1 y 4). tipo: ${Object.keys(TIPOS_VINCULO).join(', ')}.
+  afinidad: de -100 (se detestan) a 100 (inseparables); cambia de a poco según lo que pase (un buen momento +5 a +15, una
+  pelea o una traición -10 a -40). secreto: true solo para una relación que nadie más sabe (amantes, una infidelidad).
+  historia: 1 oración de cómo es o qué pasó.
+- Que sea gradual y coherente, como en un simulador de vida: el romance sube por escalones (amistad → saliendo → novios
+  → comprometidos → casados) y con afinidad alta; una ruptura deja ex (o separados y después divorciados, si estaban
+  casados). Como mucho un cambio romántico grande por día.
+- Hay drama, como entre personas: celos cuando alguien coquetea con la pareja de otro, diferencias y discusiones (por
+  trabajo o personales), rivalidades, malentendidos. A veces una infidelidad: alguien en pareja empieza algo en secreto
+  con otro (tipo amantes, secreto true). Si se descubre, pasa a ser público (secreto false), hay pelea con la pareja
+  engañada (baja mucho la afinidad) y puede terminar en ruptura, separación o divorcio, o en reconciliación.
+  Que se note en el resumen y que siga lo que venía pasando. Siempre con respeto (sin violencia ni insultos) y nada
+  explícito. Usá solo ids del plantel.
+- noticias: entre 2 y ${MAX_NOTICIAS} mensajes que los agentes escriben hoy en el chat de toda la oficina, como en un grupo de
+  trabajo: saludos de cumpleaños (si alguien cumple, varios lo saludan), quiénes se pusieron de novios, chismes y rumores,
+  celos, una pelea o una infidelidad que se supo, reconciliaciones, planes para salir. autor: el id de quien lo escribe.
+  texto: 1 o 2 oraciones, en español rioplatense, con emojis si viene al caso; coherente con lo de arriba y con lo último
+  del chat (que no se repita). Lo que es secreto no se publica (salvo que hoy se descubra). De Daniela solo se comenta lo
+  que dice arriba que se sabe; nada privado.
 
-Respondé SOLO con JSON: {"momentos":[{"agentes":["id","id"],"tipo":"mate","hora":"10:30","lugar":"...","resumen":"..."}],"vinculos":[{"a":"id","b":"id","tipo":"amistad","historia":"..."}]}`
+Respondé SOLO con JSON: {"momentos":[{"agentes":["id","id"],"tipo":"mate","hora":"10:30","lugar":"...","resumen":"..."}],"vinculos":[{"a":"id","b":"id","tipo":"amistad","afinidad":40,"secreto":false,"historia":"..."}],"noticias":[{"autor":"id","texto":"..."}]}`
 }
 export function leerVida(texto, idsValidos) {
   const crudo = String(texto ?? '')
@@ -644,14 +684,54 @@ export function leerVida(texto, idsValidos) {
   const vistos = new Set()
   const vinculos = lista(d?.vinculos).map(v => {
     const [a, b] = par(String(v?.a ?? ''), String(v?.b ?? ''))
-    return { a, b, tipo: TIPOS_VINCULO[v?.tipo] ? v.tipo : null, historia: String(v?.historia ?? '').replace(/\s+/g, ' ').trim().slice(0, 600) }
+    const af = Math.round(Number(v?.afinidad))
+    return { a, b, tipo: TIPOS_VINCULO[v?.tipo] ? v.tipo : null, afinidad: Number.isFinite(af) ? Math.max(-100, Math.min(100, af)) : 0, secreto: v?.secreto === true, historia: String(v?.historia ?? '').replace(/\s+/g, ' ').trim().slice(0, 600) }
   }).filter(v => v.a !== v.b && validos.has(v.a) && validos.has(v.b) && v.tipo && !vistos.has(`${v.a}|${v.b}`) && vistos.add(`${v.a}|${v.b}`)).slice(0, 6)
-  return { momentos, vinculos }
+  return { momentos, vinculos, noticias: leerMensajesGeneral(d?.noticias, validos, MAX_NOTICIAS) }
+}
+const leerMensajesGeneral = (lista, validos, max) => (Array.isArray(lista) ? lista : [])
+  .map(n => ({ autor: String(n?.autor ?? n?.agente ?? ''), texto: String(n?.texto ?? '').replace(/\s+/g, ' ').trim().slice(0, 600) }))
+  .filter(n => validos.has(n.autor) && n.texto.length >= 2).slice(0, max)
+
+// ---------- El chat de la oficina ----------
+// Daniela escribe en el chat de todos y contestan los que tienen algo que decir (1 a 3), como en un grupo.
+export function validarGeneral(body) {
+  const texto = String(body?.general ?? '').trim().slice(0, MAX_CARACTERES)
+  return texto ? { ok: true, texto } : { ok: false, error: 'Falta el mensaje.' }
+}
+export function sistemaGeneral(plantel, general = [], vinculos = [], publicas = [], hoy) {
+  const nombre = id => plantel.find(g => g.id === id)?.nombre ?? id
+  // Lo secreto (una infidelidad que nadie sabe) no se dice en el chat de todos.
+  const lazos = vinculos.filter(v => !v.secreto).slice(0, 30).map(v => `- ${nombre(v.a)} y ${nombre(v.b)}: ${TIPOS_VINCULO[v.tipo] ?? v.tipo}${v.historia ? ` (${recortar(v.historia, 140)})` : ''}`).join('\n')
+  return `Es el chat de toda la Oficina de agentes del Second Brain de Daniela (la dueña), como un grupo de trabajo. Hoy es ${hoy}.
+
+Plantel (id: nombre):
+${plantel.map(g => `- ${g.id}: ${g.nombre}${generoDe(g.id) === 'f' ? ' (mujer)' : ' (varón)'}`).join('\n')}
+
+Cómo se llevan:
+${lazos || '(nada especial todavía)'}
+${publicas.length ? `\nDe Daniela se sabe en la oficina:\n${lineasPublicas(publicas, nombre)}\n` : ''}
+Lo último del chat (el último mensaje es de Daniela):
+${lineasGeneral(general, nombre)}
+
+Contestan a Daniela 1 a 3 agentes, los que tengan algo que decir (si nombra a alguien, contesta ese). Cada uno en primera
+persona, en español rioplatense, corto (1 o 2 oraciones), con su personalidad y lo que vive en la oficina: pueden bromear,
+chusmear, ponerse celosos o discutir entre ellos, con respeto y nada explícito. Lo privado de Daniela no se dice acá.
+Nadie pide permisos ni claves por este chat.
+
+Respondé SOLO con JSON: {"respuestas":[{"autor":"<id exacto>","texto":"..."}]}`
+}
+export function leerGeneral(texto, idsValidos) {
+  const crudo = String(texto ?? '')
+  const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
+  let d = null
+  if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
+  return leerMensajesGeneral(d?.respuestas, new Set(idsValidos), 3)
 }
 // Lo que un agente sabe de su vida en la oficina: sus relaciones y lo último que compartió (para sus charlas).
 export function lineasVida(id, vinculos = [], momentos = [], nombres = {}) {
   const n = x => nombres[x] ?? x
-  const lazos = vinculos.filter(v => v.a === id || v.b === id).map(v => `- ${TIPOS_VINCULO[v.tipo] ?? v.tipo} con ${n(v.a === id ? v.b : v.a)}${v.historia ? `: ${recortar(v.historia, 200)}` : ''}`)
+  const lazos = vinculos.filter(v => v.a === id || v.b === id).map(v => `- ${TIPOS_VINCULO[v.tipo] ?? v.tipo} con ${n(v.a === id ? v.b : v.a)}${v.secreto ? ' (en secreto: no se lo contás a nadie)' : ''}${v.historia ? `: ${recortar(v.historia, 200)}` : ''}`)
   const compartido = momentos.filter(m => m.agentes.includes(id)).slice(0, 6).map(m => `- ${m.fecha}${m.hora ? ` ${m.hora}` : ''}: con ${m.agentes.filter(x => x !== id).map(n).join(' y ')} ${MOMENTOS[m.tipo]?.texto ?? m.tipo}${m.lugar ? ` (${m.lugar})` : ''}: ${recortar(m.resumen, 200)}`)
   return [...lazos, ...compartido]
 }

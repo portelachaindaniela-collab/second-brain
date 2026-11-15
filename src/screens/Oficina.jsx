@@ -2,7 +2,7 @@ import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, u
 import { supabase } from '../supabase.js'
 import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
-import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, quienEntra, PRIMERA_ENTRADA_MS, ELLAS, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, sumarVisita, escenaDeVisitas, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
+import { armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, quienEntra, PRIMERA_ENTRADA_MS, ELLAS, momentoQueToca, PRIMER_SOCIAL_MS, ENTRE_SOCIALES_MS, DURA_SOCIAL_MS, TEXTO_MOMENTO, TEXTO_VINCULO, ROMANTICOS, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, sumarVisita, escenaDeVisitas, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
 import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
@@ -46,7 +46,7 @@ async function cargarOficina() {
     if (error) { errores.push(`${nombre}: ${error.message}`); return vacio }
     return data ?? vacio
   }
-  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, tareas, conexiones, operador, feminaCorridas, feminaHallazgos, reuniones, vinculos, momentos, corazon] = await Promise.all([
+  const [trabajadores, salud, upCorridas, chequeo, piezas, pdgAgentes, pdgTrabajos, pdgCuentas, admin, solicitudes, actas, tareas, conexiones, operador, feminaCorridas, feminaHallazgos, reuniones, vinculos, corazon, momentos, general] = await Promise.all([
     leer('trabajadores', supabase.from('trabajadores').select('*').order('id'), []),
     leer('salud del sistema', supabase.rpc('salud_sistema'), null),
     leer('corridas de UP', supabase.from('up_corridas').select('estado,error,pasos,iniciado_at').order('iniciado_at', { ascending: false }).limit(15), []),
@@ -64,9 +64,10 @@ async function cargarOficina() {
     leer('vueltas de Femina', supabase.from('pdg_femina_corridas').select('estado,iniciada_at,resumen,error').order('iniciada_at', { ascending: false }).limit(8), []),
     leer('lo que encontró Femina', supabase.from('pdg_hallazgos').select('tipo,titulo,estado,created_at').eq('estado', 'nuevo').order('created_at', { ascending: false }).limit(60), []),
     leer('reuniones internas', supabase.from('oficina_reuniones').select('id,convoca,asistentes,tema,detalle,fecha,estado,acta_id').order('fecha', { ascending: false }).limit(60), []),
-    leer('relaciones entre agentes', supabase.from('oficina_vinculos').select('id,a,b,tipo,historia,desde').order('actualizado', { ascending: false }).limit(100), []),
+    leer('relaciones entre agentes', supabase.from('oficina_vinculos').select('id,a,b,tipo,historia,desde,afinidad,secreto').order('actualizado', { ascending: false }).limit(100), []),
     leer('tu pareja', supabase.from('oficina_corazon').select('agente,desde,estado,saben'), []),
     leer('vida de la oficina', supabase.from('oficina_momentos').select('id,agentes,tipo,lugar,resumen,fecha,hora').gte('fecha', new Date(ahora - 7 * DIA_MS).toISOString().slice(0, 10)).order('fecha', { ascending: false }).limit(60), []),
+    leer('chat de la oficina', supabase.from('oficina_chat_general').select('id,autor,texto,tipo,creado').order('creado', { ascending: false }).order('id', { ascending: false }).limit(80), []),
   ])
   const corridasPor = {}
   await Promise.all(trabajadores.map(async t => {
@@ -76,7 +77,7 @@ async function cargarOficina() {
     trabajadores, corridasPor, salud, upCorridas, chequeo, hoy, errores,
     piezas: piezas.map(p => ({ fecha: p.fecha, estado: p.estado, tiene_texto: Boolean(p.texto) })),
     pdgAgentes, pdgTrabajos: pdgTrabajos.map(t => ({ ...t, cuenta: t.pdg_cuentas })), pdgCuentas, admin, solicitudes, actas, conexiones, operador, tareas,
-    femina: { corridas: feminaCorridas, hallazgos: feminaHallazgos }, reuniones, vinculos, momentos, corazon,
+    femina: { corridas: feminaCorridas, hallazgos: feminaHallazgos }, reuniones, vinculos, momentos, corazon, general: [...general].reverse(),
   }
 }
 
@@ -127,6 +128,7 @@ export default function Oficina() {
     errores={[error, ...(datos?.errores ?? [])].filter(Boolean)} ahora={ahora} hablar={conAviso(hablarConAgente, recargar)}
     hablarReunion={conAviso(hablarEnReunion, recargar)} actualizar={recargar}
     vinculos={datos?.vinculos ?? []} momentos={datos?.momentos ?? []} corazon={datos?.corazon ?? []}
+    general={datos?.general ?? []} escribirGeneral={async texto => { try { await escribirEnGeneral(texto) } finally { await recargar() } }}
     solicitudes={datos?.solicitudes ?? []} actas={datos?.actas ?? []} reuniones={datos?.reuniones ?? []} decidir={async (id, estado, nota, accion) => { await decidirSolicitud(id, estado, nota, accion); await recargar() }}
     tareas={datos?.tareas ?? []} cambiarTarea={async (id, estado) => { await cambiarTarea(id, estado); await recargar() }}
     marcarPresentada={async ids => { await marcarPresentada(ids); await recargar() }}
@@ -214,7 +216,7 @@ async function entrarSola(agente) {
 // reloj: de dónde sale la hora para la luz del día (en la app, la actual; se puede cambiar para probar).
 export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now,
   solicitudes = [], actas = [], tareas = [], reuniones = [], decidir = async () => {}, cambiarTarea = async () => {}, marcarPresentada = async () => {}, guardarActa = async () => {},
-  vinculos = [], momentos = [], corazon = [], cambiarConVosEnBase = cambiarCorazonEnBase, cambiarSabenEnBase = cambiarSabenDeBase, correrInterna = correrReunionInterna, entrar = entrarSola, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
+  vinculos = [], momentos = [], corazon = [], general = [], escribirGeneral = async () => {}, cambiarConVosEnBase = cambiarCorazonEnBase, cambiarSabenEnBase = cambiarSabenDeBase, correrInterna = correrReunionInterna, entrar = entrarSola, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
   leerConversacion = leerConversacionDeBase, anotarEnConversacion = anotarEnConversacionDeBase }) {
   const [elegidoId, setElegidoId] = useState(null)
   const [pestana, setPestana] = useState('ahora')
@@ -561,6 +563,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
                 : p.agente && agentes.some(a => a.id === p.agente) && <button type="button" className="btn btn-sm" onClick={() => abrir(p.agente)}>Ver agente</button>}
             </li>)}</ul>
             : <p className="tenue">Nada pendiente: los agentes no te necesitan por ahora.</p> },
+          { id: 'general', titulo: 'Chat de la oficina', contenido: <ChatGeneral mensajes={general} agentes={agentes} escribir={escribirGeneral} /> },
           { id: 'ahora', titulo: 'Trabajando ahora', contenido: <ActividadAhora agentes={agentes} abrir={abrir} /> },
           { id: 'mensajes', titulo: 'Mensajes', num: solicitudes.filter(x => x.estado === 'pendiente').length, contenido: <Mensajes solicitudes={solicitudes} agentes={agentes} decidir={decidir} responder={responder} ahora={ahora} /> },
           { id: 'calendario', titulo: 'Calendario', contenido: <CalendarioOficina eventos={eventos} ahora={ahora} /> },
@@ -843,6 +846,54 @@ function LibroOficina({ hojas, hoja, setHoja }) {
   </div>
 }
 
+// El chat de toda la oficina: las noticias del día (cumpleaños, parejas, celos, peleas, reconciliaciones) y lo que
+// escribís vos, con las respuestas de los que contestan.
+async function escribirEnGeneral(texto) {
+  const { data, error } = await supabase.functions.invoke('oficina-chat', { body: { general: texto } })
+  let r = data
+  if (error?.context) { try { r = await error.context.json() } catch { /* queda el error de conexión */ } }
+  if (error || r?.error) throw new Error(r?.error || 'No se pudo enviar. Probá de nuevo.')
+}
+function ChatGeneral({ mensajes, agentes, escribir }) {
+  const [texto, setTexto] = useState('')
+  const [esperando, setEsperando] = useState(false)
+  const [error, setError] = useState('')
+  const fin = useRef(null)
+  useEffect(() => { fin.current?.scrollIntoView({ block: 'nearest' }) }, [mensajes.length, esperando])
+  const agente = id => agentes.find(a => a.id === id)
+  const enviar = async e => {
+    e?.preventDefault?.()
+    const t = texto.trim()
+    if (!t || esperando) return
+    setTexto(''); setError(''); setEsperando(true)
+    try { await escribir(t) } catch (err) { setError(`No contestó nadie: ${err.message}`) }
+    setEsperando(false)
+  }
+  return <div className="oficina-general">
+    <div className="oficina-general-mensajes" aria-live="polite">
+      {!mensajes.length && <p className="tenue">Acá aparecen las noticias de la oficina: cumpleaños, parejas nuevas, peleas y reconciliaciones. La primera vez que abrís la Oficina cada día, los agentes cuentan lo suyo.</p>}
+      {mensajes.map(m => {
+        const a = m.autor === 'daniela' ? null : agente(m.autor)
+        return <div key={m.id} className={`oficina-general-msj${m.autor === 'daniela' ? ' de-vos' : ''}${m.tipo === 'noticia' ? ' es-noticia' : ''}`}>
+          {a ? <Avatar agente={a} /> : m.autor !== 'daniela' && <span className="oficina-avatar" />}
+          <div>
+            <p className="oficina-general-quien">{m.autor === 'daniela' ? 'Vos' : nombreCorto(a?.nombre ?? m.autor)} <span className="tenue">· {haceCuanto(m.creado)}</span></p>
+            <p>{m.texto}</p>
+          </div>
+        </div>
+      })}
+      {esperando && <p className="tenue">Están escribiendo…</p>}
+      <span ref={fin} />
+    </div>
+    {error && <p role="alert" className="feedback-error">{error}</p>}
+    <form className="oficina-charla-form" onSubmit={enviar}>
+      <textarea rows={2} value={texto} disabled={esperando} placeholder="Escribile a toda la oficina…" aria-label="Mensaje para toda la oficina"
+        onChange={e => setTexto(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) enviar(e) }} />
+      <button type="submit" className="btn btn-primary btn-sm" disabled={esperando || !texto.trim()}>Enviar</button>
+    </form>
+  </div>
+}
+
 // Quién sabe de tu relación con ella: nadie, todos o los que marques.
 function QuienSabe({ saben, cambiar, companeros }) {
   const [modo, setModo] = useState(saben.includes('*') ? 'todos' : saben.length ? 'algunos' : 'nadie')
@@ -868,10 +919,18 @@ function QuienSabe({ saben, cambiar, companeros }) {
   </div>
 }
 
+// La afinidad entre dos agentes, de -100 a 100: una barrita verde si se quieren, roja si no se soportan.
+function Afinidad({ valor }) {
+  const v = Math.max(-100, Math.min(100, Number(valor) || 0))
+  return <span className={`oficina-afinidad ${v < 0 ? 'negativa' : 'positiva'}`} title={`Afinidad ${v}`} aria-label={`Afinidad ${v} de 100`}>
+    <span style={{ width: `${Math.abs(v) / 2}%`, [v < 0 ? 'right' : 'left']: '50%' }} />
+  </span>
+}
+
 function VidaOficina({ vinculos, momentos, agentes, corazon = [] }) {
   const nombre = id => nombreCorto(agentes.find(a => a.id === id)?.nombre ?? id)
   if (!vinculos.length && !momentos.length && !corazon.length) return <p className="tenue">Todavía no pasó nada entre ellos: la primera vez que abras la Oficina cada día, se arma lo que comparten.</p>
-  const orden = { pareja: 0, amistad: 1, companerismo: 2 }
+  const orden = Object.fromEntries(Object.keys(TEXTO_VINCULO).map((t, i) => [t, i]))
   return <div className="oficina-vida">
     {corazon.length > 0 && <div>
       <p className="oficina-vida-titulo">Con vos</p>
@@ -882,9 +941,12 @@ function VidaOficina({ vinculos, momentos, agentes, corazon = [] }) {
     </div>}
     {vinculos.length > 0 && <div>
       <p className="oficina-vida-titulo">Cómo se llevan</p>
-      <ul className="oficina-vida-lista">{[...vinculos].sort((p, q) => orden[p.tipo] - orden[q.tipo]).map(v => <li key={v.id}>
-        <span className={`oficina-vinculo vinculo-${v.tipo}`}>{v.tipo === 'pareja' ? '❤ ' : ''}{TEXTO_VINCULO[v.tipo]}</span>
-        <strong>{nombre(v.a)} y {nombre(v.b)}</strong>{v.historia && <span className="tenue"> · {v.historia}</span>}
+      <ul className="oficina-vida-lista">{[...vinculos].sort((p, q) => (orden[p.tipo] ?? 99) - (orden[q.tipo] ?? 99) || (q.afinidad ?? 0) - (p.afinidad ?? 0)).map(v => <li key={v.id}>
+        <span className={`oficina-vinculo vinculo-${v.tipo}`}>{ROMANTICOS.has(v.tipo) ? '❤ ' : ''}{TEXTO_VINCULO[v.tipo] ?? v.tipo}</span>
+        <strong>{nombre(v.a)} y {nombre(v.b)}</strong>
+        {v.secreto && <span className="oficina-vinculo-secreto" title="Nadie más en la oficina lo sabe"> 🤫 en secreto</span>}
+        <Afinidad valor={v.afinidad ?? 0} />
+        {v.historia && <span className="tenue"> · {v.historia}</span>}
       </li>)}</ul>
     </div>}
     {momentos.length > 0 && <div>
