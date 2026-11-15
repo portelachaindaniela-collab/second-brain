@@ -503,8 +503,10 @@ export function lePedisQueVenga(texto) {
   const t = String(texto ?? '')
   return LO_LLAMAS.test(t) || SEGUIME.test(t)
 }
+// «Ya estoy en la puerta», «estoy en tu puerta»: también viene.
+const EN_LA_PUERTA = /(?<!\p{L})estoy (en|frente a|afuera de) (la puerta|tu puerta|tu oficina|tu despacho)(?!\p{L})/iu
 export function vieneATuOficina(texto) {
-  return VIENE.test(String(texto ?? ''))
+  return VIENE.test(String(texto ?? '')) || EN_LA_PUERTA.test(String(texto ?? ''))
 }
 
 // Golpear la puerta: cada tanto, un agente que tiene algo pendiente para vos (un pedido o un aviso) va hasta la puerta
