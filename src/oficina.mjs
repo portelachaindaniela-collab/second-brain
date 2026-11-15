@@ -496,6 +496,13 @@ export function turnosReunion(asistentes, idJefa = 'trabajadores:maria') {
 // ahí de verdad: se sienta en tu mesa un rato y después vuelve a su puesto.
 export const VISITA_MS = 4 * 60_000
 const VIENE = /\b(voy|vengo|paso|me acerco|me doy una vuelta|caigo|me cruzo|subo|bajo|te alcanzo|estoy yendo|ya voy|me llego|me arrimo)\b[^.!?\n]{0,40}\b(tu oficina|tu despacho|tu escritorio|tu mesa)\b/i
+// Cuando vos le pedís que venga («vení a mi oficina», «seguime», «te espero en mi despacho»), también va.
+const LO_LLAMAS = /(?<!\p{L})(ven[ií](te)?|vengan|seguime|segu[ií]me|pas[aá](te)?|acercate|ac[eé]rcate|te espero|los espero|vamos)(?!\p{L})[^.!?\n]{0,40}(?<!\p{L})(mi oficina|mi despacho|mi escritorio|mi mesa)(?!\p{L})/iu
+const SEGUIME = /^\s*(dale,?\s*)?(seguime|segu[ií]me|ven[ií](te)?( para ac[aá])?|ven[ií] un (toque|segundo|momento))\s*[.!]*\s*$/iu
+export function lePedisQueVenga(texto) {
+  const t = String(texto ?? '')
+  return LO_LLAMAS.test(t) || SEGUIME.test(t)
+}
 export function vieneATuOficina(texto) {
   return VIENE.test(String(texto ?? ''))
 }
