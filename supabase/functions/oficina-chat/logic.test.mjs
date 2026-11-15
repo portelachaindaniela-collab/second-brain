@@ -230,3 +230,13 @@ test('reuniones internas: se agendan sin pedir permiso, solo entre agentes que c
   assert.deepEqual(conv, [{ agente: 'up:noruega', texto: 'Arranco yo.' }])
   assert.equal(validarActa({ asistentes: ['up:noruega'], mensajes: [{ de: 'Noruega', texto: 'hola' }], modo: 'interna', inicio: '2026-11-14T10:00:00Z' }).ok, true)
 })
+
+test('encuentros en el pasillo: el agente sabe qué le dijo a Daniela y qué le contestó', async () => {
+  const { lineasEncuentros } = await import('./logic.mjs')
+  const c = contexto('up', 'noruega', { chequeos: [], encuentros: [{ texto: '¿Tenés un minuto? Te quería pedir permiso para «Frenar la pieza».', respuesta: 'ahora_no', creado: '2026-11-15T13:00:00Z' }] })
+  assert.match(c.registro[0], /en el pasillo paraste a Daniela/)
+  assert.match(c.registro[0], /Frenar la pieza/)
+  assert.match(c.registro[0], /ahora no/)
+  assert.match(lineasEncuentros([{ texto: 'Hola', respuesta: null, creado: '2026-11-15T13:00:00Z' }])[0], /sin contestarte/)
+  assert.match(sistema(c, 'hoy', {}), /qué le querías decir/)
+})

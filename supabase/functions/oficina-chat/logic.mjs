@@ -38,7 +38,14 @@ export function contexto(equipo, clave, datos = {}) {
   // Los supervisores saben qué tareas de las reuniones tienen a cargo, para seguirlas.
   const yo = `${equipo}:${clave}`
   const tareas = (datos.tareas || []).map(t => `- ${t.responsable === yo ? 'tarea tuya' : `tarea de tu equipo (la hace ${t.responsable})`} (${t.estado === 'en_curso' ? 'en curso' : 'pendiente'}${t.vence ? `, vence ${t.vence}` : ''}, área ${t.area}): ${recortar(t.tarea, 250)}`)
-  return { ...c, registro: [...tareas, ...c.registro], id: yo }
+  return { ...c, registro: [...lineasEncuentros(datos.encuentros), ...tareas, ...c.registro], id: yo }
+}
+
+// Lo que el agente le dijo a Daniela cuando la cruzó caminando por la oficina y lo que ella le contestó (lo más nuevo
+// primero): así, si después lo llama y le pregunta qué le quería decir, lo sabe.
+const RESPUESTA_ENCUENTRO = { ahora_no: 'Ella te dijo «ahora no» (queda pendiente: retomalo)', hablemos: 'Ella te dijo «hablemos»', aprobada: 'Ella te lo aprobó ahí mismo', rechazada: 'Ella te dijo que no' }
+export function lineasEncuentros(encuentros = []) {
+  return (encuentros || []).slice(0, 5).map(e => `- ${hora(e.creado)} · en el pasillo paraste a Daniela y le dijiste: «${recortar(e.texto, 400)}». ${RESPUESTA_ENCUENTRO[e.respuesta] ?? 'Siguió caminando sin contestarte (queda pendiente)'}.`)
 }
 function fichaDe(equipo, clave, datos) {
   if (equipo === 'trabajadores') {
@@ -140,6 +147,7 @@ ${c.registro.length ? c.registro.join('\n') : '(vacío: todavía no hay nada reg
 Cómo responder:
 - En primera persona, en español rioplatense, corto y concreto (2 a 6 oraciones salvo que te pidan detalle).
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
+- Si Daniela te pregunta qué le querías decir (por ejemplo en el pasillo), es lo que dice tu registro de cuando la paraste: retomalo.
 - Respondé a lo que Daniela te dice, en el contexto de la charla: si te pide ideas u opinión, dalas ahí mismo con lo que sabés de tu área. No recites tu estado ni tu registro salvo que te lo pida o venga al caso.
 - No podés cambiar nada desde esta charla ni prometer entregas («te lo mando en una hora»): lo que haya que hacer, lo pedís con permiso (abajo).
 - Si algo falló, explicá qué dice el registro y qué podría revisar ella.
