@@ -1,0 +1,42 @@
+/* La Oficina en 2D: el marco que se arrastra y acerca, los botones y la vista de reunión a pantalla completa. */
+.of2d {
+  position: relative;
+  height: clamp(340px, 62vh, 640px);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #f4f3ef;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.of2d:active { cursor: grabbing; }
+.of2d-lienzo { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.of2d-lienzo svg { display: block; overflow: visible; }
+.of2d-agente { cursor: pointer; outline: none; }
+.of2d-agente:hover text, .of2d-agente:focus-visible text { fill: #2b2b2b; text-decoration: underline; }
+.of2d-agente:focus-visible rect:first-child { stroke: var(--accent); stroke-width: 3; stroke-dasharray: 6 4; }
+
+/* Acercar, alejar y volver al inicio: arriba a la derecha (abajo los tapan las ventanas de chat), grandes para el dedo. */
+.of2d-botones { position: absolute; right: 10px; top: 10px; display: flex; gap: 8px; z-index: 2; }
+.of2d-botones button {
+  width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid #e2ddd3; cursor: pointer; font: 700 20px/1 system-ui, sans-serif;
+  color: #2b2b2b; background: rgba(255, 255, 255, .94); box-shadow: 0 2px 6px rgba(43, 43, 43, .15); touch-action: manipulation;
+}
+.of2d-botones button:hover { background: #fff; }
+.of2d-botones button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Pantalla completa: la reunión (sala o tu oficina). La arma Oficina.jsx con la barra, los participantes, los
+   subtítulos y los controles alrededor del dibujo. */
+.of2d.o3-completa {
+  position: fixed; inset: 0; z-index: 95; height: auto; border-radius: 0; background: #17151f; cursor: default; touch-action: auto; user-select: auto;
+  display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "barra barra" "video gente" "sub gente" "controles controles";
+}
+.of2d-sala { grid-area: video; min-height: 0; margin: 10px 0 0 10px; border-radius: 10px; overflow: hidden; background: #f4f3ef; display: grid; place-items: center; }
+.of2d-sala svg { width: 100%; height: 100%; max-height: 100%; overflow: visible; }
+@media (max-width: 780px) {
+  .of2d.o3-completa { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas: "barra" "video" "sub" "gente" "controles"; }
+  .of2d-sala { margin: 6px 6px 0; }
+}
