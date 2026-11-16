@@ -360,3 +360,8 @@
 .oficina-vinculo-historia { flex: 1 1 220px; min-width: 0; }
 .oficina-vinculos-tuyos select, .oficina-vinculo-form select, .oficina-vinculos .oficina-quien-sabe select { width: auto; min-width: 140px; }
 .oficina-vinculos .oficina-quien-sabe, .oficina-vinculos .oficina-con-vos { display: inline-flex; gap: 6px; align-items: center; }
+/* Las pestañas de las hojas van arriba, como un menú. */
+.oficina-libro > .oficina-pestanas { border-top: 0; border-bottom: 1px solid var(--gray-200); }
+/* Las ventanas de chat van a la izquierda del botón de BS67 (abajo a la derecha), así no lo tapa ni las tapa. */
+.oficina-chats { right: calc(var(--esp-16) + 92px); max-width: calc(100vw - 2 * var(--esp-16) - 92px); }
+.oficina-chats.con-panel { right: calc(min(440px, 100vw) + var(--esp-16)); }
