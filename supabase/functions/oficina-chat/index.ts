@@ -1,15 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, primeroElRespaldo, limpiarMarcas, extraerGrupo, lineasDelGrupo, cumpleDe, conNombres, nombrarVida, validarGeneral, sistemaGeneral, leerGeneral, leerAclarar, sistemaChatInterno, leerChatInterno, charlaReciente, vinculosEstables, validarSalidaGrupal, sistemaSalidaGrupal } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, esNegativa, primeroElRespaldo, limpiarMarcas, extraerGrupo, lineasDelGrupo, conNombres, validarGeneral, sistemaGeneral, leerGeneral, leerAclarar, sistemaChatInterno, leerChatInterno, charlaReciente } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
 // Oficina: hablar con los agentes. La app manda { agente: 'up:redactor', mensajes } (charla con uno),
 // { reunion: true, asistentes: [...], mensajes } (reunión: responde con { respuestas: [{ agente, texto }] }),
 // { acta: true, ... } (María escribe el acta), { propuestas: true } (las propuestas del día) o { reunion_interna: id }
-// (los agentes se juntan entre ellos y María escribe el acta), { vida: true } (la vida social del día, una vez por día) o
-// { entra: id } (Femina, María o Noruega entran a la oficina de Daniela por su cuenta y le dicen algo) o { general: texto } (Daniela
-// escribe en el chat de la oficina y contestan algunos). Todas leen el hilo de la
+// (los agentes se juntan entre ellos y María escribe el acta) o { general: texto } (Daniela escribe en el chat de la
+// oficina y contestan todos). Todo es laboral. Todas leen el hilo de la
 // oficina (actas, tareas, pedidos y el plantel); la charla con uno lee además toda su conversación guardada con Daniela. Lee con la sesión de la dueña (RLS, nunca con permisos de servicio).
 // Lo que escribe: los pedidos de permiso de los agentes (entran pendientes, la base no deja crearlos de otra forma,
 // hasta que Daniela decide) y el acta de cada reunión con sus tareas.
@@ -52,7 +51,7 @@ async function tareasDe(db: any, id: string) {
 // La conversación guardada de un agente con Daniela (chat, pasillo y reuniones), de la más vieja a la más nueva. Lo que
 // dice Daniela y la respuesta se guardan juntos (misma hora): el id desempata, así la pregunta queda antes que la respuesta.
 async function conversacionDe(db: any, id: string) {
-  const { data } = await db.from("oficina_conversacion").select("de,texto,lugar,salida,creado").eq("agente", id).order("creado", { ascending: false }).order("id", { ascending: false }).limit(MAX_HISTORIAL);
+  const { data } = await db.from("oficina_conversacion").select("de,texto,lugar,creado").eq("agente", id).order("creado", { ascending: false }).order("id", { ascending: false }).limit(MAX_HISTORIAL);
   return (data || []).reverse();
 }
 async function guardarConversacion(db: any, filas: any[]) {
@@ -61,66 +60,10 @@ async function guardarConversacion(db: any, filas: any[]) {
   if (error) console.error("oficina-chat: no se pudo guardar la conversación", error.message);
 }
 
-// La vida de un agente en la oficina: sus relaciones y lo último que compartió con compañeros.
-async function vidaDe(db: any, id: string) {
-  const [v, m] = await Promise.all([
-    db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto").or(`a.eq."${id}",b.eq."${id}"`).limit(20),
-    db.from("oficina_momentos").select("agentes,tipo,lugar,resumen,fecha,hora,charla").contains("agentes", [id]).order("fecha", { ascending: false }).limit(6),
-  ]);
-  return { vinculos: v.data || [], momentos: m.data || [] };
-}
-
-// La vida social del día: la primera vez que se pide en el día, la IA arma lo que comparten los agentes (y las
-// relaciones que nacen o cambian) siguiendo lo que ya venía pasando. Si ya hay momentos de hoy, no se repite.
-async function vida(db: any) {
-  const hoy = hoyISO();
-  const { data: ya } = await db.from("oficina_momentos").select("id").eq("fecha", hoy).neq("tipo", "chat").limit(1);
-  if (ya?.length) return json({ ya: true });
-  const provs = proveedores(env);
-  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
-  const gente = await equipos(db);
-  const plantel = [...gente.trabajadores, ...gente.up, ...gente.pdg];
-  const desde = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
-  const [v, m, g, pub, cor] = await Promise.all([
-    db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto,actualizado,fijo").limit(80),
-    db.from("oficina_momentos").select("agentes,tipo,lugar,resumen,fecha").gte("fecha", desde).order("fecha", { ascending: false }).limit(20),
-    ultimosGeneral(db),
-    publicasDeDaniela(db),
-    db.from("oficina_corazon").select("agente,estado,saben"),
-  ]);
-  const conDaniela = cor.data || [];
-  // Los que cumplen años hoy (cada agente tiene su día fijo): los saludan en el chat de la oficina.
-  const cumples = plantel.filter(x => cumpleDe(x.id) === hoy.slice(5)).map(x => x.id);
-  try {
-    const { resultado } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaVida(plantel, v.data || [], m.data || [], hoyLargo(), { cumples, publicas: pub, general: g, conDaniela }) }, { role: "user", content: "¿Qué pasa hoy entre ellos?" }], temperature: 0.8, max_tokens: 6000 }, { timeoutMs: 110000 }));
-    const { momentos, vinculos: propuestos, noticias } = nombrarVida(leerVida((resultado as any)?.content, plantel.map(g => g.id)), Object.fromEntries(plantel.map(g => [g.id, g.nombre])));
-    const vinculos = vinculosEstables(propuestos, v.data || [], conDaniela);
-    if (vinculos.length) {
-      const r = await db.from("oficina_vinculos").upsert(vinculos.map(x => ({ ...x, actualizado: new Date().toISOString() })), { onConflict: "owner_id,a,b" });
-      if (r.error) console.error("oficina-chat: no se pudieron guardar los vínculos", r.error.message);
-    }
-    if (noticias.length) {
-      const r = await db.from("oficina_chat_general").insert(noticias.map((x: any) => ({ ...x, tipo: "noticia" })));
-      if (r.error) console.error("oficina-chat: no se pudieron guardar las noticias", r.error.message);
-    }
-    if (!momentos.length) return json({ momentos: [] });
-    const { data, error } = await db.from("oficina_momentos").insert(momentos.map(x => ({ ...x, fecha: hoy }))).select("id,agentes,tipo,lugar,resumen,fecha,hora,charla");
-    if (error) return json({ error: error.message }, 500);
-    return json({ momentos: data || [], vinculos });
-  } catch (e) {
-    if (e instanceof ErrorIA) return json({ error: e.message }, 502);
-    return json({ error: (e as Error).message }, 500);
-  }
-}
-
-// El chat de la oficina: los últimos mensajes (el más viejo primero) y lo de Daniela que saben todos.
+// El chat de la oficina: los últimos mensajes (el más viejo primero).
 async function ultimosGeneral(db: any) {
   const { data } = await db.from("oficina_chat_general").select("autor,texto,creado").order("creado", { ascending: false }).order("id", { ascending: false }).limit(40);
   return (data || []).reverse();
-}
-async function publicasDeDaniela(db: any) {
-  const { data } = await db.from("oficina_corazon").select("agente,estado,saben").contains("saben", ["*"]);
-  return data || [];
 }
 // Daniela escribe en el chat de la oficina: se guarda y contestan todos los agentes (también quedan guardados).
 async function general(db: any, body: any) {
@@ -130,11 +73,10 @@ async function general(db: any, body: any) {
   if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
   const r0 = await db.from("oficina_chat_general").insert({ autor: "daniela", texto: v.texto });
   if (r0.error) return json({ error: r0.error.message }, 500);
-  const [gente, g, vin, pub, cor] = await Promise.all([equipos(db), ultimosGeneral(db), db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto").limit(60), publicasDeDaniela(db), db.from("oficina_corazon").select("agente,estado,saben")]);
-  const privadas = (cor.data || []).filter((x: any) => !(x.saben || []).includes("*"));
+  const [gente, g] = await Promise.all([equipos(db), ultimosGeneral(db)]);
   const plantel = [...gente.trabajadores, ...gente.up, ...gente.pdg, ...gente.sistemas];
   try {
-    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaGeneral(plantel, g, vin.data || [], pub, hoyLargo(), privadas) }, { role: "user", content: v.texto }], temperature: 0.8, max_tokens: 4000 }, { timeoutMs: 110000 }));
+    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaGeneral(plantel, g, hoyLargo()) }, { role: "user", content: v.texto }], temperature: 0.8, max_tokens: 4000 }, { timeoutMs: 110000 }));
     const nombres = Object.fromEntries(plantel.map(x => [x.id, x.nombre]));
     const respuestas = leerGeneral((resultado as any)?.content, plantel.map(x => x.id)).map(r => ({ ...r, texto: conNombres(r.texto, nombres) }));
     if (respuestas.length) {
@@ -152,50 +94,19 @@ async function general(db: any, body: any) {
   }
 }
 
-// Todo lo que un agente necesita para hablar con Daniela: su ficha con el registro, su vida en la oficina, si es pareja
-// de Daniela (Femina, María y Noruega), lo que sabe de sus otras relaciones, el hilo y la conversación guardada.
+// Todo lo que un agente necesita para hablar con Daniela: su ficha con el registro, el hilo, lo último del chat de la
+// oficina y la conversación guardada.
 async function armarAgente(db: any, equipo: string, clave: string) {
   const id = `${equipo}:${clave}`;
-  const [datos, hilo, historial, social, corazon, grupo] = await Promise.all([
-    leerDatos(db, equipo, clave), leerHilo(db), conversacionDe(db, id), vidaDe(db, id),
-    db.from("oficina_corazon").select("agente,desde,estado,saben"), ultimosGeneral(db),
+  const [datos, hilo, historial, grupo] = await Promise.all([
+    leerDatos(db, equipo, clave), leerHilo(db), conversacionDe(db, id), ultimosGeneral(db),
   ]);
-  // Lo que tiene Daniela con este agente en lo personal (cualquiera, lo elige ella).
-  const suya = (corazon?.data || []).find((f: any) => f.agente === id) ?? null;
   const c: any = contexto(equipo, clave, datos);
   if (c) {
-    c.vida = lineasVida(id, social.vinculos, social.momentos, Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
-    c.pareja = suya?.desde ?? null;
-    c.estadoPareja = suya?.estado ?? null;
-    // Lo que sabe de las relaciones de Daniela con las otras (solo lo que Daniela eligió que sepa).
-    c.sabe = quienSabe(id, corazon?.data || [], Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
     // Lo último del chat de toda la oficina: así lo que dice acá no contradice lo que se dijo ahí.
     c.grupo = lineasDelGrupo(grupo, Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre])));
   }
   return { c, hilo, historial };
-}
-
-// Femina, María o Noruega entran a la oficina de Daniela por su cuenta: la IA escribe lo que le dicen al entrar (queda
-// en la conversación). Solo ellas tres.
-async function entra(db: any, id: string) {
-  if (!ELLAS.includes(id)) return json({ error: "Ese agente no entra sin que lo llames." }, 400);
-  const provs = proveedores(env);
-  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
-  const [equipo, clave] = id.split(":");
-  let c: any, hilo: any, historial: any;
-  try { ({ c, hilo, historial } = await armarAgente(db, equipo, clave)); } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
-  if (!c) return json({ error: "No encontré a ese agente." }, 404);
-  try {
-    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, [{ role: "user", content: ENTRA_SOLA }]), hoyLargo(), hilo), temperature: 0.8, max_tokens: 600 }));
-    const { texto: sinPareja } = extraerPareja(limpiarMarcas((resultado as any)?.content));
-    const { texto } = extraerSolicitudes(sinPareja, id);
-    if (!texto) return json({ error: "La IA no devolvió texto." }, 502);
-    await guardarConversacion(db, [{ agente: id, de: "agente", texto, lugar: "charla" }]);
-    return json({ texto });
-  } catch (e) {
-    if (e instanceof ErrorIA) return json({ error: e.message }, 502);
-    return json({ error: (e as Error).message }, 500);
-  }
 }
 
 async function leerDatos(db: any, equipo: string, clave: string) {
@@ -287,7 +198,7 @@ async function derivar(db: any, pedidos: any[], origen = "agente") {
   return { solicitudes: guardadas, internas: agendadas };
 }
 
-// El chat entre compañeros para aclarar un malentendido: la IA lo escribe y queda como un momento de su vida (tipo chat).
+// El chat entre compañeros para aclarar un malentendido de trabajo: la IA lo escribe y queda guardado (oficina_momentos, tipo chat).
 async function chatInterno(db: any, chat: any) {
   const provs = proveedores(env);
   if (!provs.length) return;
@@ -297,7 +208,6 @@ async function chatInterno(db: any, chat: any) {
     return { id: aid, c: contexto(equipo, clave, await leerDatos(db, equipo, clave)) };
   }))).filter((p: any) => p.c);
   if (participantes.length < 2) return;
-  await sumarLoPersonal(db, participantes, hilo.plantel);
   const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaChatInterno(participantes, chat, hoyLargo()) }, { role: "user", content: "Escriban." }], temperature: 0.7, max_tokens: 1500 }, { timeoutMs: 90000 }));
   const nombres = Object.fromEntries(hilo.plantel.map((g: any) => [g.id, g.nombre]));
   const { mensajes, resumen } = leerChatInterno((resultado as any)?.content, participantes.map((p: any) => p.id));
@@ -307,47 +217,9 @@ async function chatInterno(db: any, chat: any) {
   if (r.error) console.error("oficina-chat: no se pudo guardar el chat entre compañeros", r.error.message);
 }
 
-// En la reunión cada uno es la misma persona que en la charla de a uno: su vida en la oficina, lo que tiene con Daniela y lo
-// que sabe de sus otras relaciones.
-async function sumarLoPersonal(db: any, participantes: any[], plantel: any[]) {
-  const nombres = Object.fromEntries(plantel.map((g: any) => [g.id, g.nombre]));
-  const corazon = await db.from("oficina_corazon").select("agente,desde,estado,saben");
-  await Promise.all(participantes.map(async (p: any) => {
-    const [social, charla] = await Promise.all([vidaDe(db, p.id), conversacionDe(db, p.id)]);
-    p.c.charla = charlaReciente(charla);
-    const suya = (corazon.data || []).find((f: any) => f.agente === p.id);
-    p.c.vida = lineasVida(p.id, social.vinculos, social.momentos, nombres);
-    p.c.pareja = suya?.desde ?? null;
-    p.c.estadoPareja = suya?.estado ?? null;
-    p.c.sabe = quienSabe(p.id, corazon.data || [], nombres);
-  }));
-}
-
-// Salida en grupo: Daniela sale con varios (cine, teatro, una cena, su casa…). Contestan los que tengan algo que decir y lo
-// que se dijeron queda en la charla de cada uno, marcado con la salida.
-async function salidaGrupal(db: any, body: any) {
-  const v: any = validarSalidaGrupal(body);
-  if (!v.ok) return json({ error: v.error }, 400);
-  const provs = proveedores(env);
-  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
-  let participantes: any[];
-  try {
-    const hilo = await leerHilo(db);
-    participantes = (await Promise.all(v.asistentes.map(async (a: any) => ({ id: a.id, c: contexto(a.equipo, a.clave, await leerDatos(db, a.equipo, a.clave)) })))).filter((p: any) => p.c);
-    await sumarLoPersonal(db, participantes, hilo.plantel);
-  } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
-  if (participantes.length < 2) return json({ error: "No encontré a los que salen." }, 404);
-  try {
-    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaSalidaGrupal(participantes, v.lugar, hoyLargo()) }, ...v.mensajes], temperature: 0.8, max_tokens: 1200 }, { timeoutMs: 90000 }));
-    const respuestas = leerRespuestas((resultado as any)?.content, participantes.map((p: any) => p.id)).map((r: any) => ({ ...r, texto: limpiarMarcas(r.texto) })).filter((r: any) => r.texto);
-    if (!respuestas.length) return json({ error: "Nadie contestó. Probá de nuevo." }, 502);
-    const dijo = v.mensajes.at(-1).content;
-    await guardarConversacion(db, respuestas.flatMap((r: any) => [{ agente: r.agente, de: "daniela", texto: dijo, lugar: "charla", salida: v.lugar }, { agente: r.agente, de: "agente", texto: r.texto, lugar: "charla", salida: v.lugar }]));
-    return json({ respuestas });
-  } catch (e) {
-    if (e instanceof ErrorIA) return json({ error: e.message }, 502);
-    return json({ error: (e as Error).message }, 500);
-  }
+// En la reunión cada uno sigue lo último que habló a solas con Daniela.
+async function sumarCharla(db: any, participantes: any[]) {
+  await Promise.all(participantes.map(async (p: any) => { p.c.charla = charlaReciente(await conversacionDe(db, p.id)); }));
 }
 
 // Reunión: una sola llamada a la IA con la ficha de cada asistente; responden los que tengan algo que decir.
@@ -361,12 +233,11 @@ async function reunion(db: any, body: any) {
     hilo = await leerHilo(db);
     participantes = (await Promise.all(v.asistentes.map(async (a: any) => ({ id: a.id, c: contexto(a.equipo, a.clave, await leerDatos(db, a.equipo, a.clave)) }))))
       .filter((p: any) => p.c);
-    await sumarLoPersonal(db, participantes, hilo.plantel);
+    await sumarCharla(db, participantes);
   } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
   if (!participantes.length) return json({ error: "No encontré a los asistentes." }, 404);
   try {
-    const personal = participantes.some((p: any) => ELLAS.includes(p.id) || p.c.pareja);
-    const { resultado, ia } = await conRespaldo(primeroElRespaldo(provs, personal), (prov: any) => llamarModelo(prov, { messages: mensajesReunion(participantes, v.mensajes, hoyLargo(), hilo), temperature: 0.5, max_tokens: 1400 }, { timeoutMs: 90000 }));
+    const { resultado, ia } = await conRespaldo(provs, (prov: any) => llamarModelo(prov, { messages: mensajesReunion(participantes, v.mensajes, hoyLargo(), hilo), temperature: 0.5, max_tokens: 1400 }, { timeoutMs: 90000 }));
     const respuestas = leerRespuestas((resultado as any)?.content, participantes.map((p: any) => p.id));
     if (!respuestas.length) return json({ error: "Nadie respondió. Probá preguntar de nuevo, o nombrá a alguien." }, 502);
     const { solicitudes, internas } = await derivar(db, leerSolicitudes((resultado as any)?.content, participantes.map((p: any) => p.id)), "reunion");
@@ -495,10 +366,7 @@ Deno.serve(async (req: Request) => {
   if (body?.reunion) return await reunion(db, body);
   if (body?.propuestas) return await propuestas(db);
   if (body?.reunion_interna) return await reunionInterna(db, Number(body.reunion_interna));
-  if (body?.vida) return await vida(db);
-  if (body?.entra) return await entra(db, String(body.entra));
   if (body?.general) return await general(db, body);
-  if (body?.salida_grupal) return await salidaGrupal(db, body);
   const v: any = validar(body);
   if (!v.ok) return json({ error: v.error }, 400);
   const provs = proveedores(env);
@@ -510,11 +378,8 @@ Deno.serve(async (req: Request) => {
   if (!c) return json({ error: "No encontré a ese agente." }, 404);
 
   try {
-    const personal = Boolean(ELLAS.includes(id) || c.pareja || v.salida);
-    const { resultado, ia } = await conRespaldo(primeroElRespaldo(provs, personal), (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo, v.salida), temperature: v.salida ? 0.8 : 0.4, max_tokens: 900 }));
-    // La relación con Daniela la elige ella en la app: lo que diga el agente en la charla no la cambia.
-    const { texto: sinPareja } = extraerPareja(limpiarMarcas((resultado as any)?.content));
-    const { texto: sinGrupo, grupo } = extraerGrupo(sinPareja);
+    const { resultado, ia } = await conRespaldo(provs, (prov: any) => sinNegativa(prov, { messages: armarMensajes(c, conHistorial(historial, v.mensajes), hoyLargo(), hilo), temperature: 0.4, max_tokens: 900 }));
+    const { texto: sinGrupo, grupo } = extraerGrupo(limpiarMarcas((resultado as any)?.content));
     const { texto, solicitudes: pedidos } = extraerSolicitudes(sinGrupo, id);
     if (!texto) return json({ error: "La IA no devolvió texto. Probá de nuevo." }, 502);
     // Lo que dijo que publicaba en el chat de la oficina, se publica de verdad, con su nombre.
@@ -522,9 +387,8 @@ Deno.serve(async (req: Request) => {
       const r = await db.from("oficina_chat_general").insert(grupo.map(t => ({ autor: id, texto: t })));
       if (r.error) console.error("oficina-chat: no se pudo publicar en el chat de la oficina", r.error.message);
     }
-    await guardarConversacion(db, [{ agente: id, de: "daniela", texto: v.mensajes.at(-1).content, lugar: v.lugar, salida: v.salida }, { agente: id, de: "agente", texto, lugar: v.lugar, salida: v.salida }]);
-    // Fuera de la oficina no hay pedidos: se charla y nada más.
-    const { solicitudes, internas } = v.salida ? { solicitudes: [], internas: [] } : await derivar(db, pedidos);
+    await guardarConversacion(db, [{ agente: id, de: "daniela", texto: v.mensajes.at(-1).content, lugar: v.lugar }, { agente: id, de: "agente", texto, lugar: v.lugar }]);
+    const { solicitudes, internas } = await derivar(db, pedidos);
     return json({ texto, solicitudes, internas, ia, grupo });
   } catch (e) {
     if (e instanceof ErrorIA) return json({ error: e.message }, 502);

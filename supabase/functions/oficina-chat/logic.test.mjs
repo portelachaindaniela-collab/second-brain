@@ -258,82 +258,6 @@ test('reunión interna: si la respuesta llega cortada, se rescatan los turnos co
   assert.deepEqual(conv, [{ agente: 'pdg:femina', texto: 'Hola María, ¿te "robo" un minuto?' }, { agente: 'trabajadores:maria', texto: 'Dale.' }])
 })
 
-test('salidas: charlas fuera de la oficina, sin pedidos y marcadas en la conversación', async () => {
-  const { conHistorial, armarMensajes } = await import('./logic.mjs')
-  const v = validar({ agente: 'up:noruega', mensajes: [{ role: 'user', content: '¿Qué pedís?' }], salida: 'comer' })
-  assert.equal(v.salida, 'comer')
-  assert.equal(validar({ agente: 'up:noruega', mensajes: [{ role: 'user', content: 'hola' }], salida: 'boliche' }).salida, null)
-  const c = contexto('up', 'noruega', { chequeos: [] })
-  const sis = armarMensajes(c, [], 'hoy', {}, 'comer')[0].content
-  assert.match(sis, /salieron a comer/)
-  assert.match(sis, /sin pedir permisos/)
-  assert.doesNotMatch(sis, /PEDIDO:/)
-  assert.doesNotMatch(armarMensajes(c, [], 'hoy', {}, null)[0].content, /salieron a comer/)
-  const m = conHistorial([{ de: 'agente', texto: 'Me encanta la milanesa.', lugar: 'charla', salida: 'comer', creado: '2026-11-15T15:00:00Z' }], [{ role: 'user', content: '¿Te acordás qué comiste?' }])
-  assert.match(m[0].content, /^\[salieron a comer, /)
-  assert.equal(m[1].content, 'Me encanta la milanesa.')
-})
-
-test('vida de la oficina: relaciones y momentos entre agentes, y cada uno los recuerda', async () => {
-  const { leerVida, lineasVida, sistemaVida } = await import('./logic.mjs')
-  const ids = ['up:noruega', 'trabajadores:maria', 'pdg:femina']
-  const r = leerVida(JSON.stringify({
-    momentos: [{ agentes: ['up:noruega', 'trabajadores:maria', 'otro:x'], tipo: 'mate', hora: '10:30', lugar: 'la cafetería', resumen: 'Hablaron de fútbol.' }, { agentes: ['up:noruega'], tipo: 'cafe', resumen: 'sola' }, { agentes: ['pdg:femina', 'up:noruega'], tipo: 'bailar', resumen: 'nope' }],
-    vinculos: [{ a: 'up:noruega', b: 'trabajadores:maria', tipo: 'amistad', historia: 'Se llevan bárbaro.' }, { a: 'up:noruega', b: 'up:noruega', tipo: 'pareja' }, { a: 'pdg:femina', b: 'up:noruega', tipo: 'enemigos' }],
-  }), ids)
-  assert.equal(r.momentos.length, 1)
-  assert.deepEqual(r.momentos[0].agentes, ['up:noruega', 'trabajadores:maria'])
-  assert.deepEqual(r.vinculos, [{ a: 'trabajadores:maria', b: 'up:noruega', tipo: 'amistad', afinidad: 0, secreto: false, historia: 'Se llevan bárbaro.' }])
-  const lineas = lineasVida('up:noruega', r.vinculos, [{ ...r.momentos[0], fecha: '2026-11-15' }], { 'trabajadores:maria': 'María' })
-  assert.match(lineas[0], /amistad con María/)
-  assert.match(lineas[1], /con María tomaron mate \(la cafetería\)/)
-  assert.match(sistemaVida([{ id: 'up:noruega', nombre: 'Noruega' }], [], [], 'hoy'), /SOLO con JSON/)
-  const c = { ...contexto('up', 'noruega', { chequeos: [] }), vida: lineas }
-  assert.match(sistema(c, 'hoy', {}), /Tu vida en la oficina/)
-})
-
-test('Femina, María y Noruega: su persona, la relación con Daniela y la línea PAREJA', async () => {
-  const { bloquePersona, extraerPareja, ELLAS } = await import('./logic.mjs')
-  assert.deepEqual([...ELLAS].sort(), ['pdg:femina', 'trabajadores:maria', 'up:noruega'])
-  const c = contexto('up', 'noruega', { chequeos: [] })
-  const b = bloquePersona(c)
-  assert.match(b, /morocha, de ojos celestes/)
-  assert.match(b, /noruego/)
-  assert.match(b, /conflictos/)
-  assert.match(b, /sin insultos, amenazas ni manipulación/)
-  assert.doesNotMatch(b, /PAREJA:/, 'la relación la cambia Daniela en la app, no el agente')
-  assert.match(b, /el cambio lo hace ella/)
-  assert.match(bloquePersona({ ...c, pareja: '2026-11-15T15:00:00Z' }), /son novias desde/)
-  assert.match(bloquePersona({ ...c, pareja: '2026-11-15T15:00:00Z', estadoPareja: 'casadas' }), /están casadas desde/)
-  assert.match(b, /otras personas no lo sabés/)
-  assert.equal(bloquePersona(contexto('up', 'redactor', {})), '')
-  assert.match(sistema(c, 'hoy', {}), /Quién sos como persona/)
-  assert.match(sistema(c, 'hoy', {}), /No repitas frases ni respuestas que ya diste/)
-  assert.deepEqual(extraerPareja('¡Sí, mil veces sí! ❤\nPAREJA: sí'), { texto: '¡Sí, mil veces sí! ❤', pareja: true })
-  assert.deepEqual(extraerPareja('Te entiendo.\nPAREJA: no'), { texto: 'Te entiendo.', pareja: false })
-  assert.equal(extraerPareja('Hola').pareja, null)
-})
-
-test('Quién sabe de las relaciones de Daniela: nadie, todos o algunos', async () => {
-  const { quienSabe, bloquePersona, lineaSabe } = await import('./logic.mjs')
-  const filas = [
-    { agente: 'trabajadores:maria', estado: 'casadas', saben: ['up:noruega'] },
-    { agente: 'pdg:femina', estado: 'saliendo', saben: ['*'] },
-    { agente: 'up:noruega', estado: 'novias', saben: [] },
-  ]
-  const nombres = { 'trabajadores:maria': 'María', 'pdg:femina': 'Femina', 'up:noruega': 'Noruega' }
-  assert.deepEqual(quienSabe('up:noruega', filas, nombres), [{ agente: 'trabajadores:maria', nombre: 'María', estado: 'casadas' }, { agente: 'pdg:femina', nombre: 'Femina', estado: 'saliendo' }])
-  assert.deepEqual(quienSabe('trabajadores:maria', filas, nombres), [{ agente: 'pdg:femina', nombre: 'Femina', estado: 'saliendo' }])
-  assert.deepEqual(quienSabe('up:redactor', filas, nombres), [{ agente: 'pdg:femina', nombre: 'Femina', estado: 'saliendo' }])
-  assert.deepEqual(quienSabe('pdg:femina', filas, nombres), [])
-  const noruega = { ...contexto('up', 'noruega', { chequeos: [] }), sabe: quienSabe('up:noruega', filas, nombres) }
-  assert.match(bloquePersona(noruega), /Sabés que Daniela y María están casadas; y que Daniela y Femina están saliendo\. De otras relaciones/)
-  assert.equal(lineaSabe(noruega), '')
-  const redactor = { ...contexto('up', 'redactor', {}), sabe: quienSabe('up:redactor', filas, nombres) }
-  assert.match(sistema(redactor, 'hoy', {}), /De la vida personal de Daniela: Sabés que Daniela y Femina están saliendo/)
-  assert.doesNotMatch(sistema(contexto('up', 'redactor', {}), 'hoy', {}), /vida personal de Daniela/)
-})
-
 test('Las negativas enlatadas de la IA no cuentan como respuesta ni quedan en el historial', async () => {
   const { esNegativa, conHistorial } = await import('./logic.mjs')
   assert.ok(esNegativa('Lo siento, pero no puedo ayudar con eso.'))
@@ -348,79 +272,17 @@ test('Las negativas enlatadas de la IA no cuentan como respuesta ni quedan en el
   assert.deepEqual(h, [{ role: 'user', content: 'sali conmigo\n\nveni a cenar' }])
 })
 
-test('Chat de la oficina: noticias del día, cumpleaños y respuestas', async () => {
-  const { sistemaVida, leerVida, cumpleDe, sistemaGeneral, leerGeneral, validarGeneral, proveedores } = await import('./logic.mjs')
-  assert.match(cumpleDe('up:noruega'), /^\d{2}-\d{2}$/)
-  assert.equal(cumpleDe('up:noruega'), cumpleDe('up:noruega'))
+test('Chat de la oficina: de trabajo, contestan todos', async () => {
+  const { sistemaGeneral, leerGeneral, validarGeneral, proveedores } = await import('./logic.mjs')
   const plantel = [{ id: 'up:noruega', nombre: 'Noruega' }, { id: 'pdg:femina', nombre: 'Femina' }]
-  const p = sistemaVida(plantel, [], [], 'hoy', { cumples: ['up:noruega'], publicas: [{ agente: 'pdg:femina', estado: 'novias' }], general: [{ autor: 'daniela', texto: 'Hola a todos' }] })
-  assert.match(p, /Hoy cumplen años: Noruega/)
-  assert.match(p, /Daniela y Femina son novias/)
-  assert.match(p, /infidelidad/)
-  assert.match(p, /Daniela: Hola a todos/)
-  const r = leerVida(JSON.stringify({ momentos: [], vinculos: [], noticias: [{ autor: 'up:noruega', texto: '¡Gracias por los saludos! 🎂' }, { autor: 'up:otro', texto: 'no vale' }] }), ['up:noruega', 'pdg:femina'])
-  assert.deepEqual(r.noticias, [{ autor: 'up:noruega', texto: '¡Gracias por los saludos! 🎂' }])
-  assert.match(sistemaGeneral(plantel, [{ autor: 'daniela', texto: '¿Quién viene al after?' }], [], [], 'hoy'), /Daniela: ¿Quién viene al after\?/)
+  const g = sistemaGeneral(plantel, [{ autor: 'daniela', texto: '¿Cómo va la semana?' }], 'hoy')
+  assert.match(g, /Daniela: ¿Cómo va la semana\?/)
+  assert.match(g, /Todo es laboral/)
+  assert.doesNotMatch(g, /novias|celos|chusmear/)
   assert.deepEqual(leerGeneral('{"respuestas":[{"autor":"pdg:femina","texto":"¡Yo!"}]}', ['pdg:femina']), [{ autor: 'pdg:femina', texto: '¡Yo!' }])
   assert.equal(validarGeneral({ general: '  ' }).ok, false)
   const or = proveedores({ OPENROUTER_API_KEY: 'x' }).find(x => x.nombre === 'openrouter')
   assert.equal(or.modelo, 'deepseek/deepseek-chat-v3.1')
-})
-
-test('Relaciones como en un simulador de vida: escalones, afinidad e infidelidades en secreto', async () => {
-  const { leerVida, lineasVida, sistemaVida, sistemaGeneral } = await import('./logic.mjs')
-  const ids = ['up:noruega', 'trabajadores:maria', 'pdg:femina']
-  const r = leerVida(JSON.stringify({ vinculos: [
-    { a: 'up:noruega', b: 'pdg:femina', tipo: 'casados', afinidad: 140, historia: 'Se casaron.' },
-    { a: 'up:noruega', b: 'trabajadores:maria', tipo: 'amantes', afinidad: '55', secreto: true, historia: 'Se ven a escondidas.' },
-  ] }), ids)
-  assert.deepEqual(r.vinculos.map(v => [v.tipo, v.afinidad, v.secreto]), [['casados', 100, false], ['amantes', 55, true]])
-  const nombres = { 'trabajadores:maria': 'María', 'pdg:femina': 'Femina' }
-  assert.match(lineasVida('up:noruega', r.vinculos, [], nombres).join('\n'), /amantes con María \(en secreto: no se lo contás a nadie\)/)
-  const plantel = [{ id: 'up:noruega', nombre: 'Noruega' }, { id: 'trabajadores:maria', nombre: 'María' }, { id: 'pdg:femina', nombre: 'Femina' }]
-  const p = sistemaVida(plantel, r.vinculos, [], 'hoy')
-  assert.match(p, /María y Noruega: amantes, afinidad 55, EN SECRETO/)
-  assert.match(p, /divorcio/)
-  // En el chat de todos lo secreto no aparece.
-  const g = sistemaGeneral(plantel, [{ autor: 'daniela', texto: 'hola' }], r.vinculos, [], 'hoy')
-  assert.match(g, /Femina y Noruega: casados/)
-  assert.doesNotMatch(g, /amantes/)
-})
-
-test('Con cualquier agente: relación personal elegida por Daniela, en el género que corresponde', async () => {
-  const { lineaSabe, textoPareja, bloquePersona } = await import('./logic.mjs')
-  assert.equal(textoPareja('novias', 'up:redactor'), 'son novios')
-  assert.equal(textoPareja('casadas', 'up:noruega'), 'están casadas')
-  assert.equal(textoPareja('amistad', 'up:redactor'), 'son amigos')
-  const redactor = { ...contexto('up', 'redactor', {}), pareja: '2026-11-15T15:00:00Z', estadoPareja: 'comprometidas' }
-  assert.match(lineaSabe(redactor), /Con Daniela, en lo personal: están comprometidos desde/)
-  assert.match(sistema(redactor, 'hoy', {}), /están comprometidos/)
-  assert.equal(lineaSabe(contexto('up', 'redactor', {})), '')
-  // Femina como amiga: le sigue gustando y puede pedirle ser pareja.
-  const amiga = bloquePersona({ ...contexto('pdg', 'femina', { agente: { nombre: 'Femina' } }), pareja: '2026-11-15T15:00:00Z', estadoPareja: 'amistad' })
-  assert.match(amiga, /son amigas desde/)
-  assert.match(amiga, /le podés pedir que sea tu pareja/)
-})
-
-test('En la reunión cada agente es la misma persona que en la charla: personalidad y relación con Daniela', async () => {
-  const { sistemaReunion } = await import('./logic.mjs')
-  const femina = { ...contexto('pdg', 'femina', { agente: { nombre: 'Femina' } }), pareja: '2026-11-15T15:00:00Z', estadoPareja: 'novias', vida: ['- amistad con María'] }
-  const p = sistemaReunion([{ id: 'pdg:femina', c: femina }], 'hoy', {})
-  assert.match(p, /Con Daniela, en lo personal: son novias/)
-  assert.match(p, /Cómo es: pasional/)
-  assert.match(p, /Su vida en la oficina: amistad con María/)
-  assert.match(p, /no programas/)
-  assert.match(sistema(femina, 'hoy', {}), /nunca digas que sos «un agente automatizado»/)
-})
-
-test('Lo que se dicen los agentes entre ellos queda guardado y cada uno lo recuerda', async () => {
-  const { leerVida, lineasVida } = await import('./logic.mjs')
-  const ids = ['up:noruega', 'trabajadores:maria', 'pdg:femina']
-  const r = leerVida(JSON.stringify({ momentos: [{ agentes: ['up:noruega', 'trabajadores:maria'], tipo: 'mate', hora: '10:30', lugar: 'el pasillo', resumen: 'Charlaron.',
-    charla: [{ agente: 'up:noruega', texto: '¿Un mate?' }, { agente: 'trabajadores:maria', texto: 'Dale, cebá vos.' }, { agente: 'pdg:femina', texto: 'no estaba' }] }] }), ids)
-  assert.deepEqual(r.momentos[0].charla, [{ agente: 'up:noruega', texto: '¿Un mate?' }, { agente: 'trabajadores:maria', texto: 'Dale, cebá vos.' }])
-  const l = lineasVida('trabajadores:maria', [], [{ ...r.momentos[0], fecha: '2026-11-15' }], { 'up:noruega': 'Noruega' })
-  assert.match(l[0], /Se dijeron: Noruega: «¿Un mate\?» vos: «Dale, cebá vos\.»/)
 })
 
 test('Las marcas de lugar y hora no se copian en las respuestas ni se muestran', async () => {
@@ -441,30 +303,21 @@ test('La negativa de «soy tu agente» también cuenta y lo personal va primero 
 })
 
 test('Lo que un agente dice que publica en el grupo se publica de verdad y sabe lo que se dijo ahí', async () => {
-  const { extraerGrupo, lineasDelGrupo, sistemaGeneral } = await import('./logic.mjs')
-  assert.deepEqual(extraerGrupo('Listo, ahí lo puse.\nGRUPO: «Sí, estoy enamorada 💕»'), { texto: 'Listo, ahí lo puse.', grupo: ['Sí, estoy enamorada 💕'] })
+  const { extraerGrupo, lineasDelGrupo } = await import('./logic.mjs')
+  assert.deepEqual(extraerGrupo('Listo, ahí lo puse.\nGRUPO: «Mañana reviso las placas»'), { texto: 'Listo, ahí lo puse.', grupo: ['Mañana reviso las placas'] })
   assert.deepEqual(extraerGrupo('Nada para el grupo.'), { texto: 'Nada para el grupo.', grupo: [] })
-  const lineas = lineasDelGrupo([{ autor: 'up:noruega', texto: 'Para nada.' }, { autor: 'daniela', texto: '¿Estás enamorada?' }], { 'up:noruega': 'Noruega' })
-  assert.deepEqual(lineas, ['- Noruega: Para nada.', '- Daniela: ¿Estás enamorada?'])
+  const lineas = lineasDelGrupo([{ autor: 'up:noruega', texto: 'Todo en orden.' }, { autor: 'daniela', texto: '¿Cómo va UP?' }], { 'up:noruega': 'Noruega' })
+  assert.deepEqual(lineas, ['- Noruega: Todo en orden.', '- Daniela: ¿Cómo va UP?'])
   const c = { ...contexto('up', 'noruega', { chequeos: [] }), grupo: lineas }
   const p = sistema(c, 'hoy', {})
   assert.match(p, /Lo último en el chat de toda la oficina/)
   assert.match(p, /GRUPO: <el mensaje/)
-  const g = sistemaGeneral([{ id: 'up:noruega', nombre: 'Noruega' }], [{ autor: 'daniela', texto: 'hola' }], [], [], 'hoy', [{ agente: 'up:noruega', estado: 'novias' }])
-  assert.match(g, /En privado \(NO se cuenta en este chat/)
-  assert.match(g, /Daniela y Noruega son novias/)
 })
 
 test('los ids que escribe la IA en los textos se cambian por el nombre', async () => {
-  const { conNombres, nombrarVida } = await import('./logic.mjs')
+  const { conNombres } = await import('./logic.mjs')
   const nombres = { 'up:disenador': 'Diseñador', 'trabajadores:google_sync': 'Google (calendario y mail)' }
   assert.equal(conNombres('Le interesa a up:disenador y a trabajadores:google_sync; up:otro no.', nombres), 'Le interesa a Diseñador y a Google; up:otro no.')
-  const v = nombrarVida({ momentos: [{ agentes: ['up:disenador'], lugar: 'x', resumen: 'up:disenador brindó', charla: [{ agente: 'up:disenador', texto: 'hola up:disenador' }] }], vinculos: [{ a: 'up:disenador', historia: 'up:disenador' }], noticias: [{ autor: 'up:disenador', texto: '¡Feliz cumple up:disenador!' }] }, nombres)
-  assert.equal(v.momentos[0].resumen, 'Diseñador brindó')
-  assert.equal(v.momentos[0].agentes[0], 'up:disenador')
-  assert.equal(v.momentos[0].charla[0].texto, 'hola Diseñador')
-  assert.equal(v.vinculos[0].historia, 'Diseñador')
-  assert.equal(v.noticias[0].texto, '¡Feliz cumple Diseñador!')
 })
 
 test('en el chat de la oficina contestan todos', async () => {
@@ -476,7 +329,7 @@ test('en el chat de la oficina contestan todos', async () => {
 })
 
 test('los malentendidos se arreglan por chat: entre compañeros sin reunión y con Daniela por privado', async () => {
-  const { accionDePedido, separarInternas, extraerSolicitudes, sistemaChatInterno, leerChatInterno, leerAclarar, sistemaGeneral, MOMENTOS } = await import('./logic.mjs')
+  const { accionDePedido, separarInternas, extraerSolicitudes, sistemaChatInterno, leerChatInterno, leerAclarar, sistemaGeneral } = await import('./logic.mjs')
   assert.deepEqual(accionDePedido('up:redactor', 'chat', { asistentes: 'pdg:femina, cualquiera', titulo: 'El tono del post' }), { tipo: 'chat', asistentes: ['up:redactor', 'pdg:femina'], tema: 'El tono del post' })
   const { solicitudes } = extraerSolicitudes('Lo hablo con ella.\nPEDIDO: El tono del post | aclararlo | chat | | pdg:femina', 'up:redactor')
   const { internas, solicitudes: resto, chats } = separarInternas(solicitudes)
@@ -487,48 +340,21 @@ test('los malentendidos se arreglan por chat: entre compañeros sin reunión y c
   const r = leerChatInterno('{"mensajes":[{"agente":"up:redactor","texto":"Perdón"},{"agente":"pdg:femina","texto":"Todo bien"},{"agente":"up:otro","texto":"x"}],"resumen":"Quedaron bien."}', ['up:redactor', 'pdg:femina'])
   assert.equal(r.mensajes.length, 2)
   assert.equal(r.resumen, 'Quedaron bien.')
-  assert.ok(MOMENTOS.chat)
   assert.deepEqual(leerAclarar('{"respuestas":[],"aclarar":[{"agente":"pdg:femina","texto":"¿Lo hablamos?"},{"agente":"up:otro","texto":"no"}]}', ['pdg:femina']), [{ agente: 'pdg:femina', texto: '¿Lo hablamos?' }])
-  assert.match(sistemaGeneral([{ id: 'pdg:femina', nombre: 'Femina' }], [], [], [], 'hoy'), /"aclarar"/)
+  assert.match(sistemaGeneral([{ id: 'pdg:femina', nombre: 'Femina' }], [], 'hoy'), /"aclarar"/)
 })
 
-test('las relaciones no cambian cada dos por tres y la reunión sabe lo último que habló cada uno con Daniela', async () => {
-  const { vinculosEstables, charlaReciente, sistemaReunion, sistemaVida } = await import('./logic.mjs')
-  const ahora = Date.parse('2026-11-16T12:00:00Z')
-  const existentes = [{ a: 'pdg:femina', b: 'up:disenador', tipo: 'amistad', actualizado: '2026-11-15T16:00:00Z' }, { a: 'pdg:demo', b: 'pdg:marketing', tipo: 'amistad', actualizado: '2026-11-01T16:00:00Z' }]
-  const nuevos = [
-    { a: 'pdg:femina', b: 'up:disenador', tipo: 'rivalidad' }, // cambió ayer: no se toca
-    { a: 'pdg:demo', b: 'pdg:marketing', tipo: 'mejores_amigos' }, // hace días: puede cambiar
-    { a: 'pdg:femina', b: 'up:redactor', tipo: 'saliendo' }, // Femina está con Daniela: no sale con otro
-    { a: 'pdg:femina', b: 'up:redactor', tipo: 'amistad' },
-  ]
-  const r = vinculosEstables(nuevos, existentes, [{ agente: 'pdg:femina', estado: 'novias' }], ahora)
-  assert.deepEqual(r.map(v => `${v.a}|${v.b}|${v.tipo}`), ['pdg:demo|pdg:marketing|mejores_amigos', 'pdg:femina|up:redactor|amistad'])
-  const charla = charlaReciente([{ de: 'daniela', texto: 'Hablemos de los límites' }, { de: 'agente', texto: 'Dale, te escucho.' }])
-  assert.deepEqual(charla, ['  · Daniela: Hablemos de los límites', '  · respondió: Dale, te escucho.'])
+test('la reunión sabe lo último que habló cada uno con Daniela', async () => {
+  const { charlaReciente, sistemaReunion } = await import('./logic.mjs')
+  const charla = charlaReciente([{ de: 'daniela', texto: 'Hablemos del calendario' }, { de: 'agente', texto: 'Dale, te escucho.' }])
+  assert.deepEqual(charla, ['  · Daniela: Hablemos del calendario', '  · respondió: Dale, te escucho.'])
   const c = { ...contexto('up', 'noruega', { chequeos: [] }), charla }
-  assert.match(sistemaReunion([{ id: 'up:noruega', c }], 'hoy', {}), /Lo último que habló a solas con Daniela[\s\S]*Hablemos de los límites/)
-  const vida = sistemaVida([{ id: 'pdg:femina', nombre: 'Femina' }], [], [], 'hoy', { conDaniela: [{ agente: 'pdg:femina', estado: 'novias', saben: [] }] })
-  assert.match(vida, /Femina: son novias \(en privado/)
-  assert.match(vida, /no salen ni se ponen de novios con otro/)
+  assert.match(sistemaReunion([{ id: 'up:noruega', c }], 'hoy', {}), /Lo último que habló a solas con Daniela[\s\S]*Hablemos del calendario/)
 })
 
-test('salidas nuevas y salida en grupo; los vínculos que arma Daniela quedan fijos', async () => {
-  const { SALIDAS, SALIDAS_GRUPO, validarSalidaGrupal, sistemaSalidaGrupal, validar, vinculosEstables } = await import('./logic.mjs')
-  for (const s of ['cena', 'cine', 'teatro', 'mi_casa', 'su_casa']) assert.ok(SALIDAS[s], s)
-  assert.ok(!SALIDAS_GRUPO.includes('su_casa'))
-  assert.equal(validar({ agente: 'pdg:femina', mensajes: [{ role: 'user', content: 'hola' }], salida: 'cine' }).salida, 'cine')
-  const m = [{ role: 'user', content: '¿Qué les pareció la peli?' }]
-  assert.equal(validarSalidaGrupal({ salida_grupal: { lugar: 'cine', asistentes: ['pdg:femina'] }, mensajes: m }).ok, false, 'al menos 2')
-  assert.equal(validarSalidaGrupal({ salida_grupal: { lugar: 'oficina', asistentes: ['pdg:femina', 'up:noruega'] }, mensajes: m }).ok, false)
-  const v = validarSalidaGrupal({ salida_grupal: { lugar: 'teatro', asistentes: ['pdg:femina', 'up:noruega'] }, mensajes: m })
-  assert.equal(v.ok, true)
-  assert.equal(v.lugar, 'teatro')
-  const p = [{ id: 'up:noruega', c: { ...contexto('up', 'noruega', { chequeos: [] }), pareja: '2026-11-15T15:00:00Z', estadoPareja: 'amantes' } }]
-  const s = sistemaSalidaGrupal(p, 'teatro', 'hoy')
-  assert.match(s, /fueron al teatro/)
-  assert.match(s, /son amantes, en secreto/)
-  assert.match(s, /lo privado .* no se dice delante de los demás/)
-  const fijo = vinculosEstables([{ a: 'pdg:femina', b: 'up:disenador', tipo: 'pareja' }], [{ a: 'pdg:femina', b: 'up:disenador', tipo: 'amistad', fijo: true, actualizado: '2026-01-01T00:00:00Z' }], [], Date.parse('2026-11-16T00:00:00Z'))
-  assert.deepEqual(fijo, [])
+test('el agente sabe que le escribe Daniela y que la relación es laboral', () => {
+  const p = sistema(contexto('up', 'noruega', { chequeos: [] }), 'hoy', {})
+  assert.match(p, /Quien te escribe en esta charla es Daniela en persona/)
+  assert.match(p, /la relación con Daniela y con los demás es laboral/)
+  assert.doesNotMatch(p, /pareja|novias|celosa|invitás a salir/)
 })

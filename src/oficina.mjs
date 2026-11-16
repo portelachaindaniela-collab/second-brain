@@ -535,73 +535,21 @@ export function quienGolpea(ids = [], datos = {}, descartados = new Set(), ultim
   return primerEncuentro(ids, datos, descartados)
 }
 
-// ---------- La vida de la oficina ----------
-// Los momentos de hoy que pasan adentro (mate, café, almuerzo, merienda) se ven en la escena: los que lo comparten van
-// juntos a la sala común un rato. De a uno, con pausa, y cada uno una sola vez por visita.
-export const PRIMER_SOCIAL_MS = 3 * 60_000
-export const ENTRE_SOCIALES_MS = 7 * 60_000
-export const DURA_SOCIAL_MS = 150_000
-const ADENTRO = ['mate', 'cafe', 'almuerzo', 'merienda']
-export function momentoQueToca(momentos = [], hoy, jugados = new Set(), presentes = null) {
-  return momentos.find(m => m.fecha === hoy && ADENTRO.includes(m.tipo) && !jugados.has(m.id)
-    && (!presentes || m.agentes.every(id => presentes.has(id)))) ?? null
-}
-export const TEXTO_MOMENTO = { mate: 'tomaron mate', cafe: 'se tomaron un café', almuerzo: 'almorzaron juntos', merienda: 'merendaron juntos', cena: 'salieron a cenar', after: 'fueron a un after office', paseo: 'salieron a pasear', chat: 'se escribieron por chat' }
-// Las relaciones entre agentes, como en un simulador de vida (de las más cercanas a las que terminaron).
-export const TEXTO_VINCULO = {
-  casados: 'Casados', comprometidos: 'Comprometidos', pareja: 'Novios', saliendo: 'Saliendo', amantes: 'Amantes',
-  mejores_amigos: 'Mejores amigos', amistad: 'Amigos', companerismo: 'Compañeros', conocidos: 'Conocidos',
-  rivalidad: 'Rivales', separados: 'Separados', divorciados: 'Divorciados', ex: 'Ex',
-}
-export const ROMANTICOS = new Set(['casados', 'comprometidos', 'pareja', 'saliendo', 'amantes'])
-// Tu relación con cada agente: laboral (sin nada) o personal, con su tipo. Lo que le decís al cambiarla queda en su charla,
-// en el género que corresponde (vos sos mujer; con un varón, en masculino).
-export const RELACIONES_CON_VOS = [['amistad', 'Amistad'], ['mejores_amigos', 'Mejores amigos'], ['saliendo', 'Saliendo'], ['novias', 'Noviazgo'], ['comprometidas', 'Compromiso'], ['casadas', 'Matrimonio'], ['amantes', 'Amantes'], ['ex', 'Ex']]
-export const ROMANCE_CON_VOS = new Set(['saliendo', 'novias', 'comprometidas', 'casadas', 'amantes'])
-export function textoConVos(estado, id) {
-  const f = generoDe(id) === 'f'
-  if (!estado) return f ? 'Prefiero que volvamos a ser compañeras de trabajo.' : 'Prefiero que volvamos a ser compañeros de trabajo.'
-  const t = {
-    amistad: f ? 'Me caés re bien: ya somos amigas.' : 'Me caés re bien: ya somos amigos.',
-    mejores_amigos: f ? 'Sos de mis mejores amigas.' : 'Sos de mis mejores amigos.',
-    saliendo: 'Me gusta que estemos saliendo.',
-    novias: f ? '¿Querés ser mi novia? Para mí ya lo sos.' : '¿Querés ser mi novio? Para mí ya lo sos.',
-    comprometidas: f ? 'Estamos comprometidas.' : 'Estamos comprometidos.',
-    casadas: f ? 'Estamos casadas.' : 'Estamos casados.',
-    amantes: 'Lo nuestro queda entre nosotros.',
-    ex: 'Lo nuestro terminó.',
-  }[estado]
-  return t ? `${t}${ROMANCE_CON_VOS.has(estado) ? ' 💕' : ''}` : ''
-}
-
-// ---------- Femina, María y Noruega ----------
-// Entran a tu oficina cuando quieren, sin golpear: te cuentan una duda de trabajo, algo personal o te invitan a salir.
-// La primera al rato de abrir la Oficina; después, cada tanto y no más de unas pocas veces por visita.
-export const ELLAS = ['pdg:femina', 'trabajadores:maria', 'up:noruega']
-export const PRIMERA_ENTRADA_MS = 4 * 60_000
-export const ENTRE_ENTRADAS_MS = 12 * 60_000
-export const MAX_ENTRADAS = 4
-export function quienEntra(agentes = [], ultima = 0, cuantas = 0, ahora = Date.now(), azar = Math.random) {
-  if (cuantas >= MAX_ENTRADAS || (ultima && ahora - ultima < ENTRE_ENTRADAS_MS)) return null
-  const ellas = ELLAS.filter(id => agentes.some(a => a.id === id && a.estado !== 'pausado'))
-  return ellas.length ? ellas[Math.floor(azar() * ellas.length) % ellas.length] : null
-}
+// ---------- Chats entre compañeros ----------
+// Cuando dos o más agentes aclaran algo de trabajo por chat, queda guardado (tipo chat) y lo leés en la oficina.
+export const TEXTO_MOMENTO = { chat: 'se escribieron por chat' }
 
 // ---------- Comunicados oficiales ----------
 // Lo oficial de la oficina, en una sola lista (lo más nuevo primero): lo que decidís o anunciás vos, lo que sale de las
-// reuniones, las noticias del día y los avisos de los agentes (lo que terminaron y los problemas).
-// tipo: 'tuyo' | 'reunion' | 'noticia' | 'aviso'.
-export const TIPOS_COMUNICADO = { tuyo: 'Tuyos', reunion: 'De reuniones', noticia: 'Noticias', aviso: 'Avisos' }
+// reuniones y los avisos de los agentes (lo que terminaron y los problemas).
+// tipo: 'tuyo' | 'reunion' | 'aviso'.
+export const TIPOS_COMUNICADO = { tuyo: 'Tuyos', reunion: 'De reuniones', aviso: 'Avisos' }
 const ESTADO_DECIDIDO = { aprobada: 'Aprobaste', rechazada: 'Rechazaste', hecha: 'Quedó hecho' }
-export function comunicados({ general = [], solicitudes = [], actas = [], tareas = [], corazon = [], agentes = [] } = {}, ahora = Date.now(), max = 80) {
+export function comunicados({ general = [], solicitudes = [], actas = [], tareas = [], agentes = [] } = {}, ahora = Date.now(), max = 80) {
   const nombre = id => String(agentes.find(a => a.id === id)?.nombre ?? id).split(' (')[0]
   const lista = []
-  for (const m of general) {
-    if (m.tipo === 'comunicado') lista.push({ id: `g${m.id}`, tipo: 'tuyo', fecha: m.creado, titulo: 'Comunicado tuyo', texto: m.texto })
-    else if (m.tipo === 'noticia') lista.push({ id: `g${m.id}`, tipo: 'noticia', fecha: m.creado, titulo: nombre(m.autor), texto: m.texto })
-  }
+  for (const m of general) if (m.tipo === 'comunicado') lista.push({ id: `g${m.id}`, tipo: 'tuyo', fecha: m.creado, titulo: 'Comunicado tuyo', texto: m.texto })
   for (const x of solicitudes) if (ESTADO_DECIDIDO[x.estado] && x.decidida) lista.push({ id: `s${x.id}`, tipo: 'tuyo', fecha: x.decidida, titulo: `${ESTADO_DECIDIDO[x.estado]}: «${x.titulo}»`, texto: `Lo pidió ${nombre(x.agente)}.${x.nota ? ` Tu nota: ${x.nota}` : ''}` })
-  for (const c of corazon) if ((c.saben || []).includes('*') && c.desde) lista.push({ id: `c${c.agente}`, tipo: 'tuyo', fecha: c.desde, titulo: `Es oficial: vos y ${nombre(c.agente)}`, texto: RELACIONES_CON_VOS.find(([v]) => v === c.estado)?.[1] ?? 'Noviazgo' })
   for (const a of actas) if (a.fin) {
     const dec = (a.plan?.decisiones || []).slice(0, 5)
     lista.push({ id: `a${a.id}`, tipo: 'reunion', fecha: a.fin, titulo: a.titulo || 'Reunión', texto: dec.length ? `Se decidió: ${dec.join('; ')}.` : (a.resumen || '') })
@@ -610,19 +558,3 @@ export function comunicados({ general = [], solicitudes = [], actas = [], tareas
   for (const a of agentes) if (a.estado === 'error') lista.push({ id: `e${a.id}`, tipo: 'aviso', fecha: new Date(ahora).toISOString(), titulo: `${nombre(a.id)} tiene un problema`, texto: a.ahora || 'Revisá su registro.', problema: true })
   return lista.filter(x => x.fecha && Number.isFinite(Date.parse(x.fecha))).sort((p, q) => Date.parse(q.fecha) - Date.parse(p.fecha)).slice(0, max)
 }
-
-// ---------- Vínculos que arma Daniela ----------
-// Un vínculo entre dos agentes elegido por Daniela: queda fijo (la vida de la oficina no lo cambia). Devuelve la fila
-// lista para guardar (a < b, como pide la base) o { error }.
-const ID_VINCULO = /^(trabajadores|up|pdg):[a-z_]{1,40}$/
-export function vinculoParaGuardar({ a, b, tipo, afinidad = 0, secreto = false, historia = '' } = {}) {
-  if (!ID_VINCULO.test(String(a)) || !ID_VINCULO.test(String(b))) return { error: 'Elegí a los dos.' }
-  if (a === b) return { error: 'Elegí dos personas distintas.' }
-  if (!TEXTO_VINCULO[tipo]) return { error: 'Elegí qué son.' }
-  const [x, y] = a < b ? [a, b] : [b, a]
-  const af = Math.max(-100, Math.min(100, Math.round(Number(afinidad) || 0)))
-  return { a: x, b: y, tipo, afinidad: af, secreto: Boolean(secreto), historia: String(historia ?? '').trim().slice(0, 600), fijo: true }
-}
-// La charla de una salida en grupo, para mandarla a la IA: lo tuyo como tuyo y lo de cada uno con su nombre.
-export const mensajesSalidaGrupal = (mensajes = [], nombre = x => x) => mensajes.slice(-16)
-  .map(m => (m.de === 'yo' ? { role: 'user', content: m.texto } : { role: 'assistant', content: `${nombre(m.de)}: ${m.texto}` }))

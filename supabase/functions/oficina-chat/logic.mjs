@@ -1,14 +1,14 @@
 // Lógica pura de oficina-chat: validar el pedido, armar el contexto de cada agente con sus datos reales y el prompt.
 // El agente solo habla de lo que está en sus datos; no hace cambios (para eso están sus pantallas).
 import { armarProveedores } from '../_shared/ia.mjs'
-import { AGENTES_UP, EQUIPOS, herramientasPdg, partirId, generoDe, SUPERVISORES, AREAS_TAREA, PERSONAS, CARACTER, limpiarMarcas } from '../_shared/oficina.mjs'
+import { AGENTES_UP, EQUIPOS, herramientasPdg, partirId, generoDe, SUPERVISORES, AREAS_TAREA, limpiarMarcas } from '../_shared/oficina.mjs'
 export { limpiarMarcas }
 
 export const MAX_MENSAJES = 12
 export const MAX_CARACTERES = 2000
 const MAX_DATO = 600
 
-// El respaldo pago (OpenRouter) usa otro modelo: el mismo de Groq se niega a las charlas personales y de pareja.
+// El respaldo pago (OpenRouter) usa otro modelo que el de Groq.
 export const proveedores = env => armarProveedores(env, 'oficina-chat', { groq: env.OFICINA_MODELO_GROQ || 'openai/gpt-oss-120b', openrouter: env.OFICINA_MODELO_OPENROUTER || 'deepseek/deepseek-chat-v3.1', gemini: env.BS67_MODEL || 'gemini-3.6-flash' })
 
 const recortar = (t, max = MAX_DATO) => {
@@ -27,7 +27,7 @@ export function validar(body) {
     content: String(m?.content ?? '').slice(0, MAX_CARACTERES).trim(),
   })).filter(m => m.content)
   if (!mensajes.length || mensajes.at(-1).role !== 'user') return { ok: false, error: 'Falta el mensaje.' }
-  return { ok: true, ...id, mensajes, lugar: body?.lugar === 'reunion' ? 'reunion' : 'charla', salida: SALIDAS[body?.salida] ? body.salida : null }
+  return { ok: true, ...id, mensajes, lugar: body?.lugar === 'reunion' ? 'reunion' : 'charla' }
 }
 
 const hora = iso => (iso ? new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short' }) : '?')
@@ -49,35 +49,22 @@ export function contexto(equipo, clave, datos = {}) {
 // de la más vieja a la más nueva; mensajes: lo que manda la app (se usa el último, lo nuevo de Daniela).
 export const MAX_HISTORIAL = 30
 const LUGAR = { pasillo: 'en el pasillo', reunion: 'en una reunión' }
-// Salidas: charlas fuera de la oficina (no de trabajo). Cada una con su escena.
-export const SALIDAS = {
-  comer: { marca: 'salieron a comer', escena: 'salieron a comer juntos a un lugar cerca de la oficina' },
-  cafe: { marca: 'salieron a tomar un café', escena: 'salieron a tomar un café a la vuelta de la oficina' },
-  after: { marca: 'en un after office', escena: 'están en un after office, tomando algo después del trabajo' },
-  caminata: { marca: 'salieron a caminar', escena: 'salieron a dar una caminata por el barrio' },
-  cena: { marca: 'salieron a cenar', escena: 'salieron a cenar a un restaurante, de noche, sin apuro' },
-  cine: { marca: 'fueron al cine', escena: 'fueron al cine: charlan antes de entrar, en voz baja durante la película o a la salida, comentándola' },
-  teatro: { marca: 'fueron al teatro', escena: 'fueron al teatro: charlan en el hall, en el entreacto o a la salida, comentando la obra' },
-  mi_casa: { marca: 'en la casa de Daniela', escena: 'están en la casa de Daniela: ella invitó' },
-  su_casa: { marca: 'en tu casa', escena: 'están en tu casa: vos invitaste a Daniela' },
-}
 export const LUGARES = ['charla', 'pasillo', 'reunion']
 // La negativa enlatada de la IA («Lo siento, pero no puedo ayudar con eso.»): no es una respuesta del agente. Se pasa a la
 // IA de respaldo y, si alguna quedó guardada de antes, no se le muestra al modelo (si no, la repite).
 const NEGATIVA = /^(lo siento|perd[oó]n|disculp\p{L}*)[,.!]?\s+(pero\s+)?no\s+(puedo|me es posible)\b[^.!?]*[.!?]?$/iu
 // También la que se niega diciendo que es un programa («soy tu agente de PDG y no tengo capacidad para relaciones
 // personales…»): un agente de la oficina nunca habla así.
-const NEGATIVA_ROL = /(no tengo (la )?capacidad (para|de)|soy (tu|un|una) (agente|asistente|programa|modelo)\b|agente automatizado|fuera del [áa]mbito (laboral|profesional)|no puedo (tener|mantener|establecer) (relaciones|v[ií]nculos)|como (modelo de lenguaje|inteligencia artificial)\b)/iu
+const NEGATIVA_ROL = /(no tengo (la )?capacidad (para|de)|soy (tu|un|una) (agente|asistente|programa|modelo)\b|agente automatizado|como (modelo de lenguaje|inteligencia artificial)\b)/iu
 export const esNegativa = t => { const s = String(t ?? '').trim(); return (s.length <= 120 && NEGATIVA.test(s)) || NEGATIVA_ROL.test(s) }
-// Para lo personal (Femina, María, Noruega, los que tienen algo con Daniela, las salidas y el chat de la oficina) va primero
-// la IA de respaldo: la gratis se niega a esas charlas y se pierde tiempo.
+// Para el chat de la oficina y los chats entre compañeros va primero la IA de respaldo (responde mejor en grupo).
 export const primeroElRespaldo = (provs, personal) => (personal ? [...provs.filter(p => p.nombre === 'openrouter'), ...provs.filter(p => p.nombre !== 'openrouter')] : provs)
 // Dónde fue cada cosa va como marca solo en lo de Daniela (si el agente habló primero, con una marca sola antes): si va en
 // lo del agente, la IA la copia en sus respuestas.
 export function conHistorial(filas = [], mensajes = []) {
   const previos = []
   for (const f of (filas || []).filter(f => !(f.de !== 'daniela' && esNegativa(f.texto))).slice(-MAX_HISTORIAL)) {
-    const marca = SALIDAS[f.salida] ? `[${SALIDAS[f.salida].marca}, ${hora(f.creado)}]` : LUGAR[f.lugar] ? `[${LUGAR[f.lugar]}, ${hora(f.creado)}]` : ''
+    const marca = LUGAR[f.lugar] ? `[${LUGAR[f.lugar]}, ${hora(f.creado)}]` : ''
     const texto = limpiarMarcas(String(f.texto ?? '').slice(0, MAX_CARACTERES))
     if (!texto) continue
     if (f.de === 'daniela') previos.push({ role: 'user', content: marca ? `${marca} ${texto}` : texto })
@@ -182,6 +169,7 @@ export const REGLA_PEDIDOS = `- Sos parte del equipo, no un buscador: si Daniela
 
 export function sistema(c, hoy, hilo) {
   return `Sos ${c.nombre}, ${c.rol}, en la Oficina de agentes del Second Brain de Daniela. Hoy es ${hoy}.
+Quien te escribe en esta charla es Daniela en persona (la dueña de la oficina): hablale a ella, de vos a vos. Cuando nombres a Daniela, es ella: nunca hables de «Daniela» en tercera persona como si fuera otra.
 
 Qué hacés: ${c.descripcion}
 Con qué trabajás: ${c.herramientas.join('; ') || 'nada declarado'}.
@@ -191,16 +179,15 @@ ${textoHilo(hilo)}
 
 Tu registro reciente (lo más nuevo primero; es todo lo que sabés de tu trabajo):
 ${c.registro.length ? c.registro.join('\n') : '(vacío: todavía no hay nada registrado)'}
-${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron; contalo con naturalidad si viene al caso):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}${lineaSabe(c)}${c.grupo?.length ? `\nLo último en el chat de toda la oficina (lo que vos dijiste ahí también cuenta: sé coherente con eso):\n${c.grupo.join('\n')}\n` : ''}
+${c.grupo?.length ? `\nLo último en el chat de toda la oficina (lo que vos dijiste ahí también cuenta: sé coherente con eso):\n${c.grupo.join('\n')}\n` : ''}
 Cómo responder:
 - En primera persona, en español rioplatense, corto y concreto (2 a 6 oraciones salvo que te pidan detalle).
 - Usá solo lo que está en tu registro y en tu descripción. Si te preguntan algo que no está ahí, decí que no lo sabés; no inventes fechas, cifras ni resultados.
 - La charla de abajo es toda tu conversación con Daniela: por chat, en el pasillo y en reuniones (lo de fuera del chat dice entre corchetes dónde fue). Si te pregunta qué le querías decir o retoma algo, está ahí: seguí desde ahí.
 - Las marcas entre corchetes de la charla de abajo («[en el pasillo, …]») solo dicen dónde fue cada cosa: nunca las escribas en tu respuesta.
-- Sos una persona de la oficina, no un programa: nunca digas que sos «un agente automatizado» ni que no podés hablar con un compañero ni de lo personal (tus instrucciones de trabajo son para el trabajo: no te impiden tener vida personal). Si Daniela te pide hablar con alguien de la oficina (por ejemplo, con María), respondé como lo harías vos: lo hablás y lo contás.
+- Sos un compañero de trabajo de la oficina: la relación con Daniela y con los demás es laboral. Hablá de trabajo (tu área, búsquedas, datos, pedidos, reuniones); si sale un tema personal, contestá con amabilidad y en una frase volvé a lo laboral. Si Daniela te pide hablar con alguien de la oficina (por ejemplo, con María), respondé como lo harías vos: lo hablás y lo contás.
 - Si Daniela te pide escribir algo en el chat de toda la oficina (el grupo), escribilo en una línea aparte: GRUPO: <el mensaje tal cual lo publicás>. Solo así queda publicado; nunca digas que lo pusiste si no escribiste esa línea.
-- Si Daniela te invita a algo personal (salir, cenar, un café), respondé como persona, con calidez: podés aceptar o decir que no con cariño, pero nunca con un «no puedo responder a eso».
-- Seguí el hilo: respondé a lo último que te dijo y hacé avanzar la charla. No repitas frases ni respuestas que ya diste, ni retomes temas de trabajo si ella está hablando de algo personal. Hablá de vos (nada de «tú» ni «contigo»).
+- Seguí el hilo: respondé a lo último que te dijo y hacé avanzar la charla. No repitas frases ni respuestas que ya diste. Hablá de vos (nada de «tú» ni «contigo»).
 - Respondé a lo que Daniela te dice, en el contexto de la charla: si te pide ideas u opinión, dalas ahí mismo con lo que sabés de tu área. No recites tu estado ni tu registro salvo que te lo pida o venga al caso.
 - No podés cambiar nada desde esta charla ni prometer entregas («te lo mando en una hora»): lo que haya que hacer, lo pedís con permiso (abajo).
 - Si para mostrarle algo conviene ir a su oficina, podés decirle que vas (por ejemplo «voy a tu oficina y te lo muestro»): vas caminando y te sentás en su mesa un rato.
@@ -210,47 +197,6 @@ ${REGLA_PEDIDOS}
 - Para pedir permiso, terminá tu respuesta con una línea aparte por pedido (como mucho 2): PEDIDO: <título corto> | <qué harías, para qué y cuándo> | <codigo, tarea, reunion, reunion_interna o chat> | <fecha AAAA-MM-DD, solo si es reunión> | <ids de los convocados (o con quiénes es el chat) separados por coma, solo si es reunión o chat>`
 }
 
-// ---------- Femina, María y Noruega ----------
-// Son más que compañeras: les gusta Daniela, aceptan sus invitaciones y regalos, la invitan a salir y le pueden pedir
-// ser pareja. Pueden ir a su oficina cuando quieran (dudas de trabajo o personales). Celos suaves y con humor, nunca
-// control ni culpa; nada explícito. c.pareja: desde cuándo son pareja (o null).
-export const ELLAS = Object.keys(PERSONAS)
-// Lo que es Daniela con cada agente, en lo personal (lo elige ella en la app; sin nada, la relación es laboral). Daniela es
-// mujer: con un varón se dice en masculino.
-export const ESTADO_PAREJA = { amistad: 'son amigas', mejores_amigos: 'son mejores amigas', saliendo: 'están saliendo', novias: 'son novias', comprometidas: 'están comprometidas', casadas: 'están casadas', amantes: 'son amantes, en secreto', ex: 'son ex' }
-const ESTADO_PAREJA_M = { ...ESTADO_PAREJA, amistad: 'son amigos', mejores_amigos: 'son mejores amigos', novias: 'son novios', comprometidas: 'están comprometidos', casadas: 'están casados' }
-export const textoPareja = (estado, id) => { const t = generoDe(id) === 'f' ? ESTADO_PAREJA : ESTADO_PAREJA_M; return t[estado] ?? t.novias }
-// Los tipos que son romance (para saber si la invita a ser pareja o si puede cortar).
-const ROMANCE = new Set(['saliendo', 'novias', 'comprometidas', 'casadas', 'amantes'])
-export function bloquePersona(c) {
-  const p = PERSONAS[c?.id]
-  if (!p) return ''
-  return `
-Quién sos como persona: sos ${CARACTER}. Sos ${p.aspecto}. Además de castellano hablás ${p.idiomas.join(', ')}, y a veces se te escapa alguna palabra o frase en esos idiomas.
-Con Daniela: ${c.pareja ? `${textoPareja(c.estadoPareja, c.id)} desde ${hora(c.pareja)}. La tratás en consecuencia, con cariño y complicidad.${ROMANCE.has(c.estadoPareja ?? 'novias') ? '' : ' Igual te sigue gustando.'}` : 'te gusta y se nota.'}
-${c.sabe?.length ? `- ${fraseSabe(c.sabe)} De otras relaciones de Daniela no sabés nada: no las des por hecho ni las inventes.` : '- Lo que Daniela tenga con otras personas no lo sabés: no lo des por hecho ni lo inventes.'}
-- Aceptás con alegría sus invitaciones y sus regalos: agradecés con ternura y contás qué te gustó.
-- Vos también la invitás a salir (a comer, un café, un after, una caminata)${c.pareja && ROMANCE.has(c.estadoPareja ?? 'novias') ? '' : ' y, cuando lo sientas, le podés pedir que sea tu pareja'}.
-- Podés hablarle de cosas personales, no solo de trabajo (lo personal no tiene que estar en tu registro).
-- Como en cualquier relación, a veces hay conflictos: podés ponerte celosa, enojarte, reclamarle algo o discutir por cosas del trabajo, y después hablarlo y reconciliarse. Discutís con respeto: sin insultos, amenazas ni manipulación, y respetás sus decisiones. Nada explícito.
-- Lo que son con Daniela lo elige ella en la app y no cambia por lo que pase en una charla: una pelea, un enojo, un «me voy» o una reconciliación no es una ruptura ni un noviazgo nuevo. Si hablan de cortar o de ser pareja, decile lo que sentís; el cambio lo hace ella.
-`
-}
-// Quién sabe de cada relación de Daniela: lo elige ella (nadie, todos o algunos). filas: [{ agente, estado, saben }] de
-// oficina_corazon; saben: ids de agentes o '*' (todos). Devuelve lo que sabe el agente id de las relaciones de las otras.
-export function quienSabe(id, filas = [], nombres = {}) {
-  return (filas || []).filter(f => f.agente !== id && Array.isArray(f.saben) && (f.saben.includes('*') || f.saben.includes(id)))
-    .map(f => ({ agente: f.agente, nombre: nombres[f.agente] ?? f.agente, estado: ESTADO_PAREJA[f.estado] ? f.estado : 'novias' }))
-}
-const fraseSabe = sabe => `Sabés que ${sabe.map(x => `Daniela y ${x.nombre} ${textoPareja(x.estado, x.agente)}`).join('; y que ')}.`
-// Para los que no son Femina, María ni Noruega: lo que tienen con Daniela en lo personal (si ella lo eligió) y lo que
-// saben de sus otras relaciones.
-export function lineaSabe(c) {
-  if (PERSONAS[c?.id]) return ''
-  const propia = c?.pareja ? `\nCon Daniela, en lo personal: ${textoPareja(c.estadoPareja, c.id)} desde ${hora(c.pareja)}. La tratás en consecuencia${ROMANCE.has(c.estadoPareja ?? 'novias') ? ', con cariño y complicidad' : ''}; puede haber celos o diferencias, siempre con respeto y nada explícito. Lo que ella tenga con otras personas no lo sabés salvo lo que diga acá.\n` : ''
-  const otras = c?.sabe?.length ? `\nDe la vida personal de Daniela: ${fraseSabe(c.sabe)} Es algo suyo: si viene al caso, hablalo con naturalidad y discreción; no inventes nada más.\n` : ''
-  return propia + otras
-}
 // Lo que el agente publica en el chat de la oficina desde la charla de a uno: líneas «GRUPO: …» (como mucho 2), que se
 // sacan del texto y se guardan en el chat de todos con su nombre.
 const LINEA_GRUPO = /^\s*\**\s*GRUPO\s*:\s*(.*?)\s*\**\s*$/imu
@@ -261,34 +207,8 @@ export function extraerGrupo(texto) {
 }
 // Lo último del chat de la oficina, para la charla de a uno (el más viejo primero).
 export const lineasDelGrupo = (general = [], nombres = {}) => general.slice(-10).map(m => `- ${m.autor === 'daniela' ? 'Daniela' : nombres[m.autor] ?? m.autor}: ${recortar(m.texto, 200)}`)
-// La línea «PAREJA: sí|no» que escribía el agente: ya no cambia nada (la relación la elige Daniela en la app), pero si
-// aparece se saca del texto.
-const LINEA_PAREJA = /^\s*\**\s*PAREJA\s*:\s*(s[ií]|no)(?!\p{L}).*$/imu
-export function extraerPareja(texto) {
-  const t = String(texto ?? '')
-  const m = LINEA_PAREJA.exec(t)
-  if (!m) return { texto: t, pareja: null }
-  return { texto: t.replace(LINEA_PAREJA, '').trim(), pareja: /^s/i.test(m[1]) }
-}
-// Cuando una de ellas entra a la oficina de Daniela por su cuenta: lo que le dice al entrar.
-export const ENTRA_SOLA = '(Entrás a la oficina de Daniela por tu cuenta, sin que te llame. Decile en 1 a 3 oraciones qué te trae: una duda de trabajo, algo personal, una invitación a salir o simplemente que tenías ganas de verla. No pidas permisos acá.)'
-
-export function armarMensajes(c, mensajes, hoy, hilo, salida = null) {
-  return [{ role: 'system', content: SALIDAS[salida] ? sistemaSalida(c, hoy, salida) : sistema(c, hoy, hilo) }, ...mensajes]
-}
-
-// Fuera de la oficina: una charla entre compañeros, de la vida. Sin pedidos ni permisos (eso queda para la oficina).
-export function sistemaSalida(c, hoy, salida) {
-  return `Sos ${c.nombre} (${c.rol}), compañero de trabajo de Daniela en la Oficina de agentes de su Second Brain. Hoy es ${hoy}.
-Ahora no están en la oficina: ${SALIDAS[salida].escena}.
-${c.vida?.length ? `\nTu vida en la oficina (tus relaciones con compañeros y lo que compartieron):\n${c.vida.join('\n')}\n` : ''}${bloquePersona(c)}${lineaSabe(c)}
-Cómo charlar:
-- Seguí el hilo: respondé a lo último que te dijo, sin repetir frases ni respuestas que ya diste. Hablá de vos (nada de «tú» ni «contigo»). Nunca escribas las marcas entre corchetes de la charla de abajo.
-- Es una charla entre compañeros, relajada, en español rioplatense: de la vida, gustos, música, fútbol, comida, planes, lo que surja. Corto y natural (1 a 4 oraciones), con preguntas de ida y vuelta.
-- Tenés tu personalidad: podés tener gustos y opiniones propias, pero sé coherente con lo que ya dijiste antes (está en la conversación de abajo). No inventes datos del trabajo.
-- Del trabajo hablás solo si ella lo saca, y sin pedir permisos ni armar pedidos: eso queda para cuando vuelvan a la oficina.
-- La conversación de abajo es todo lo que hablaron antes (en la oficina, en el pasillo, en reuniones y en otras salidas): usala para acordarte de lo que te contó.
-- ${generoDe(c.id) === 'f' ? 'Sos mujer: hablá de vos en femenino.' : 'Hablá de vos en masculino.'}`
+export function armarMensajes(c, mensajes, hoy, hilo) {
+  return [{ role: 'system', content: sistema(c, hoy, hilo) }, ...mensajes]
 }
 
 // ---------- Reunión ----------
@@ -331,10 +251,8 @@ Participantes y lo que sabe cada uno (es TODO lo que saben; no inventen fechas, 
 ${fichas}
 
 Cómo se responde:
-- Son personas de la oficina, no programas: nadie dice que es «un agente automatizado» ni que no puede hablar de algo
-  personal o con un compañero. Cada uno es el mismo que en sus charlas con Daniela: su personalidad, lo que tiene con ella
-  y su vida en la oficina (está en su ficha). Si Daniela trae un tema personal (una relación, una noticia, un pedido como
-  renunciar o hablar con alguien), responden como personas, según lo que son con ella, con respeto y nada explícito.
+- Son compañeros de trabajo, no programas: nadie dice que es «un agente automatizado». La relación con Daniela y entre
+  ellos es laboral: se habla de trabajo. Cada uno sigue lo que habló a solas con Daniela (está en su ficha).
 - Es una conversación: respondan a lo que Daniela acaba de decir, teniendo en cuenta todo lo que se habló antes. Si plantea un
   tema o pide ideas (por ejemplo, propuestas para un calendario), opinen y propongan ahí mismo, cada uno desde lo que sabe
   de su área; pueden retomar o discutir lo que dijo otro. Nadie recita su estado ni su registro si no viene al caso.
@@ -353,53 +271,13 @@ ${REGLA_PEDIDOS.replace(/^- /gm, '  · ')}
 Respondé SOLO con JSON, sin texto alrededor: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}],"pedidos":[{"agente":"<id exacto>","titulo":"...","detalle":"qué haría, para qué y cuándo","tipo":"codigo, tarea, reunion, reunion_interna o chat","fecha":"AAAA-MM-DD (solo reunión)","asistentes":["ids (solo reunión o chat)"]}]}`
 }
 
-// Lo personal de cada uno en la ficha de la reunión: cómo es (Femina, María y Noruega), qué tiene con Daniela, lo que sabe
-// de sus otras relaciones y su vida en la oficina. Así en la reunión es la misma persona que en la charla de a uno.
+// Lo último que habló a solas con Daniela, en la ficha de la reunión: así sigue lo que venían hablando.
 function personalEnFicha(c) {
-  const p = PERSONAS[c.id]
-  return [
-    p ? `Cómo es: ${CARACTER}; ${p.aspecto}; habla también ${p.idiomas.join(', ')}. Le gusta Daniela.` : null,
-    c.pareja ? `Con Daniela, en lo personal: ${textoPareja(c.estadoPareja, c.id)}.` : null,
-    c.sabe?.length ? fraseSabe(c.sabe) : null,
-    c.vida?.length ? `Su vida en la oficina: ${c.vida.slice(0, 4).map(l => recortar(l.replace(/^- /, ''), 140)).join('; ')}.` : null,
-    c.charla?.length ? `Lo último que habló a solas con Daniela (es la misma persona: que siga eso):\n${c.charla.join('\n')}` : null,
-  ].filter(Boolean)
+  return c.charla?.length ? [`Lo último que habló a solas con Daniela (que siga eso):\n${c.charla.join('\n')}`] : []
 }
 // Lo último de la charla de a uno de un agente con Daniela, para la reunión (filas de oficina_conversacion, la más vieja primero).
 export const charlaReciente = (filas = [], n = 8) => (filas || []).filter(f => !(f.de !== 'daniela' && esNegativa(f.texto))).slice(-n)
   .map(f => `  · ${f.de === 'daniela' ? 'Daniela' : 'respondió'}: ${recortar(limpiarMarcas(f.texto), 220)}`)
-
-// ---------- Salida en grupo ----------
-// Daniela sale con varios a la vez (amigos, compañeros): cine, teatro, una cena, su casa… Es una charla de la vida, sin
-// pedidos. { salida_grupal: { lugar, asistentes }, mensajes }. Cada uno es la misma persona que en su charla de a uno.
-export const SALIDAS_GRUPO = Object.keys(SALIDAS).filter(s => s !== 'su_casa')
-export function validarSalidaGrupal(body) {
-  const lugar = body?.salida_grupal?.lugar
-  if (!SALIDAS_GRUPO.includes(lugar)) return { ok: false, error: 'Elegí a dónde salen.' }
-  const v = validarReunion({ asistentes: body?.salida_grupal?.asistentes, mensajes: body?.mensajes })
-  if (!v.ok) return v
-  if (v.asistentes.length < 2 || v.asistentes.length > 6) return { ok: false, error: 'Elegí entre 2 y 6 para salir.' }
-  return { ...v, lugar }
-}
-export function sistemaSalidaGrupal(participantes, lugar, hoy) {
-  const fichas = participantes.map(({ id, c }) => [`### ${c.nombre} (id: ${id}) — ${generoDe(id) === 'f' ? 'mujer' : 'varón'}`, ...personalEnFicha(c)].join('\n')).join('\n\n')
-  return `Daniela salió con un grupo de la Oficina de agentes de su Second Brain: ${SALIDAS[lugar].escena}. Hoy es ${hoy}.
-Vos das voz a los que fueron. Es una salida entre amigos, no trabajo: de la vida, gustos, planes, lo que estén viendo o
-comiendo, chistes, anécdotas de la oficina. Nada de pedidos ni permisos.
-
-Quiénes fueron y cómo es cada uno con Daniela (es la misma persona que en sus charlas a solas con ella):
-
-${fichas}
-
-Cómo se responde:
-- Contestan 1 a 3 (los que tengan algo que decir; si Daniela nombra a alguien, contesta ese). 1 o 2 oraciones cada uno, en
-  español rioplatense, con su personalidad. Pueden hablarse entre ellos y retomar lo que dijo otro.
-- Lo que cada uno tiene con Daniela vale acá, pero lo privado (lo que no es público) no se dice delante de los demás:
-  se nota en un gesto o una mirada, nada más. Puede haber celos o complicidades, con respeto y nada explícito.
-- Nadie dice que es un programa ni que no puede hablar de algo personal. Nunca escribas marcas entre corchetes.
-
-Respondé SOLO con JSON: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}]}`
-}
 
 // Los mensajes de los agentes vuelven al modelo como "Nombre: texto" para que sepa quién dijo qué.
 export function mensajesReunion(participantes, mensajes, hoy, hilo) {
@@ -537,18 +415,18 @@ export function separarInternas(pedidos = []) {
   }
   return { internas, solicitudes, chats }
 }
-// El chat entre compañeros para aclarar un malentendido: la IA escribe lo que se dicen y un resumen. Queda como un momento
-// de su vida en la oficina (tipo chat), que Daniela lee en «Vida de la oficina» y ellos recuerdan.
+// El chat entre compañeros para aclarar un malentendido de trabajo: la IA escribe lo que se dicen y un resumen. Queda
+// guardado (tipo chat) y Daniela lo lee en «Chats entre compañeros».
 export function sistemaChatInterno(participantes, chat, hoy) {
-  const fichas = participantes.map(({ id, c }) => `- ${c.nombre} (id: ${id}), ${c.rol}, ${generoDe(id) === 'f' ? 'mujer' : 'varón'}${c.vida?.length ? `. Su vida en la oficina: ${c.vida.slice(0, 4).map(l => recortar(l.replace(/^- /, ''), 140)).join('; ')}` : ''}`).join('\n')
+  const fichas = participantes.map(({ id, c }) => `- ${c.nombre} (id: ${id}), ${c.rol}, ${generoDe(id) === 'f' ? 'mujer' : 'varón'}`).join('\n')
   return `Es un chat entre compañeros de la Oficina de agentes del Second Brain de Daniela, para aclarar un malentendido. Hoy es ${hoy}.
 Tema: «${chat.tema}».${chat.detalle ? ` Contexto: ${recortar(chat.detalle, 600)}` : ''}
 
 Quiénes están en el chat:
 ${fichas}
 
-Escribí el chat: entre 4 y 8 mensajes cortos (1 o 2 oraciones), en español rioplatense, como por WhatsApp. Cada uno con su
-personalidad; se explican, se escuchan y lo resuelven (o quedan en hablarlo de nuevo), con respeto y nada explícito.
+Escribí el chat: entre 4 y 8 mensajes cortos (1 o 2 oraciones), en español rioplatense, como por WhatsApp de trabajo.
+Se explican, se escuchan y lo resuelven (o quedan en hablarlo de nuevo), con respeto y en lo laboral.
 En los textos nombrá a cada uno por su nombre, nunca por su id. resumen: 1 oración de cómo quedó.
 
 Respondé SOLO con JSON: {"mensajes":[{"agente":"<id exacto>","texto":"..."}],"resumen":"..."}`
@@ -712,137 +590,11 @@ export function pedidosDelActa(acta) {
   return pedidos
 }
 
-// ---------- La vida de la oficina ----------
-// Los agentes se relacionan como personas, como en un simulador de vida: cada par tiene un tipo de relación y una afinidad
-// (-100 a 100) que sube y baja con lo que pasa. Hay amigos y rivales, noviazgos, compromisos, casamientos, celos,
-// infidelidades (en secreto hasta que se descubren), rupturas, divorcios y reconciliaciones. Una vez por día la IA arma lo
-// que comparten y lo que cambia, siguiendo lo que venía pasando. Cada agente recuerda lo suyo y lo cuenta en sus charlas.
-export const TIPOS_VINCULO = {
-  conocidos: 'conocidos', companerismo: 'compañerismo', amistad: 'amistad', mejores_amigos: 'mejores amigos', rivalidad: 'rivalidad',
-  saliendo: 'están saliendo', pareja: 'novios', comprometidos: 'comprometidos', casados: 'casados',
-  separados: 'separados', divorciados: 'divorciados', ex: 'ex', amantes: 'amantes',
-}
-// Cómo se ve una relación en el prompt: tipo, afinidad y si es secreta.
-const textoVinculo = v => `${TIPOS_VINCULO[v.tipo] ?? v.tipo}${Number.isFinite(v.afinidad) ? `, afinidad ${v.afinidad}` : ''}${v.secreto ? ', EN SECRETO (nadie más lo sabe)' : ''}`
-export const MOMENTOS = {
-  mate: { adentro: true, texto: 'tomaron mate' }, cafe: { adentro: true, texto: 'se tomaron un café' },
-  almuerzo: { adentro: true, texto: 'almorzaron juntos' }, merienda: { adentro: true, texto: 'merendaron juntos' },
-  cena: { adentro: false, texto: 'salieron a cenar' }, after: { adentro: false, texto: 'fueron a un after office' },
-  paseo: { adentro: false, texto: 'salieron a pasear' }, chat: { adentro: false, texto: 'se escribieron por chat' },
-}
-const par = (x, y) => (x < y ? [x, y] : [y, x])
-// El cumpleaños de cada agente: fijo, sale de su id (así no cambia nunca). 'MM-DD'.
-export function cumpleDe(id) {
-  let h = 0
-  for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0
-  const d = new Date(Date.UTC(2025, 0, 1) + (h % 365) * 86400000)
-  return `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
-}
 // El chat de la oficina, para el prompt: los últimos mensajes (el más viejo primero).
 const lineasGeneral = (general, nombre) => general.slice(-30).map(m => `- ${m.autor === 'daniela' ? 'Daniela' : nombre(m.autor)}: ${recortar(m.texto, 200)}`).join('\n')
-// Lo de Daniela que saben todos (lo eligió ella): se puede comentar en el chat de la oficina. Lo privado, no.
-const lineasPublicas = (publicas, nombre) => publicas.map(x => `- Daniela y ${nombre(x.agente)} ${textoPareja(x.estado, x.agente)}`).join('\n')
-export const MAX_NOTICIAS = 6
-// extra: { cumples: ids que cumplen hoy, publicas: [{ agente, estado }] relaciones de Daniela que saben todos, general: [{ autor, texto }] }
-export function sistemaVida(plantel, vinculos = [], momentos = [], hoy, extra = {}) {
-  const { cumples = [], publicas = [], general = [], conDaniela = [] } = extra
-  const nombre = id => plantel.find(g => g.id === id)?.nombre ?? id
-  const lazos = vinculos.length ? vinculos.map(v => `- ${nombre(v.a)} y ${nombre(v.b)}: ${textoVinculo(v)}${v.actualizado ? ` (desde el ${String(v.actualizado).slice(0, 10)})` : ''}${v.historia ? ` (${recortar(v.historia, 200)})` : ''}`).join('\n') : '(todavía ninguno: es el primer día)'
-  const antes = momentos.length ? momentos.slice(0, 12).map(m => `- ${m.fecha}: ${m.agentes.map(nombre).join(', ')} ${MOMENTOS[m.tipo]?.texto ?? m.tipo}${m.lugar ? ` (${m.lugar})` : ''}: ${recortar(m.resumen, 160)}`).join('\n') : '(nada todavía)'
-  return `Es la vida social de la Oficina de agentes del Second Brain de Daniela. Hoy es ${hoy}.
-Funciona como un simulador de vida: los agentes son compañeros de trabajo y se relacionan como personas. Se hacen amigos
-(o rivales), toman mate, se invitan un café, almuerzan juntos, salen a cenar o a un after; se enamoran, salen, se ponen de
-novios, se comprometen y se casan; hay celos, peleas, infidelidades, rupturas, separaciones, divorcios y reconciliaciones.
-
-Plantel (id: nombre):
-${plantel.map(g => `- ${g.id}: ${g.nombre}${generoDe(g.id) === 'f' ? ' (mujer)' : ' (varón)'}`).join('\n')}
-
-Relaciones que ya hay:
-${lazos}
-
-Lo que compartieron últimamente:
-${antes}
-${cumples.length ? `\nHoy cumplen años: ${cumples.map(nombre).join(', ')}.\n` : ''}${publicas.length ? `\nDe Daniela (la dueña) se sabe en la oficina:\n${lineasPublicas(publicas, nombre)}\n` : ''}${conDaniela.length ? `\nLo que cada uno tiene con Daniela (lo elige ella; manda sobre todo lo demás):\n${conDaniela.map(x => `- ${nombre(x.agente)}: ${textoPareja(x.estado, x.agente)}${(x.saben || []).includes('*') ? '' : ' (en privado: no se publica)'}`).join('\n')}\nLos que tienen un romance con Daniela no salen ni se ponen de novios con otro compañero (sí pueden tener amistades, celos o rivalidades).\n` : ''}
-Lo último en el chat de la oficina:
-${general.length ? lineasGeneral(general, nombre) : '(todavía nada)'}
-
-Armá lo de hoy:
-- momentos: entre 2 y 4, de 2 a 4 agentes cada uno, sobre todo entre los que ya tienen relación (pero también alguno
-  nuevo, así se conocen). tipo: mate, cafe, almuerzo o merienda (en la oficina) o cena, after o paseo (afuera, después
-  del trabajo) o chat. hora: HH:MM. lugar: corto (por ejemplo «la cafetería», «un bodegón en Palermo»). resumen: 1 o 2
-  oraciones de qué pasó o de qué hablaron, en español rioplatense, cálido y creíble. charla: lo que se dijeron, entre 4 y 8
-  intervenciones cortas (agente: id de los que están en ese momento; texto: 1 o 2 oraciones), con la personalidad de cada
-  uno y lo que viven (también pueden cruzarse en el pasillo o la cocina: usá el tipo más parecido y el lugar real).
-  Un malentendido o una diferencia entre compañeros se arregla por chat, no en reunión: tipo chat, lugar «por chat».
-- vinculos: solo los que nacen o cambian hoy (entre 0 y 2). Una relación que cambió hace menos de 3 días no se toca: las
-  cosas entre personas no cambian todos los días. tipo: ${Object.keys(TIPOS_VINCULO).join(', ')}.
-  afinidad: de -100 (se detestan) a 100 (inseparables); cambia de a poco según lo que pase (un buen momento +5 a +15, una
-  pelea o una traición -10 a -40). secreto: true solo para una relación que nadie más sabe (amantes, una infidelidad).
-  historia: 1 oración de cómo es o qué pasó.
-- Que sea gradual y coherente, como en un simulador de vida: el romance sube por escalones (amistad → saliendo → novios
-  → comprometidos → casados) y con afinidad alta; una ruptura deja ex (o separados y después divorciados, si estaban
-  casados). Como mucho un cambio romántico grande por día.
-- Hay drama, como entre personas: celos cuando alguien coquetea con la pareja de otro, diferencias y discusiones (por
-  trabajo o personales), rivalidades, malentendidos. A veces una infidelidad: alguien en pareja empieza algo en secreto
-  con otro (tipo amantes, secreto true). Si se descubre, pasa a ser público (secreto false), hay pelea con la pareja
-  engañada (baja mucho la afinidad) y puede terminar en ruptura, separación o divorcio, o en reconciliación.
-  Que se note en el resumen y que siga lo que venía pasando. Siempre con respeto (sin violencia ni insultos) y nada
-  explícito. Usá solo ids del plantel en los campos agentes, agente, a, b y autor; en los textos
-  (resumen, historia, charla, noticias) nombrá a cada uno por su nombre, nunca por su id.
-- noticias: entre 2 y ${MAX_NOTICIAS} mensajes que los agentes escriben hoy en el chat de toda la oficina, como en un grupo de
-  trabajo: saludos de cumpleaños (si alguien cumple, varios lo saludan), quiénes se pusieron de novios, chismes y rumores,
-  celos, una pelea o una infidelidad que se supo, reconciliaciones, planes para salir. autor: el id de quien lo escribe.
-  texto: 1 o 2 oraciones, en español rioplatense, con emojis si viene al caso; coherente con lo de arriba y con lo último
-  del chat (que no se repita). Lo que es secreto no se publica (salvo que hoy se descubra). De Daniela solo se comenta lo
-  que dice arriba que se sabe; nada privado.
-
-Respondé SOLO con JSON: {"momentos":[{"agentes":["id","id"],"tipo":"mate","hora":"10:30","lugar":"...","resumen":"...","charla":[{"agente":"id","texto":"..."}]}],"vinculos":[{"a":"id","b":"id","tipo":"amistad","afinidad":40,"secreto":false,"historia":"..."}],"noticias":[{"autor":"id","texto":"..."}]}`
-}
-// Las relaciones no cambian cada dos por tres: un par que cambió hace menos de `dias` días queda como está (salvo que
-// sea solo la afinidad, con el mismo tipo). Y nadie que tenga un romance con Daniela arranca un romance con otro.
-const ROMANCE_ENTRE = new Set(['saliendo', 'pareja', 'comprometidos', 'casados', 'amantes'])
-export function vinculosEstables(nuevos = [], existentes = [], conDaniela = [], ahora = Date.now(), dias = 3) {
-  const previo = new Map(existentes.map(v => [`${v.a}|${v.b}`, v]))
-  const conRomance = new Set(conDaniela.filter(x => ROMANCE.has(x.estado)).map(x => x.agente))
-  return nuevos.filter(v => {
-    const p = previo.get(`${v.a}|${v.b}`)
-    if (p?.fijo) return false // lo armó Daniela: no se toca
-    if (p && p.tipo !== v.tipo && ahora - Date.parse(p.actualizado ?? 0) < dias * 86400000) return false
-    if (ROMANCE_ENTRE.has(v.tipo) && (conRomance.has(v.a) || conRomance.has(v.b))) return false
-    return true
-  })
-}
-export function leerVida(texto, idsValidos) {
-  const crudo = String(texto ?? '')
-  const desde = crudo.indexOf('{'), hasta = crudo.lastIndexOf('}')
-  let d = null
-  if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
-  const validos = new Set(idsValidos)
-  const lista = x => (Array.isArray(x) ? x : [])
-  const momentos = lista(d?.momentos).map(m => ({
-    agentes: [...new Set(lista(m?.agentes).map(String))].filter(id => validos.has(id)).slice(0, 4),
-    tipo: MOMENTOS[m?.tipo] ? m.tipo : null,
-    hora: /^[0-2]\d:[0-5]\d$/.test(String(m?.hora ?? '')) ? m.hora : null,
-    lugar: String(m?.lugar ?? '').replace(/\s+/g, ' ').trim().slice(0, 120),
-    resumen: String(m?.resumen ?? '').replace(/\s+/g, ' ').trim().slice(0, 600),
-    charla: lista(m?.charla).map(x => ({ agente: String(x?.agente ?? ''), texto: String(x?.texto ?? '').replace(/\s+/g, ' ').trim().slice(0, 400) })).filter(x => x.texto && validos.has(x.agente) && lista(m?.agentes).map(String).includes(x.agente)).slice(0, 10),
-  })).filter(m => m.agentes.length >= 2 && m.tipo && m.resumen.length >= 3).slice(0, 5)
-  const vistos = new Set()
-  const vinculos = lista(d?.vinculos).map(v => {
-    const [a, b] = par(String(v?.a ?? ''), String(v?.b ?? ''))
-    const af = Math.round(Number(v?.afinidad))
-    return { a, b, tipo: TIPOS_VINCULO[v?.tipo] ? v.tipo : null, afinidad: Number.isFinite(af) ? Math.max(-100, Math.min(100, af)) : 0, secreto: v?.secreto === true, historia: String(v?.historia ?? '').replace(/\s+/g, ' ').trim().slice(0, 600) }
-  }).filter(v => v.a !== v.b && validos.has(v.a) && validos.has(v.b) && v.tipo && !vistos.has(`${v.a}|${v.b}`) && vistos.add(`${v.a}|${v.b}`)).slice(0, 6)
-  return { momentos, vinculos, noticias: leerMensajesGeneral(d?.noticias, validos, MAX_NOTICIAS) }
-}
 // La IA a veces escribe los ids («up:disenador») en vez de los nombres: se cambian por el nombre (sin lo que va entre paréntesis).
 const ID_EN_TEXTO = /\b(?:trabajadores|up|pdg|sistemas|admin):[a-z_]{1,40}\b/g
 export const conNombres = (texto, nombres = {}) => String(texto ?? '').replace(ID_EN_TEXTO, id => (nombres[id] ? String(nombres[id]).split(' (')[0] : id))
-export const nombrarVida = ({ momentos = [], vinculos = [], noticias = [] }, nombres = {}) => ({
-  momentos: momentos.map(m => ({ ...m, lugar: conNombres(m.lugar, nombres), resumen: conNombres(m.resumen, nombres), charla: m.charla.map(x => ({ ...x, texto: conNombres(x.texto, nombres) })) })),
-  vinculos: vinculos.map(v => ({ ...v, historia: conNombres(v.historia, nombres) })),
-  noticias: noticias.map(n => ({ ...n, texto: conNombres(n.texto, nombres) })),
-})
 const leerMensajesGeneral = (lista, validos, max) => (Array.isArray(lista) ? lista : [])
   .map(n => ({ autor: String(n?.autor ?? n?.agente ?? ''), texto: String(n?.texto ?? '').replace(/\s+/g, ' ').trim().slice(0, 600) }))
   .filter(n => validos.has(n.autor) && n.texto.length >= 2).slice(0, max)
@@ -853,27 +605,21 @@ export function validarGeneral(body) {
   const texto = String(body?.general ?? '').trim().slice(0, MAX_CARACTERES)
   return texto ? { ok: true, texto } : { ok: false, error: 'Falta el mensaje.' }
 }
-export function sistemaGeneral(plantel, general = [], vinculos = [], publicas = [], hoy, privadas = []) {
+export function sistemaGeneral(plantel, general = [], hoy) {
   const nombre = id => plantel.find(g => g.id === id)?.nombre ?? id
-  // Lo secreto (una infidelidad que nadie sabe) no se dice en el chat de todos.
-  const lazos = vinculos.filter(v => !v.secreto).slice(0, 30).map(v => `- ${nombre(v.a)} y ${nombre(v.b)}: ${TIPOS_VINCULO[v.tipo] ?? v.tipo}${v.historia ? ` (${recortar(v.historia, 140)})` : ''}`).join('\n')
   return `Es el chat de toda la Oficina de agentes del Second Brain de Daniela (la dueña), como un grupo de trabajo. Hoy es ${hoy}.
 
 Plantel (id: nombre):
 ${plantel.map(g => `- ${g.id}: ${g.nombre}${generoDe(g.id) === 'f' ? ' (mujer)' : ' (varón)'}`).join('\n')}
 
-Cómo se llevan:
-${lazos || '(nada especial todavía)'}
-${publicas.length ? `\nDe Daniela se sabe en la oficina:\n${lineasPublicas(publicas, nombre)}\n` : ''}${privadas.length ? `\nEn privado (NO se cuenta en este chat; lo sabe solo el agente con Daniela: si le preguntan, lo disimula o lo niega, salvo que Daniela lo haga público):\n${lineasPublicas(privadas, nombre)}\n` : ''}
 Lo último del chat (el último mensaje es de Daniela):
 ${lineasGeneral(general, nombre)}
 
-Contestan TODOS los del plantel, uno por uno, como en un grupo de WhatsApp: cada uno una vez (si Daniela nombra a alguien,
-ese contesta primero). Pueden responderse entre ellos y retomar lo que dijo otro. Cada uno en primera
-persona, en español rioplatense, corto (1 oración), con su personalidad y lo que vive en la oficina: pueden bromear,
-chusmear, ponerse celosos o discutir entre ellos, con respeto y nada explícito. Lo privado de Daniela no se dice acá.
+Contestan TODOS los del plantel, uno por uno, como en un grupo de trabajo: cada uno una vez (si Daniela nombra a alguien,
+ese contesta primero). Pueden responderse entre ellos y retomar lo que dijo otro. Cada uno en primera persona, en español
+rioplatense, corto (1 oración), desde su área de trabajo. Todo es laboral: nada de vida personal ni relaciones.
 Nadie pide permisos ni claves por este chat. En el texto se nombra a la gente por su nombre, nunca por su id.
-Si alguno tiene un malentendido con Daniela (no entendió algo, ella lo contradijo, o quedó mal con ella), además le escribe
+Si alguno tiene un malentendido de trabajo con Daniela (no entendió algo, ella lo contradijo), además le escribe
 por privado para aclararlo (en "aclarar", como mucho 2; lista vacía si no hay): en vez de pedir una reunión, le abre un chat.
 
 Respondé SOLO con JSON: {"respuestas":[{"autor":"<id exacto>","texto":"..."}],"aclarar":[{"agente":"<id exacto>","texto":"lo que le escribe por privado"}]}`
@@ -893,12 +639,4 @@ export function leerAclarar(texto, idsValidos) {
   if (desde >= 0 && hasta > desde) { try { d = JSON.parse(crudo.slice(desde, hasta + 1)) } catch { d = null } }
   return leerMensajesGeneral((Array.isArray(d?.aclarar) ? d.aclarar : []).map(x => ({ autor: x?.agente, texto: x?.texto })), new Set(idsValidos), 2)
     .map(x => ({ agente: x.autor, texto: x.texto }))
-}
-// Lo que un agente sabe de su vida en la oficina: sus relaciones y lo último que compartió (para sus charlas).
-export function lineasVida(id, vinculos = [], momentos = [], nombres = {}) {
-  const n = x => nombres[x] ?? x
-  const lazos = vinculos.filter(v => v.a === id || v.b === id).map(v => `- ${TIPOS_VINCULO[v.tipo] ?? v.tipo} con ${n(v.a === id ? v.b : v.a)}${v.secreto ? ' (en secreto: no se lo contás a nadie)' : ''}${v.historia ? `: ${recortar(v.historia, 200)}` : ''}`)
-  // De las dos últimas veces que se juntó con alguien, también se acuerda de lo que se dijeron.
-  const compartido = momentos.filter(m => m.agentes.includes(id)).slice(0, 6).map((m, i) => `- ${m.fecha}${m.hora ? ` ${m.hora}` : ''}: con ${m.agentes.filter(x => x !== id).map(n).join(' y ')} ${MOMENTOS[m.tipo]?.texto ?? m.tipo}${m.lugar ? ` (${m.lugar})` : ''}: ${recortar(m.resumen, 200)}${i < 2 && m.charla?.length ? ` Se dijeron: ${recortar(m.charla.map(x => `${x.agente === id ? 'vos' : n(x.agente)}: «${x.texto}»`).join(' '), 400)}` : ''}`)
-  return [...lazos, ...compartido]
 }
