@@ -64,15 +64,6 @@ export const MUJERES = new Set([
 ])
 export function generoDe(id) { return MUJERES.has(id) ? 'f' : 'm' }
 
-// Femina, María y Noruega: más que compañeras de Daniela. Cómo son, cómo se ven y qué idiomas hablan (además de
-// castellano). Lo usan los prompts de oficina-chat; el dibujo de cada una está en src/oficinaPlano.mjs (ASPECTOS).
-export const PERSONAS = {
-  'trabajadores:maria': { aspecto: 'castaña, de ojos marrones', idiomas: ['italiano', 'francés', 'inglés'] },
-  'up:noruega': { aspecto: 'morocha, de ojos celestes', idiomas: ['noruego', 'inglés', 'alemán'] },
-  'pdg:femina': { aspecto: 'colorada, de ojos verdes, con pecas y lentes', idiomas: ['portugués', 'inglés', 'francés'] },
-}
-export const CARACTER = 'pasional, tierna, amable, atenta, inteligente y un poco celosa'
-
 // Supervisores: quién se encarga de que lo acordado en una reunión se cumpla en cada área (PDG, por ahora, María).
 export const SUPERVISORES = { trabajadores: 'trabajadores:maria', up: 'up:noruega', pdg: 'trabajadores:maria', sistemas: 'sistemas:mesa_entrada', admin: 'trabajadores:maria' }
 export const AREAS_TAREA = Object.keys(SUPERVISORES)

@@ -380,30 +380,6 @@ test('llamarlo: si le pedís que venga a tu oficina, va', async () => {
   assert.equal(lePedisQueVenga('Mi oficina está muy linda.'), false)
 })
 
-test('vida de la oficina: los momentos de hoy que pasan adentro se ven de a uno', async () => {
-  const { momentoQueToca } = await import('./oficina.mjs')
-  const ms = [
-    { id: 1, fecha: '2026-11-15', tipo: 'cena', agentes: ['a:x', 'b:y'] },
-    { id: 2, fecha: '2026-11-14', tipo: 'mate', agentes: ['a:x', 'b:y'] },
-    { id: 3, fecha: '2026-11-15', tipo: 'mate', agentes: ['a:x', 'b:y'] },
-    { id: 4, fecha: '2026-11-15', tipo: 'cafe', agentes: ['a:x', 'c:z'] },
-  ]
-  assert.equal(momentoQueToca(ms, '2026-11-15')?.id, 3)
-  assert.equal(momentoQueToca(ms, '2026-11-15', new Set([3]))?.id, 4)
-  assert.equal(momentoQueToca(ms, '2026-11-15', new Set([3]), new Set(['a:x', 'b:y'])), null)
-})
-
-test('Femina, María y Noruega entran a tu oficina de a una, con pausa y pocas veces', async () => {
-  const { quienEntra, ENTRE_ENTRADAS_MS, MAX_ENTRADAS } = await import('./oficina.mjs')
-  const agentes = [{ id: 'up:noruega', estado: 'libre' }, { id: 'pdg:femina', estado: 'pausado' }, { id: 'up:redactor', estado: 'libre' }]
-  const t = Date.parse('2026-11-15T15:00:00Z')
-  assert.equal(quienEntra(agentes, 0, 0, t, () => 0.9), 'up:noruega')
-  assert.equal(quienEntra(agentes, t - 60_000, 1, t), null)
-  assert.equal(quienEntra(agentes, t - ENTRE_ENTRADAS_MS - 1, 1, t), 'up:noruega')
-  assert.equal(quienEntra(agentes, 0, MAX_ENTRADAS, t), null)
-  assert.equal(quienEntra([{ id: 'up:redactor', estado: 'libre' }], 0, 0, t), null)
-})
-
 test('visitas: pueden venir varios a la vez', async () => {
   const { sumarVisita, escenaDeVisitas, VISITA_MS } = await import('./oficina.mjs')
   let v = sumarVisita([], 'pdg:femina', false, 1000)
@@ -414,14 +390,6 @@ test('visitas: pueden venir varios a la vez', async () => {
   assert.equal(v2.find(x => x.agente === 'pdg:femina').hasta, 5000 + VISITA_MS)
   assert.deepEqual(escenaDeVisitas(v2).agentes, ['pdg:femina', 'up:noruega'])
   assert.equal(escenaDeVisitas([]), null)
-})
-
-test('tu relación con cada agente: lo que le decís, en su género', async () => {
-  const { textoConVos } = await import('./oficina.mjs')
-  assert.equal(textoConVos('novias', 'up:noruega'), '¿Querés ser mi novia? Para mí ya lo sos. 💕')
-  assert.equal(textoConVos('novias', 'up:redactor'), '¿Querés ser mi novio? Para mí ya lo sos. 💕')
-  assert.equal(textoConVos('amistad', 'up:redactor'), 'Me caés re bien: ya somos amigos.')
-  assert.equal(textoConVos('', 'up:redactor'), 'Prefiero que volvamos a ser compañeros de trabajo.')
 })
 
 test('el que pidió una reunión aprobada te viene a buscar para arrancarla', async () => {
@@ -435,35 +403,19 @@ test('el que pidió una reunión aprobada te viene a buscar para arrancarla', as
   assert.equal(encuentroCon('up:noruega', { solicitudes: [], pendientes }, new Set([e.clave])).texto, 'Daniela, una cosa: Algo de antes')
 })
 
-test('comunicados: lo tuyo, lo de las reuniones, las noticias y los avisos, lo más nuevo primero', async () => {
+test('comunicados: lo tuyo, lo de las reuniones y los avisos, lo más nuevo primero', async () => {
   const { comunicados } = await import('./oficina.mjs')
   const agentes = [{ id: 'pdg:femina', nombre: 'Femina' }, { id: 'up:noruega', nombre: 'Noruega (madre)' }, { id: 'trabajadores:canillita', nombre: 'Canillita', estado: 'error', ahora: 'no pudo leer los diarios' }]
   const lista = comunicados({
     general: [{ id: 1, tipo: 'comunicado', autor: 'daniela', texto: 'Desde hoy, los viernes no hay reuniones.', creado: '2026-11-15T10:00:00Z' },
-      { id: 2, tipo: 'noticia', autor: 'up:noruega', texto: '¡Feliz cumple, Femina! 🎂', creado: '2026-11-15T09:00:00Z' },
       { id: 3, tipo: 'charla', autor: 'daniela', texto: 'hola', creado: '2026-11-15T11:00:00Z' }],
     solicitudes: [{ id: 7, agente: 'up:noruega', titulo: 'Calendario de enero', estado: 'aprobada', decidida: '2026-11-14T12:00:00Z' }, { id: 8, agente: 'up:noruega', titulo: 'Otra', estado: 'pendiente' }],
     actas: [{ id: 4, fin: '2026-11-13T15:00:00Z', titulo: 'Plan de redes', plan: { decisiones: ['Tres posts por semana'] } }],
     tareas: [{ id: 5, estado: 'hecha', actualizada: '2026-11-12T10:00:00Z', responsable: 'pdg:femina', tarea: 'Buscar 5 cuentas' }],
-    corazon: [{ agente: 'pdg:femina', estado: 'novias', saben: ['*'], desde: '2026-11-10T10:00:00Z' }, { agente: 'up:noruega', estado: 'amantes', saben: [], desde: '2026-11-11T10:00:00Z' }],
     agentes,
   }, Date.parse('2026-11-16T00:00:00Z'))
-  assert.deepEqual(lista.map(x => x.tipo), ['aviso', 'tuyo', 'noticia', 'tuyo', 'reunion', 'aviso', 'tuyo'])
+  assert.deepEqual(lista.map(x => x.tipo), ['aviso', 'tuyo', 'tuyo', 'reunion', 'aviso'])
   assert.equal(lista[0].titulo, 'Canillita tiene un problema')
-  assert.equal(lista[2].titulo, 'Noruega')
-  assert.equal(lista[3].titulo, 'Aprobaste: «Calendario de enero»')
-  assert.match(lista[4].texto, /Tres posts por semana/)
-  assert.equal(lista[6].titulo, 'Es oficial: vos y Femina')
-  assert.ok(!lista.some(x => /Noruega/.test(x.titulo) && x.tipo === 'tuyo' && /oficial/.test(x.titulo)), 'lo secreto no es oficial')
-})
-
-test('vínculos que arma Daniela: ordenados, validados y fijos; la charla de una salida en grupo', async () => {
-  const { vinculoParaGuardar, mensajesSalidaGrupal } = await import('./oficina.mjs')
-  assert.deepEqual(vinculoParaGuardar({ a: 'up:disenador', b: 'pdg:femina', tipo: 'amistad', afinidad: 150, historia: ' Se conocen de PDG ' }),
-    { a: 'pdg:femina', b: 'up:disenador', tipo: 'amistad', afinidad: 100, secreto: false, historia: 'Se conocen de PDG', fijo: true })
-  assert.equal(vinculoParaGuardar({ a: 'pdg:femina', b: 'pdg:femina', tipo: 'amistad' }).error, 'Elegí dos personas distintas.')
-  assert.equal(vinculoParaGuardar({ a: 'pdg:femina', b: 'up:redactor', tipo: 'novias' }).error, 'Elegí qué son.')
-  assert.equal(vinculoParaGuardar({ a: 'sistemas:operador', b: 'up:redactor', tipo: 'amistad' }).error, 'Elegí a los dos.')
-  assert.deepEqual(mensajesSalidaGrupal([{ de: 'yo', texto: '¿Les gustó?' }, { de: 'pdg:femina', texto: '¡Me encantó!' }], id => (id === 'pdg:femina' ? 'Femina' : id)),
-    [{ role: 'user', content: '¿Les gustó?' }, { role: 'assistant', content: 'Femina: ¡Me encantó!' }])
+  assert.equal(lista[2].titulo, 'Aprobaste: «Calendario de enero»')
+  assert.match(lista[3].texto, /Tres posts por semana/)
 })
