@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, primeroElRespaldo, limpiarMarcas, extraerGrupo, lineasDelGrupo, cumpleDe, conNombres, nombrarVida, validarGeneral, sistemaGeneral, leerGeneral, leerAclarar, sistemaChatInterno, leerChatInterno, charlaReciente, vinculosEstables } from "./logic.mjs";
+import { validar, contexto, armarMensajes, proveedores, validarReunion, mensajesReunion, leerRespuestas, leerSolicitudes, extraerSolicitudes, validarActa, mensajesActa, leerActa, pedidosDelActa, sistemaPropuestas, leerPropuestas, separarInternas, sistemaReunionInterna, leerConversacion, MIN_TURNOS_INTERNA, conHistorial, MAX_HISTORIAL, sistemaVida, leerVida, lineasVida, ELLAS, extraerPareja, ENTRA_SOLA, quienSabe, esNegativa, primeroElRespaldo, limpiarMarcas, extraerGrupo, lineasDelGrupo, cumpleDe, conNombres, nombrarVida, validarGeneral, sistemaGeneral, leerGeneral, leerAclarar, sistemaChatInterno, leerChatInterno, charlaReciente, vinculosEstables, validarSalidaGrupal, sistemaSalidaGrupal } from "./logic.mjs";
 import { ErrorIA, conRespaldo, llamarModelo } from "../_shared/ia.mjs";
 import { AGENTES_UP } from "../_shared/oficina.mjs";
 
@@ -82,7 +82,7 @@ async function vida(db: any) {
   const plantel = [...gente.trabajadores, ...gente.up, ...gente.pdg];
   const desde = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
   const [v, m, g, pub, cor] = await Promise.all([
-    db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto,actualizado").limit(80),
+    db.from("oficina_vinculos").select("a,b,tipo,historia,afinidad,secreto,actualizado,fijo").limit(80),
     db.from("oficina_momentos").select("agentes,tipo,lugar,resumen,fecha").gte("fecha", desde).order("fecha", { ascending: false }).limit(20),
     ultimosGeneral(db),
     publicasDeDaniela(db),
@@ -323,6 +323,33 @@ async function sumarLoPersonal(db: any, participantes: any[], plantel: any[]) {
   }));
 }
 
+// Salida en grupo: Daniela sale con varios (cine, teatro, una cena, su casa…). Contestan los que tengan algo que decir y lo
+// que se dijeron queda en la charla de cada uno, marcado con la salida.
+async function salidaGrupal(db: any, body: any) {
+  const v: any = validarSalidaGrupal(body);
+  if (!v.ok) return json({ error: v.error }, 400);
+  const provs = proveedores(env);
+  if (!provs.length) return json({ error: "Falta configurar la IA." }, 503);
+  let participantes: any[];
+  try {
+    const hilo = await leerHilo(db);
+    participantes = (await Promise.all(v.asistentes.map(async (a: any) => ({ id: a.id, c: contexto(a.equipo, a.clave, await leerDatos(db, a.equipo, a.clave)) })))).filter((p: any) => p.c);
+    await sumarLoPersonal(db, participantes, hilo.plantel);
+  } catch (e) { return json({ error: `No se pudo leer la base: ${(e as Error).message}` }, 500); }
+  if (participantes.length < 2) return json({ error: "No encontré a los que salen." }, 404);
+  try {
+    const { resultado } = await conRespaldo(primeroElRespaldo(provs, true), (prov: any) => llamarModelo(prov, { messages: [{ role: "system", content: sistemaSalidaGrupal(participantes, v.lugar, hoyLargo()) }, ...v.mensajes], temperature: 0.8, max_tokens: 1200 }, { timeoutMs: 90000 }));
+    const respuestas = leerRespuestas((resultado as any)?.content, participantes.map((p: any) => p.id)).map((r: any) => ({ ...r, texto: limpiarMarcas(r.texto) })).filter((r: any) => r.texto);
+    if (!respuestas.length) return json({ error: "Nadie contestó. Probá de nuevo." }, 502);
+    const dijo = v.mensajes.at(-1).content;
+    await guardarConversacion(db, respuestas.flatMap((r: any) => [{ agente: r.agente, de: "daniela", texto: dijo, lugar: "charla", salida: v.lugar }, { agente: r.agente, de: "agente", texto: r.texto, lugar: "charla", salida: v.lugar }]));
+    return json({ respuestas });
+  } catch (e) {
+    if (e instanceof ErrorIA) return json({ error: e.message }, 502);
+    return json({ error: (e as Error).message }, 500);
+  }
+}
+
 // Reunión: una sola llamada a la IA con la ficha de cada asistente; responden los que tengan algo que decir.
 async function reunion(db: any, body: any) {
   const v: any = validarReunion(body);
@@ -471,6 +498,7 @@ Deno.serve(async (req: Request) => {
   if (body?.vida) return await vida(db);
   if (body?.entra) return await entra(db, String(body.entra));
   if (body?.general) return await general(db, body);
+  if (body?.salida_grupal) return await salidaGrupal(db, body);
   const v: any = validar(body);
   if (!v.ok) return json({ error: v.error }, 400);
   const provs = proveedores(env);
