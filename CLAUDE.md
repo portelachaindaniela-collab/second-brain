@@ -15,7 +15,7 @@ Deno, pg_cron).
   cron (que validan `x-trabajador-secreto`).
 
 ## Dónde está cada cosa
-- `src/screens/`: pantallas. `src/oficina*.mjs` y `src/oficina3d/`: la Oficina de agentes (3D con three.js).
+- `src/screens/`: pantallas. `src/oficina*.mjs` y `src/oficina2d/`: la Oficina de agentes (2D en SVG; el diseño sale de `scripts/personajes_oficina.py` y está copiado fiel en `src/oficina2d/dibujo.mjs`).
 - `src/pdg/`: el departamento comercial (PDG). `src/up/`: la app de redes UP.
 - `supabase/functions/<nombre>/`: Edge Functions (`index.ts` + `logic.mjs` puro con tests). Código compartido en
   `supabase/functions/_shared/` (la IA con respaldo está en `_shared/ia.mjs`).

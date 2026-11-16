@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { EQUIPOS } from '../oficina.mjs'
-import { PLAZO_REUNION_S, MAX_ASISTENTES, MAX_OFICINA, asientosEspera, variante } from '../oficinaPlano.mjs'
+import { PLAZO_REUNION_S, MAX_ASISTENTES, MAX_OFICINA, ESPERA_TURNOS as LUGARES_ESPERA, vozDe } from '../oficina2d/reunion.mjs'
 
 // La reunión de la Oficina: convocar (qué áreas y dónde), la llegada (2 minutos), y la reunión en sí, como una
 // videollamada: en la sala todos juntos (ronda de informes y después conversación abierta) o en la oficina de
@@ -9,7 +9,7 @@ import { PLAZO_REUNION_S, MAX_ASISTENTES, MAX_OFICINA, asientosEspera, variante 
 const nombreCorto = n => String(n).split(' (')[0]
 const conversa = a => !a.sinCharla // Administración y Sistemas no tienen IA: escuchan
 const AREAS = ['trabajadores', 'up', 'pdg', 'admin', 'sistemas']
-export const ESPERA_TURNOS = asientosEspera().length
+export const ESPERA_TURNOS = LUGARES_ESPERA
 
 // ---------- Convocar ----------
 // preseleccion: ids de los que vienen de entrada (por ejemplo, el equipo que pidió mostrar un proyecto terminado).
@@ -137,9 +137,9 @@ function useCharla(setHablando, voz, agentes) {
     if (voz && m.de !== 'yo' && 'speechSynthesis' in window) {
       const u = new SpeechSynthesisUtterance(m.texto)
       u.lang = 'es-AR'
-      const v = variante(m.de)
-      u.pitch = 0.8 + v.colorPelo * 0.12
-      u.rate = 1.0 + v.piel * 0.05
+      const v = vozDe(m.de)
+      u.pitch = v.tono
+      u.rate = v.ritmo
       u.onend = fin
       u.onerror = fin
       window.speechSynthesis.speak(u)

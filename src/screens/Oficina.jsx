@@ -1,28 +1,17 @@
-import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabase.js'
-import { colorIdentidad } from '../tablero.mjs'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
 import { comunicados, TIPOS_COMUNICADO, armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, TEXTO_MOMENTO, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, sumarVisita, escenaDeVisitas, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { limpiarMarcas } from '../../supabase/functions/_shared/oficina.mjs'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
-import { PLAZO_REUNION_S, MAX_OFICINA } from '../oficinaPlano.mjs'
+import { PLAZO_REUNION_S, MAX_OFICINA } from '../oficina2d/reunion.mjs'
 import './Oficina.css'
 
-// La oficina en 3D se carga recién al abrir la pantalla (three.js es pesado). Si el equipo no puede mostrar 3D o la
-// escena falla, queda un aviso: los agentes igual están en la lista de abajo.
-const Oficina3D = lazy(() => import('./Oficina3D.jsx'))
-function hayWebGL() {
-  try {
-    const c = document.createElement('canvas')
-    return Boolean(c.getContext('webgl2') || c.getContext('webgl'))
-  } catch { return false }
-}
-class SiFalla extends Component {
-  constructor(props) { super(props); this.state = { fallo: false } }
-  static getDerivedStateFromError() { return { fallo: true } }
-  render() { return this.state.fallo ? this.props.respaldo : this.props.children }
-}
+import Oficina2D from './Oficina2D.jsx'
+import { muestra } from '../oficina2d/escena.mjs'
+import { person } from '../oficina2d/dibujo.mjs'
+import { figuraDe } from '../oficina2d/elenco.mjs'
 
 // La Oficina: todos los agentes (Trabajadores, UP y PDG) en sus salas. Cada uno en su escritorio; la burbuja dice
 // cómo está (trabajando, con un problema, pausado). Tocás uno y ves qué hace, sus tareas, sus herramientas, y podés
@@ -196,7 +185,7 @@ async function hablarConAgente(agente, mensajes, lugar = 'charla') {
 }
 // ---------- Vista ----------
 // reloj: de dónde sale la hora para la luz del día (en la app, la actual; se puede cambiar para probar).
-export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {}, reloj: relojLuz = Date.now,
+export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahora, hablar, hablarReunion, actualizar = async () => {},
   solicitudes = [], actas = [], tareas = [], reuniones = [], decidir = async () => {}, cambiarTarea = async () => {}, marcarPresentada = async () => {}, guardarActa = async () => {},
   momentos = [], general = [], escribirGeneral = async () => {}, correrInterna = correrReunionInterna, anotarEncuentro = anotarEncuentroEnBase, contestarEncuentro = contestarEncuentroEnBase,
   leerConversacion = leerConversacionDeBase, anotarEnConversacion = anotarEnConversacionDeBase, publicarComunicado = async () => {} }) {
@@ -237,7 +226,8 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   }
   const eventos = useMemo(() => eventosOficina({ actas, tareas, solicitudes, reuniones }), [actas, tareas, solicitudes, reuniones])
   // Encuentros a pie: el agente cercano que tiene algo para vos te lo dice. Lo que dejás para después vuelve en un rato.
-  const [cercanos, setCercanos] = useState([])
+  // (Los encuentros a pie eran de la oficina 3D, donde caminabas: en 2D nadie se cruza, así que la lista queda vacía.)
+  const [cercanos] = useState([])
   const [despues, setDespues] = useState(() => new Map())
   // Lo que ya contestaste (en el pasillo o en tu puerta) no te lo vuelven a plantear: queda en su charla y en Mensajes.
   const [contestados] = useState(() => leerGuardados(CLAVE_CONTESTADOS))
@@ -256,18 +246,15 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     if (conversa && !charlas[id]) cargarConversacion(id)
     setPestana(p ?? (conversa ? 'charla' : 'ahora'))
   }
-  const [tres] = useState(hayWebGL)
 
   // ---------- Reunión ----------
   // reunion: { id, modo: 'sala' | 'oficina' | 'turnos', estado: 'convocada' | 'en_curso' | 'volviendo', asistentes, inicio,
-  // empezo, vuelta, turnos: { [id]: { llamado, fin } } }. La escena 3D mueve a los agentes; acá se lleva el estado.
+  // empezo, vuelta, turnos: { [id]: { llamado, fin } } }. La escena 2D muestra a los agentes; acá se lleva el estado.
   const [reunion, setReunion] = useState(null)
   const [convocando, setConvocando] = useState(false)
   const [llegadas, setLlegadas] = useState(null)
   const [hablando, setHablando] = useState(null)
   const [reloj, setReloj] = useState(() => Date.now())
-  const [lejos, setLejos] = useState(false)
-  const [volverDaniela, setVolverDaniela] = useState(0)
   const [escribiendoActa, setEscribiendoActa] = useState(false)
   const activa = Boolean(reunion && reunion.estado !== 'volviendo')
   useEffect(() => {
@@ -297,10 +284,6 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   }
   // Lo de abajo de la escena va en hojas, como un Excel: una sola a la vista (sin un scroll larguísimo).
   const [hojaOficina, setHojaOficina] = useState('tetoca')
-  const verCalendario = useCallback(() => {
-    setHojaOficina('calendario')
-    document.getElementById('oficina-hojas')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
   const empezar = useCallback(async () => {
     // Antes de empezar se vuelve a leer todo: vienen con su información más actualizada.
     setReunion(r => (r && r.estado === 'convocada' ? { ...r, estado: 'preparando' } : r))
@@ -378,7 +361,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   useEffect(() => {
     if (interna?.estado !== 'volviendo') return
     if (interna.fase === 'lista') actualizar()
-    // Si la escena no avisa que volvieron (por ejemplo, sin 3D), se cierra sola.
+    // Si la escena no avisa que volvieron, se cierra sola.
     const id = interna.id
     const t = setTimeout(() => setInterna(x => (x?.id === id ? null : x)), 90000)
     return () => clearTimeout(t)
@@ -416,15 +399,15 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const abierta = useRef(0)
   useEffect(() => { abierta.current = Date.now() }, [])
   useEffect(() => {
-    if (afuera || !tres || golpe || visitas.length || reunion || interna || Date.now() - abierta.current < PRIMER_GOLPE_MS) return
+    if (afuera || golpe || visitas.length || reunion || interna || Date.now() - abierta.current < PRIMER_GOLPE_MS) return
     const fuera = new Set([...pospuestos(despues, ahora), ...golpeados.current, ...contestados, ...(fijo ? [fijo.clave] : [])])
     const quien = quienGolpea(agentes.filter(a => !a.sinCharla).map(a => a.id), { solicitudes, pendientes }, fuera, ultimoGolpe.current, Date.now())
     if (!quien) return
     ultimoGolpe.current = Date.now()
     golpeados.current.add(quien.clave)
     setGolpe({ ...quien, golpe: Date.now(), llego: false, texto: `Toc, toc. ${quien.texto}` })
-  }, [ahora, afuera, tres, golpe, visitas.length, reunion, interna, despues, agentes, solicitudes, pendientes, fijo, contestados])
-  // Si la escena no avisa que llegó (por ejemplo, sin 3D), el aviso aparece igual al rato.
+  }, [ahora, afuera, golpe, visitas.length, reunion, interna, despues, agentes, solicitudes, pendientes, fijo, contestados])
+  // Si la escena no avisa que llegó, el aviso aparece igual al rato.
   useEffect(() => {
     if (!golpe || golpe.llego) return
     const t = setTimeout(() => setGolpe(g => (g && g.golpe === golpe.golpe ? { ...g, llego: true } : g)), 45_000)
@@ -456,7 +439,6 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     delete anotados.current[e.clave]
     if (anotado) contestarEncuentro(e.id, respuesta).catch(() => { /* la charla sigue igual */ })
   }
-  const sin3D = <p className="oficina-sin-3d">Este equipo no puede mostrar la oficina en 3D. Los agentes están en la lista de abajo.</p>
 
   return <div className="oficina">
     <CabeceraPantalla sobretitulo="Agentes" titulo="Oficina" cargando={cargando}
@@ -472,15 +454,13 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
       <Bloque titulo="La oficina" ancho="completo" accion={!cargando && <span className="oficina-acciones">
         <button type="button" className="btn btn-sm" onClick={() => abrirChat('general')}>💬 Chat de la oficina</button>
         <button type="button" className={`btn btn-sm${afuera ? ' btn-primary' : ''}`} onClick={() => cambiarFuera(!afuera)}>{afuera ? 'Volví a la oficina' : '🚪 Me voy de la oficina'}</button>
-        {tres && <button type="button" className="btn btn-sm btn-primary" disabled={Boolean(reunion)} onClick={() => setConvocando(true)}>{reunion ? 'Reunión en curso' : 'Convocar reunión'}</button>}
+        <button type="button" className="btn btn-sm btn-primary" disabled={Boolean(reunion)} onClick={() => setConvocando(true)}>{reunion ? 'Reunión en curso' : 'Convocar reunión'}</button>
       </span>}>
         {cargando ? <p className="empty-state">Abriendo la oficina…</p> : <>
-          {tres
-            ? <SiFalla respaldo={sin3D}><Suspense fallback={<p className="oficina-sin-3d">Abriendo la oficina…</p>}>
-              <Oficina3D agentes={agentes} elegidoId={elegidoId} abrir={abrir} reunion={reunion} hablando={hablando ?? hablaInterna}
+          <Oficina2D agentes={agentes} elegidoId={elegidoId} abrir={abrir} reunion={reunion} hablando={hablando ?? hablaInterna}
                 reunionInterna={interna} alTerminoInterna={alTerminoInterna} visita={visitaEscena} alLlegoVisita={alLlegoVisita}
-                alPlanificar={alPlanificar} alVolvieron={alVolvieron} volverDaniela={volverDaniela} alMoverDaniela={setLejos}
-                pantallaCompleta={enCurso} reloj={relojLuz} calendario={eventos} alTocarPizarron={verCalendario} alCruzarse={setCercanos}>
+                alPlanificar={alPlanificar} alVolvieron={alVolvieron} pantallaCompleta={enCurso} conDani={!afuera}
+                visitantes={[...visitas.map(v => v.agente), ...(golpe ? [golpe.id] : [])]}>
                 {!superpuesto && cartel && <AvisoInterna interna={cartel} agentes={agentes} cerrar={() => { cerrados.current.add(cartel.id); setCartel(null) }} />}
                 {superpuesto ?? (visto && <Encuentro key={`${visto.clave}${visto === enPuerta ? '-puerta' : ''}`} encuentro={visto} agente={agentes.find(a => a.id === visto.id)} decidir={decidir}
                   puerta={visto === enPuerta} responder={responder} convocar={reunion ? null : arrancarReunionPedida}
@@ -488,14 +468,11 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
                   hablar={id => { if (visto === enPuerta) { setGolpe(null); venir(id, true) } else setFijo(null); abrir(id, 'charla') }}
                   seguime={id => { if (visto === enPuerta) setGolpe(null); venir(id, visto === enPuerta); abrir(id, 'charla') }}
                   despues={() => { setDespues(d => new Map(d).set(visto.clave, Date.now() + POSPONER_ENCUENTRO_MS)); if (visto === enPuerta) setGolpe(null) }} />)}
-              </Oficina3D>
-            </Suspense></SiFalla>
-            : sin3D}
-          {tres && <div className="oficina-ayuda">
-            <span>Arrastrá para moverte · botón derecho o ⟲ ⟳ para girar · rueda, + y − para acercar · tocá un agente para ver qué hace · <strong>doble click</strong> en el piso para caminar vos · <strong>🚶</strong> para recorrerla a pie, como en Street View.</span>
-            {lejos && <button type="button" className="btn btn-sm" onClick={() => setVolverDaniela(n => n + 1)}>Volver a mi escritorio</button>}
+              </Oficina2D>
+          <div className="oficina-ayuda">
+            <span>Arrastrá para moverte · rueda, dos dedos o + y − para acercar · ⌂ vuelve al inicio · tocá un agente para ver qué está haciendo.</span>
             <SonidoOficina />
-          </div>}
+          </div>
           <Leyenda />
           <nav className="oficina-plantel" aria-label="Todos los agentes">
             {agentes.map(a => <button key={a.id} type="button" className={`oficina-ficha estado-${a.estado}${a.id === elegidoId ? ' is-elegido' : ''}`} onClick={() => abrir(a.id)}
@@ -879,7 +856,7 @@ function ChatsCompaneros({ momentos, agentes }) {
 
 // ---------- Calendario ----------
 // El calendario interno de la oficina: reuniones que se hicieron, las agendadas, las que esperan tu OK y las fechas
-// límite de las tareas. Es lo mismo que muestran los pizarrones de la oficina 3D.
+// límite de las tareas.
 const TIPO_EVENTO = { reunion: 'Reunión', agendada: 'Reunión agendada', interna: 'Reunión interna', propuesta: 'Reunión por aprobar', vence: 'Vence', hecha: 'Hecha' }
 function CalendarioOficina({ eventos, ahora }) {
   const hoy = hoyAR(ahora)
@@ -962,12 +939,22 @@ function Archivo({ actas, tareas, agentes, escribiendo, cambiarTarea, ahora }) {
   </>
 }
 
+// La leyenda: cada estado con su dibujo (el mismo de la escena) y dónde está ese agente.
+const LEYENDA = [
+  ['work', 'Trabajando', 'en su escritorio, pantalla en verde'],
+  ['problem', 'Con un problema', 'manos en la cabeza, pantalla en rojo'],
+  ['break', 'En descanso', 'de pie en el café, con una taza'],
+  ['sleep', 'Pausado', 'en el sillón de descanso'],
+]
 function Leyenda() {
   return <ul className="oficina-leyenda" aria-label="Qué significa lo que se ve">
-    <li><span className="burbuja-muestra estado-trabajando">…</span>tecleando, pantalla en verde: trabajando</li>
-    <li><span className="burbuja-muestra estado-error">!</span>agarrándose la cabeza, pantalla en rojo: con un problema</li>
-    <li><span className="burbuja-muestra">☕</span>en la cafetería, el comedor, el ocio o el ping pong: libre, en su descanso</li>
-    <li><span className="burbuja-muestra">z</span>durmiendo en un puf: pausado</li>
+    {LEYENDA.map(([pose, titulo, texto]) => {
+      const m = muestra(pose)
+      return <li key={pose}>
+        <svg className="oficina-leyenda-dibujo" viewBox={m.vista} aria-hidden="true" dangerouslySetInnerHTML={{ __html: m.svg }} />
+        <span><strong>{titulo}</strong><span className="tenue">{texto}</span></span>
+      </li>
+    })}
   </ul>
 }
 
@@ -982,17 +969,12 @@ function ActividadAhora({ agentes, abrir }) {
   </li>)}</ul>
 }
 
-// Color de la ropa: el de identidad para los trabajadores (el mismo de sus gráficos); el de su sala para los demás.
-function colorRopa(a) {
-  return a.color ? colorIdentidad(a.color) : `var(--oficina-ropa-${a.equipo})`
-}
 
+// La carita del agente: la cabeza y los hombros de su personaje de la escena (la misma persona en toda la pantalla).
 function Avatar({ agente }) {
-  return <svg className={`oficina-avatar estado-${agente.estado}`} viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-    <path d="M4 23 C4 16 20 16 20 23 Z" style={{ fill: colorRopa(agente) }} />
-    <circle cx="12" cy="9" r="5.2" className="oficina-piel" />
-    <path d="M6.8 8.4 C7 3.6 17 3.6 17.2 8.4 C15 6.6 9 6.6 6.8 8.4 Z" className="oficina-pelo" />
-  </svg>
+  const svg = useMemo(() => person(figuraDe(agente.id), 'stand'), [agente.id])
+  return <svg className={`oficina-avatar estado-${agente.estado}`} viewBox="-32 -206 64 64" width="24" height="24" aria-hidden="true"
+    dangerouslySetInnerHTML={{ __html: svg }} />
 }
 
 // ---------- Panel del agente ----------
