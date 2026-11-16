@@ -610,3 +610,19 @@ export function comunicados({ general = [], solicitudes = [], actas = [], tareas
   for (const a of agentes) if (a.estado === 'error') lista.push({ id: `e${a.id}`, tipo: 'aviso', fecha: new Date(ahora).toISOString(), titulo: `${nombre(a.id)} tiene un problema`, texto: a.ahora || 'Revisá su registro.', problema: true })
   return lista.filter(x => x.fecha && Number.isFinite(Date.parse(x.fecha))).sort((p, q) => Date.parse(q.fecha) - Date.parse(p.fecha)).slice(0, max)
 }
+
+// ---------- Vínculos que arma Daniela ----------
+// Un vínculo entre dos agentes elegido por Daniela: queda fijo (la vida de la oficina no lo cambia). Devuelve la fila
+// lista para guardar (a < b, como pide la base) o { error }.
+const ID_VINCULO = /^(trabajadores|up|pdg):[a-z_]{1,40}$/
+export function vinculoParaGuardar({ a, b, tipo, afinidad = 0, secreto = false, historia = '' } = {}) {
+  if (!ID_VINCULO.test(String(a)) || !ID_VINCULO.test(String(b))) return { error: 'Elegí a los dos.' }
+  if (a === b) return { error: 'Elegí dos personas distintas.' }
+  if (!TEXTO_VINCULO[tipo]) return { error: 'Elegí qué son.' }
+  const [x, y] = a < b ? [a, b] : [b, a]
+  const af = Math.max(-100, Math.min(100, Math.round(Number(afinidad) || 0)))
+  return { a: x, b: y, tipo, afinidad: af, secreto: Boolean(secreto), historia: String(historia ?? '').trim().slice(0, 600), fijo: true }
+}
+// La charla de una salida en grupo, para mandarla a la IA: lo tuyo como tuyo y lo de cada uno con su nombre.
+export const mensajesSalidaGrupal = (mensajes = [], nombre = x => x) => mensajes.slice(-16)
+  .map(m => (m.de === 'yo' ? { role: 'user', content: m.texto } : { role: 'assistant', content: `${nombre(m.de)}: ${m.texto}` }))

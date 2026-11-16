@@ -55,6 +55,11 @@ export const SALIDAS = {
   cafe: { marca: 'salieron a tomar un café', escena: 'salieron a tomar un café a la vuelta de la oficina' },
   after: { marca: 'en un after office', escena: 'están en un after office, tomando algo después del trabajo' },
   caminata: { marca: 'salieron a caminar', escena: 'salieron a dar una caminata por el barrio' },
+  cena: { marca: 'salieron a cenar', escena: 'salieron a cenar a un restaurante, de noche, sin apuro' },
+  cine: { marca: 'fueron al cine', escena: 'fueron al cine: charlan antes de entrar, en voz baja durante la película o a la salida, comentándola' },
+  teatro: { marca: 'fueron al teatro', escena: 'fueron al teatro: charlan en el hall, en el entreacto o a la salida, comentando la obra' },
+  mi_casa: { marca: 'en la casa de Daniela', escena: 'están en la casa de Daniela: ella invitó' },
+  su_casa: { marca: 'en tu casa', escena: 'están en tu casa: vos invitaste a Daniela' },
 }
 export const LUGARES = ['charla', 'pasillo', 'reunion']
 // La negativa enlatada de la IA («Lo siento, pero no puedo ayudar con eso.»): no es una respuesta del agente. Se pasa a la
@@ -363,6 +368,38 @@ function personalEnFicha(c) {
 // Lo último de la charla de a uno de un agente con Daniela, para la reunión (filas de oficina_conversacion, la más vieja primero).
 export const charlaReciente = (filas = [], n = 8) => (filas || []).filter(f => !(f.de !== 'daniela' && esNegativa(f.texto))).slice(-n)
   .map(f => `  · ${f.de === 'daniela' ? 'Daniela' : 'respondió'}: ${recortar(limpiarMarcas(f.texto), 220)}`)
+
+// ---------- Salida en grupo ----------
+// Daniela sale con varios a la vez (amigos, compañeros): cine, teatro, una cena, su casa… Es una charla de la vida, sin
+// pedidos. { salida_grupal: { lugar, asistentes }, mensajes }. Cada uno es la misma persona que en su charla de a uno.
+export const SALIDAS_GRUPO = Object.keys(SALIDAS).filter(s => s !== 'su_casa')
+export function validarSalidaGrupal(body) {
+  const lugar = body?.salida_grupal?.lugar
+  if (!SALIDAS_GRUPO.includes(lugar)) return { ok: false, error: 'Elegí a dónde salen.' }
+  const v = validarReunion({ asistentes: body?.salida_grupal?.asistentes, mensajes: body?.mensajes })
+  if (!v.ok) return v
+  if (v.asistentes.length < 2 || v.asistentes.length > 6) return { ok: false, error: 'Elegí entre 2 y 6 para salir.' }
+  return { ...v, lugar }
+}
+export function sistemaSalidaGrupal(participantes, lugar, hoy) {
+  const fichas = participantes.map(({ id, c }) => [`### ${c.nombre} (id: ${id}) — ${generoDe(id) === 'f' ? 'mujer' : 'varón'}`, ...personalEnFicha(c)].join('\n')).join('\n\n')
+  return `Daniela salió con un grupo de la Oficina de agentes de su Second Brain: ${SALIDAS[lugar].escena}. Hoy es ${hoy}.
+Vos das voz a los que fueron. Es una salida entre amigos, no trabajo: de la vida, gustos, planes, lo que estén viendo o
+comiendo, chistes, anécdotas de la oficina. Nada de pedidos ni permisos.
+
+Quiénes fueron y cómo es cada uno con Daniela (es la misma persona que en sus charlas a solas con ella):
+
+${fichas}
+
+Cómo se responde:
+- Contestan 1 a 3 (los que tengan algo que decir; si Daniela nombra a alguien, contesta ese). 1 o 2 oraciones cada uno, en
+  español rioplatense, con su personalidad. Pueden hablarse entre ellos y retomar lo que dijo otro.
+- Lo que cada uno tiene con Daniela vale acá, pero lo privado (lo que no es público) no se dice delante de los demás:
+  se nota en un gesto o una mirada, nada más. Puede haber celos o complicidades, con respeto y nada explícito.
+- Nadie dice que es un programa ni que no puede hablar de algo personal. Nunca escribas marcas entre corchetes.
+
+Respondé SOLO con JSON: {"respuestas":[{"agente":"<id exacto de la lista>","texto":"..."}]}`
+}
 
 // Los mensajes de los agentes vuelven al modelo como "Nombre: texto" para que sepa quién dijo qué.
 export function mensajesReunion(participantes, mensajes, hoy, hilo) {
@@ -769,6 +806,7 @@ export function vinculosEstables(nuevos = [], existentes = [], conDaniela = [], 
   const conRomance = new Set(conDaniela.filter(x => ROMANCE.has(x.estado)).map(x => x.agente))
   return nuevos.filter(v => {
     const p = previo.get(`${v.a}|${v.b}`)
+    if (p?.fijo) return false // lo armó Daniela: no se toca
     if (p && p.tipo !== v.tipo && ahora - Date.parse(p.actualizado ?? 0) < dias * 86400000) return false
     if (ROMANCE_ENTRE.has(v.tipo) && (conRomance.has(v.a) || conRomance.has(v.b))) return false
     return true

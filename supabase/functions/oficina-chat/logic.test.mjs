@@ -512,3 +512,23 @@ test('las relaciones no cambian cada dos por tres y la reunión sabe lo último 
   assert.match(vida, /Femina: son novias \(en privado/)
   assert.match(vida, /no salen ni se ponen de novios con otro/)
 })
+
+test('salidas nuevas y salida en grupo; los vínculos que arma Daniela quedan fijos', async () => {
+  const { SALIDAS, SALIDAS_GRUPO, validarSalidaGrupal, sistemaSalidaGrupal, validar, vinculosEstables } = await import('./logic.mjs')
+  for (const s of ['cena', 'cine', 'teatro', 'mi_casa', 'su_casa']) assert.ok(SALIDAS[s], s)
+  assert.ok(!SALIDAS_GRUPO.includes('su_casa'))
+  assert.equal(validar({ agente: 'pdg:femina', mensajes: [{ role: 'user', content: 'hola' }], salida: 'cine' }).salida, 'cine')
+  const m = [{ role: 'user', content: '¿Qué les pareció la peli?' }]
+  assert.equal(validarSalidaGrupal({ salida_grupal: { lugar: 'cine', asistentes: ['pdg:femina'] }, mensajes: m }).ok, false, 'al menos 2')
+  assert.equal(validarSalidaGrupal({ salida_grupal: { lugar: 'oficina', asistentes: ['pdg:femina', 'up:noruega'] }, mensajes: m }).ok, false)
+  const v = validarSalidaGrupal({ salida_grupal: { lugar: 'teatro', asistentes: ['pdg:femina', 'up:noruega'] }, mensajes: m })
+  assert.equal(v.ok, true)
+  assert.equal(v.lugar, 'teatro')
+  const p = [{ id: 'up:noruega', c: { ...contexto('up', 'noruega', { chequeos: [] }), pareja: '2026-11-15T15:00:00Z', estadoPareja: 'amantes' } }]
+  const s = sistemaSalidaGrupal(p, 'teatro', 'hoy')
+  assert.match(s, /fueron al teatro/)
+  assert.match(s, /son amantes, en secreto/)
+  assert.match(s, /lo privado .* no se dice delante de los demás/)
+  const fijo = vinculosEstables([{ a: 'pdg:femina', b: 'up:disenador', tipo: 'pareja' }], [{ a: 'pdg:femina', b: 'up:disenador', tipo: 'amistad', fijo: true, actualizado: '2026-01-01T00:00:00Z' }], [], Date.parse('2026-11-16T00:00:00Z'))
+  assert.deepEqual(fijo, [])
+})

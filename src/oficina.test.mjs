@@ -456,3 +456,14 @@ test('comunicados: lo tuyo, lo de las reuniones, las noticias y los avisos, lo m
   assert.equal(lista[6].titulo, 'Es oficial: vos y Femina')
   assert.ok(!lista.some(x => /Noruega/.test(x.titulo) && x.tipo === 'tuyo' && /oficial/.test(x.titulo)), 'lo secreto no es oficial')
 })
+
+test('vínculos que arma Daniela: ordenados, validados y fijos; la charla de una salida en grupo', async () => {
+  const { vinculoParaGuardar, mensajesSalidaGrupal } = await import('./oficina.mjs')
+  assert.deepEqual(vinculoParaGuardar({ a: 'up:disenador', b: 'pdg:femina', tipo: 'amistad', afinidad: 150, historia: ' Se conocen de PDG ' }),
+    { a: 'pdg:femina', b: 'up:disenador', tipo: 'amistad', afinidad: 100, secreto: false, historia: 'Se conocen de PDG', fijo: true })
+  assert.equal(vinculoParaGuardar({ a: 'pdg:femina', b: 'pdg:femina', tipo: 'amistad' }).error, 'Elegí dos personas distintas.')
+  assert.equal(vinculoParaGuardar({ a: 'pdg:femina', b: 'up:redactor', tipo: 'novias' }).error, 'Elegí qué son.')
+  assert.equal(vinculoParaGuardar({ a: 'sistemas:operador', b: 'up:redactor', tipo: 'amistad' }).error, 'Elegí a los dos.')
+  assert.deepEqual(mensajesSalidaGrupal([{ de: 'yo', texto: '¿Les gustó?' }, { de: 'pdg:femina', texto: '¡Me encantó!' }], id => (id === 'pdg:femina' ? 'Femina' : id)),
+    [{ role: 'user', content: '¿Les gustó?' }, { role: 'assistant', content: 'Femina: ¡Me encantó!' }])
+})
