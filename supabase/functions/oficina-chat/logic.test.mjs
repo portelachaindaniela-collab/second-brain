@@ -301,7 +301,8 @@ test('Femina, María y Noruega: su persona, la relación con Daniela y la línea
   assert.match(b, /noruego/)
   assert.match(b, /conflictos/)
   assert.match(b, /sin insultos, amenazas ni manipulación/)
-  assert.match(b, /PAREJA: sí/)
+  assert.doesNotMatch(b, /PAREJA:/, 'la relación la cambia Daniela en la app, no el agente')
+  assert.match(b, /el cambio lo hace ella/)
   assert.match(bloquePersona({ ...c, pareja: '2026-11-15T15:00:00Z' }), /son novias desde/)
   assert.match(bloquePersona({ ...c, pareja: '2026-11-15T15:00:00Z', estadoPareja: 'casadas' }), /están casadas desde/)
   assert.match(b, /otras personas no lo sabés/)
@@ -398,7 +399,7 @@ test('Con cualquier agente: relación personal elegida por Daniela, en el géner
   // Femina como amiga: le sigue gustando y puede pedirle ser pareja.
   const amiga = bloquePersona({ ...contexto('pdg', 'femina', { agente: { nombre: 'Femina' } }), pareja: '2026-11-15T15:00:00Z', estadoPareja: 'amistad' })
   assert.match(amiga, /son amigas desde/)
-  assert.match(amiga, /PAREJA: sí/)
+  assert.match(amiga, /le podés pedir que sea tu pareja/)
 })
 
 test('En la reunión cada agente es la misma persona que en la charla: personalidad y relación con Daniela', async () => {
@@ -489,4 +490,25 @@ test('los malentendidos se arreglan por chat: entre compañeros sin reunión y c
   assert.ok(MOMENTOS.chat)
   assert.deepEqual(leerAclarar('{"respuestas":[],"aclarar":[{"agente":"pdg:femina","texto":"¿Lo hablamos?"},{"agente":"up:otro","texto":"no"}]}', ['pdg:femina']), [{ agente: 'pdg:femina', texto: '¿Lo hablamos?' }])
   assert.match(sistemaGeneral([{ id: 'pdg:femina', nombre: 'Femina' }], [], [], [], 'hoy'), /"aclarar"/)
+})
+
+test('las relaciones no cambian cada dos por tres y la reunión sabe lo último que habló cada uno con Daniela', async () => {
+  const { vinculosEstables, charlaReciente, sistemaReunion, sistemaVida } = await import('./logic.mjs')
+  const ahora = Date.parse('2026-11-16T12:00:00Z')
+  const existentes = [{ a: 'pdg:femina', b: 'up:disenador', tipo: 'amistad', actualizado: '2026-11-15T16:00:00Z' }, { a: 'pdg:demo', b: 'pdg:marketing', tipo: 'amistad', actualizado: '2026-11-01T16:00:00Z' }]
+  const nuevos = [
+    { a: 'pdg:femina', b: 'up:disenador', tipo: 'rivalidad' }, // cambió ayer: no se toca
+    { a: 'pdg:demo', b: 'pdg:marketing', tipo: 'mejores_amigos' }, // hace días: puede cambiar
+    { a: 'pdg:femina', b: 'up:redactor', tipo: 'saliendo' }, // Femina está con Daniela: no sale con otro
+    { a: 'pdg:femina', b: 'up:redactor', tipo: 'amistad' },
+  ]
+  const r = vinculosEstables(nuevos, existentes, [{ agente: 'pdg:femina', estado: 'novias' }], ahora)
+  assert.deepEqual(r.map(v => `${v.a}|${v.b}|${v.tipo}`), ['pdg:demo|pdg:marketing|mejores_amigos', 'pdg:femina|up:redactor|amistad'])
+  const charla = charlaReciente([{ de: 'daniela', texto: 'Hablemos de los límites' }, { de: 'agente', texto: 'Dale, te escucho.' }])
+  assert.deepEqual(charla, ['  · Daniela: Hablemos de los límites', '  · respondió: Dale, te escucho.'])
+  const c = { ...contexto('up', 'noruega', { chequeos: [] }), charla }
+  assert.match(sistemaReunion([{ id: 'up:noruega', c }], 'hoy', {}), /Lo último que habló a solas con Daniela[\s\S]*Hablemos de los límites/)
+  const vida = sistemaVida([{ id: 'pdg:femina', nombre: 'Femina' }], [], [], 'hoy', { conDaniela: [{ agente: 'pdg:femina', estado: 'novias', saben: [] }] })
+  assert.match(vida, /Femina: son novias \(en privado/)
+  assert.match(vida, /no salen ni se ponen de novios con otro/)
 })

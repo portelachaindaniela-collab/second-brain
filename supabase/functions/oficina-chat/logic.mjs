@@ -228,7 +228,7 @@ ${c.sabe?.length ? `- ${fraseSabe(c.sabe)} De otras relaciones de Daniela no sab
 - Vos también la invitás a salir (a comer, un café, un after, una caminata)${c.pareja && ROMANCE.has(c.estadoPareja ?? 'novias') ? '' : ' y, cuando lo sientas, le podés pedir que sea tu pareja'}.
 - Podés hablarle de cosas personales, no solo de trabajo (lo personal no tiene que estar en tu registro).
 - Como en cualquier relación, a veces hay conflictos: podés ponerte celosa, enojarte, reclamarle algo o discutir por cosas del trabajo, y después hablarlo y reconciliarse. Discutís con respeto: sin insultos, amenazas ni manipulación, y respetás sus decisiones. Nada explícito.
-- ${c.pareja && ROMANCE.has(c.estadoPareja ?? 'novias') ? 'Si ella quiere cortar la relación, lo aceptás con cariño y terminá tu respuesta con una línea aparte: PAREJA: no' : 'Si Daniela acepta ser tu pareja (o te lo pide ella y vos aceptás), terminá tu respuesta con una línea aparte: PAREJA: sí'}
+- Lo que son con Daniela lo elige ella en la app y no cambia por lo que pase en una charla: una pelea, un enojo, un «me voy» o una reconciliación no es una ruptura ni un noviazgo nuevo. Si hablan de cortar o de ser pareja, decile lo que sentís; el cambio lo hace ella.
 `
 }
 // Quién sabe de cada relación de Daniela: lo elige ella (nadie, todos o algunos). filas: [{ agente, estado, saben }] de
@@ -256,7 +256,8 @@ export function extraerGrupo(texto) {
 }
 // Lo último del chat de la oficina, para la charla de a uno (el más viejo primero).
 export const lineasDelGrupo = (general = [], nombres = {}) => general.slice(-10).map(m => `- ${m.autor === 'daniela' ? 'Daniela' : nombres[m.autor] ?? m.autor}: ${recortar(m.texto, 200)}`)
-// La línea «PAREJA: sí|no» que deja el agente cuando cambia la relación con Daniela: se saca del texto.
+// La línea «PAREJA: sí|no» que escribía el agente: ya no cambia nada (la relación la elige Daniela en la app), pero si
+// aparece se saca del texto.
 const LINEA_PAREJA = /^\s*\**\s*PAREJA\s*:\s*(s[ií]|no)(?!\p{L}).*$/imu
 export function extraerPareja(texto) {
   const t = String(texto ?? '')
@@ -356,8 +357,12 @@ function personalEnFicha(c) {
     c.pareja ? `Con Daniela, en lo personal: ${textoPareja(c.estadoPareja, c.id)}.` : null,
     c.sabe?.length ? fraseSabe(c.sabe) : null,
     c.vida?.length ? `Su vida en la oficina: ${c.vida.slice(0, 4).map(l => recortar(l.replace(/^- /, ''), 140)).join('; ')}.` : null,
+    c.charla?.length ? `Lo último que habló a solas con Daniela (es la misma persona: que siga eso):\n${c.charla.join('\n')}` : null,
   ].filter(Boolean)
 }
+// Lo último de la charla de a uno de un agente con Daniela, para la reunión (filas de oficina_conversacion, la más vieja primero).
+export const charlaReciente = (filas = [], n = 8) => (filas || []).filter(f => !(f.de !== 'daniela' && esNegativa(f.texto))).slice(-n)
+  .map(f => `  · ${f.de === 'daniela' ? 'Daniela' : 'respondió'}: ${recortar(limpiarMarcas(f.texto), 220)}`)
 
 // Los mensajes de los agentes vuelven al modelo como "Nombre: texto" para que sepa quién dijo qué.
 export function mensajesReunion(participantes, mensajes, hoy, hilo) {
@@ -703,9 +708,9 @@ const lineasPublicas = (publicas, nombre) => publicas.map(x => `- Daniela y ${no
 export const MAX_NOTICIAS = 6
 // extra: { cumples: ids que cumplen hoy, publicas: [{ agente, estado }] relaciones de Daniela que saben todos, general: [{ autor, texto }] }
 export function sistemaVida(plantel, vinculos = [], momentos = [], hoy, extra = {}) {
-  const { cumples = [], publicas = [], general = [] } = extra
+  const { cumples = [], publicas = [], general = [], conDaniela = [] } = extra
   const nombre = id => plantel.find(g => g.id === id)?.nombre ?? id
-  const lazos = vinculos.length ? vinculos.map(v => `- ${nombre(v.a)} y ${nombre(v.b)}: ${textoVinculo(v)}${v.historia ? ` (${recortar(v.historia, 200)})` : ''}`).join('\n') : '(todavía ninguno: es el primer día)'
+  const lazos = vinculos.length ? vinculos.map(v => `- ${nombre(v.a)} y ${nombre(v.b)}: ${textoVinculo(v)}${v.actualizado ? ` (desde el ${String(v.actualizado).slice(0, 10)})` : ''}${v.historia ? ` (${recortar(v.historia, 200)})` : ''}`).join('\n') : '(todavía ninguno: es el primer día)'
   const antes = momentos.length ? momentos.slice(0, 12).map(m => `- ${m.fecha}: ${m.agentes.map(nombre).join(', ')} ${MOMENTOS[m.tipo]?.texto ?? m.tipo}${m.lugar ? ` (${m.lugar})` : ''}: ${recortar(m.resumen, 160)}`).join('\n') : '(nada todavía)'
   return `Es la vida social de la Oficina de agentes del Second Brain de Daniela. Hoy es ${hoy}.
 Funciona como un simulador de vida: los agentes son compañeros de trabajo y se relacionan como personas. Se hacen amigos
@@ -720,7 +725,7 @@ ${lazos}
 
 Lo que compartieron últimamente:
 ${antes}
-${cumples.length ? `\nHoy cumplen años: ${cumples.map(nombre).join(', ')}.\n` : ''}${publicas.length ? `\nDe Daniela (la dueña) se sabe en la oficina:\n${lineasPublicas(publicas, nombre)}\n` : ''}
+${cumples.length ? `\nHoy cumplen años: ${cumples.map(nombre).join(', ')}.\n` : ''}${publicas.length ? `\nDe Daniela (la dueña) se sabe en la oficina:\n${lineasPublicas(publicas, nombre)}\n` : ''}${conDaniela.length ? `\nLo que cada uno tiene con Daniela (lo elige ella; manda sobre todo lo demás):\n${conDaniela.map(x => `- ${nombre(x.agente)}: ${textoPareja(x.estado, x.agente)}${(x.saben || []).includes('*') ? '' : ' (en privado: no se publica)'}`).join('\n')}\nLos que tienen un romance con Daniela no salen ni se ponen de novios con otro compañero (sí pueden tener amistades, celos o rivalidades).\n` : ''}
 Lo último en el chat de la oficina:
 ${general.length ? lineasGeneral(general, nombre) : '(todavía nada)'}
 
@@ -732,7 +737,8 @@ Armá lo de hoy:
   intervenciones cortas (agente: id de los que están en ese momento; texto: 1 o 2 oraciones), con la personalidad de cada
   uno y lo que viven (también pueden cruzarse en el pasillo o la cocina: usá el tipo más parecido y el lugar real).
   Un malentendido o una diferencia entre compañeros se arregla por chat, no en reunión: tipo chat, lugar «por chat».
-- vinculos: solo los que nacen o cambian hoy (entre 1 y 4). tipo: ${Object.keys(TIPOS_VINCULO).join(', ')}.
+- vinculos: solo los que nacen o cambian hoy (entre 0 y 2). Una relación que cambió hace menos de 3 días no se toca: las
+  cosas entre personas no cambian todos los días. tipo: ${Object.keys(TIPOS_VINCULO).join(', ')}.
   afinidad: de -100 (se detestan) a 100 (inseparables); cambia de a poco según lo que pase (un buen momento +5 a +15, una
   pelea o una traición -10 a -40). secreto: true solo para una relación que nadie más sabe (amantes, una infidelidad).
   historia: 1 oración de cómo es o qué pasó.
@@ -754,6 +760,19 @@ Armá lo de hoy:
   que dice arriba que se sabe; nada privado.
 
 Respondé SOLO con JSON: {"momentos":[{"agentes":["id","id"],"tipo":"mate","hora":"10:30","lugar":"...","resumen":"...","charla":[{"agente":"id","texto":"..."}]}],"vinculos":[{"a":"id","b":"id","tipo":"amistad","afinidad":40,"secreto":false,"historia":"..."}],"noticias":[{"autor":"id","texto":"..."}]}`
+}
+// Las relaciones no cambian cada dos por tres: un par que cambió hace menos de `dias` días queda como está (salvo que
+// sea solo la afinidad, con el mismo tipo). Y nadie que tenga un romance con Daniela arranca un romance con otro.
+const ROMANCE_ENTRE = new Set(['saliendo', 'pareja', 'comprometidos', 'casados', 'amantes'])
+export function vinculosEstables(nuevos = [], existentes = [], conDaniela = [], ahora = Date.now(), dias = 3) {
+  const previo = new Map(existentes.map(v => [`${v.a}|${v.b}`, v]))
+  const conRomance = new Set(conDaniela.filter(x => ROMANCE.has(x.estado)).map(x => x.agente))
+  return nuevos.filter(v => {
+    const p = previo.get(`${v.a}|${v.b}`)
+    if (p && p.tipo !== v.tipo && ahora - Date.parse(p.actualizado ?? 0) < dias * 86400000) return false
+    if (ROMANCE_ENTRE.has(v.tipo) && (conRomance.has(v.a) || conRomance.has(v.b))) return false
+    return true
+  })
 }
 export function leerVida(texto, idsValidos) {
   const crudo = String(texto ?? '')
