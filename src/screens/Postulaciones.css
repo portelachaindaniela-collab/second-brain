@@ -155,3 +155,44 @@
 .postu-leyenda strong, .postu-col-n, .postu-tiempo-n, .postu-puestos strong { font-family:var(--font-mono); letter-spacing:-.02em; }
 .postu-col-n, .postu-leyenda strong { text-shadow:0 0 12px color-mix(in srgb, var(--postu-violeta) 35%, transparent); }
 .postu-tiempo-etiqueta, .postu-col-titulo { font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.06em; font-size:var(--letra-11); }
+
+/* Pestañas Planilla / Agente y el panel del agente de Postulaciones */
+.postu-vistas { display:inline-flex; gap:var(--esp-2); padding:var(--esp-2); margin-bottom:var(--esp-16); border-radius:var(--radius); background:var(--surface-inset); }
+.postu-vistas button { padding:var(--esp-4) var(--esp-12); border:0; border-radius:var(--radius-sm); background:transparent; color:var(--gray-500); font:inherit; font-size:var(--letra-13); cursor:pointer; }
+.postu-vistas button.activo { background:var(--surface-raised); color:var(--gray-900); }
+.postu-agente { display:grid; grid-template-columns:minmax(0, 1.6fr) minmax(280px, 1fr); gap:var(--esp-16); align-items:start; }
+.postu-agente-chat, .postu-cvs { display:flex; flex-direction:column; gap:var(--esp-12); padding:var(--esp-16); border:1px solid var(--gray-200); border-radius:var(--radius); background:var(--white); }
+.postu-agente-cab { display:flex; justify-content:space-between; align-items:flex-start; gap:var(--esp-12); }
+.postu-agente-cab small { display:block; color:var(--gray-500); font-size:var(--letra-12); }
+.postu-agente-aviso { padding:var(--esp-8) var(--esp-12); border-radius:var(--radius-sm); background:var(--gray-50); font-size:var(--letra-13); color:var(--gray-700); }
+.postu-agente-aviso p { margin:0 0 var(--esp-8); }
+.postu-agente-aviso p:last-child { margin:0; }
+.postu-agente-aviso.fuerte { background:var(--red-100); color:var(--red-600); font-weight:600; }
+.postu-agente-mensajes { display:flex; flex-direction:column; gap:var(--esp-8); min-height:240px; max-height:60vh; overflow-y:auto; }
+.postu-msj { max-width:88%; padding:var(--esp-8) var(--esp-12); border-radius:var(--radius); font-size:var(--letra-14); }
+.postu-msj p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.postu-msj.m-user { align-self:flex-end; background:var(--accent-100); }
+.postu-msj.m-bot { align-self:flex-start; background:var(--gray-100); }
+.postu-msj.error { background:var(--red-100); color:var(--red-600); }
+.postu-msj-uso { display:block; margin-top:var(--esp-4); color:var(--gray-500); font-size:var(--letra-11); }
+.postu-msj-acciones { margin:var(--esp-4) 0 0; padding-left:var(--esp-16); font-size:var(--letra-12); color:var(--gray-700); }
+.postu-msj-pensando { margin:0; color:var(--gray-500); font-size:var(--letra-13); }
+.postu-capturas { display:flex; flex-wrap:wrap; gap:var(--esp-8); margin:0; padding:0; list-style:none; }
+.postu-capturas li { position:relative; }
+.postu-capturas img { width:64px; height:64px; object-fit:cover; border-radius:var(--radius-sm); border:1px solid var(--gray-200); }
+.postu-capturas button { position:absolute; top:-6px; right:-6px; width:20px; height:20px; border:0; border-radius:50%; background:var(--gray-900); color:var(--white); cursor:pointer; line-height:1; }
+.postu-agente-pie { display:flex; gap:var(--esp-8); align-items:flex-end; }
+.postu-agente-pie textarea { flex:1; min-width:0; resize:vertical; font:inherit; font-size:var(--letra-14); }
+.postu-cvs h2, .postu-cvs h3 { margin:0; font-size:var(--letra-16); }
+.postu-cvs h3 { font-size:var(--letra-14); margin-top:var(--esp-8); }
+.postu-cvs .postu-nota { margin:0; }
+.postu-cvs-lista { display:flex; flex-direction:column; gap:var(--esp-8); margin:0; padding:0; list-style:none; }
+.postu-cvs-lista li { display:grid; grid-template-columns:80px minmax(0, 1fr) auto; gap:var(--esp-8); align-items:center; font-size:var(--letra-13); }
+.postu-cvs-archivo { overflow-wrap:anywhere; }
+.postu-cvs-archivo small { display:block; color:var(--gray-500); font-size:var(--letra-11); }
+.postu-cvs label.btn { cursor:pointer; justify-self:start; }
+.postu-cvs label.btn.disabled { opacity:.5; pointer-events:none; }
+
+@media (max-width: 900px) {
+  .postu-agente { grid-template-columns:minmax(0, 1fr); }
+}

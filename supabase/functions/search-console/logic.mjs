@@ -10,7 +10,8 @@ export const DIAS_PRIMERA = 90
 export const DIAS_REPASO = 10
 
 // Se pide junto con el de planillas (pantalla Postulaciones): al autorizar uno solo, Google puede soltar el otro.
-export const PERMISOS_EXTRA = ['https://www.googleapis.com/auth/spreadsheets', SCOPE_SEARCH_CONSOLE]
+// gmail.compose es el de los borradores del agente de Postulaciones.
+export const PERMISOS_EXTRA = ['https://www.googleapis.com/auth/spreadsheets', SCOPE_SEARCH_CONSOLE, 'https://www.googleapis.com/auth/gmail.compose']
 
 export function urlPermiso({ clientId, redirectUri, state }) {
   const u = new URL('https://accounts.google.com/o/oauth2/v2/auth')

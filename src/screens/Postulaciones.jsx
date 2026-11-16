@@ -3,6 +3,7 @@ import { supabase, abrirEnlaceOAuth } from '../supabase.js'
 import { CabeceraPantalla, Pie } from '../estructura.jsx'
 import { ACCIONES, DIAS_SEGUIMIENTO, TRAMOS, agrupar, porTramo, tramoDe, coincide, nombreCv, esLink, esMail } from '../postulaciones.mjs'
 import { PERIODOS, prepararFilas, porGrupoPuesto, enviadasPorPeriodo } from '../busquedaLaboral.mjs'
+import PostulacionesAgente from './PostulacionesAgente.jsx'
 import './Postulaciones.css'
 
 // Postulaciones: la planilla de Google Sheets de Daniela, resumida en números y barras. La planilla sigue siendo
@@ -205,6 +206,7 @@ export default function Postulaciones() {
   const [tramo, setTramo] = useState('')
   const [abierta, setAbierta] = useState(null)
   const [verCerradas, setVerCerradas] = useState(false)
+  const [vista, setVista] = useState('planilla')
 
   const cargar = useCallback(async () => {
     setCargando(true); setError('')
@@ -252,6 +254,12 @@ export default function Postulaciones() {
         { valor: g.respondieron.length, etiqueta: 'respondieron' },
       ] : []} />
 
+    <div className="postu-vistas" role="tablist" aria-label="Postulaciones">
+      {[['planilla', 'Planilla'], ['agente', 'Agente y Mis CVs']].map(([v, t]) => <button key={v} role="tab" aria-selected={vista === v} className={vista === v ? 'activo' : ''} onClick={() => setVista(v)}>{t}</button>)}
+    </div>
+    {vista === 'agente' && <PostulacionesAgente />}
+
+    <div hidden={vista !== 'planilla'}>
     {error && <p role="alert" className="feedback-error">{error} <button className="btn btn-sm" onClick={cargar}>Reintentar</button></p>}
     {cargando && !datos && !error && <p className="empty-state">Leyendo tu planilla…</p>}
     {!cargando && estado && !estado.error && !(estado.conectado && estado.elegida) && <Conexion estado={estado} recargar={cargar} />}
@@ -297,5 +305,6 @@ export default function Postulaciones() {
     {datos?.url && <p className="postu-nota"><a href={datos.url} target="_blank" rel="noreferrer">Abrir la planilla en Google Sheets</a></p>}
 
     {abierta && <Detalle key={abierta.fila} p={abierta} cerrar={() => setAbierta(null)} cambiar={cambiar} />}
+    </div>
   </div>
 }

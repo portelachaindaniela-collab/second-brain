@@ -8,7 +8,8 @@ export const tienePermiso = scopes => Array.isArray(scopes) && scopes.includes(S
 
 // Los permisos extra que usa la app se piden siempre juntos: al autorizar uno solo, Google puede soltar el otro
 // (pasó al conectar Search Console: se perdió el de planillas). include_granted_scopes suma los de agenda y mail.
-export const PERMISOS_EXTRA = [SCOPE_PLANILLAS, 'https://www.googleapis.com/auth/webmasters.readonly']
+// gmail.compose: el agente de Postulaciones arma borradores en Gmail (nunca manda).
+export const PERMISOS_EXTRA = [SCOPE_PLANILLAS, 'https://www.googleapis.com/auth/webmasters.readonly', 'https://www.googleapis.com/auth/gmail.compose']
 
 export function urlPermiso({ clientId, redirectUri, state }) {
   const u = new URL('https://accounts.google.com/o/oauth2/v2/auth')
