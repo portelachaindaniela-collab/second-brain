@@ -6,7 +6,7 @@ import { vinculoParaGuardar, mensajesSalidaGrupal, comunicados, TIPOS_COMUNICADO
 import { CabeceraPantalla, Bloques, Bloque } from '../estructura.jsx'
 import { limpiarMarcas } from '../../supabase/functions/_shared/oficina.mjs'
 import { ConvocarReunion, AvisoLlegada, VistaSala, VistaTurnos } from './OficinaReunion.jsx'
-import { PLAZO_REUNION_S } from '../oficinaPlano.mjs'
+import { PLAZO_REUNION_S, MAX_OFICINA } from '../oficinaPlano.mjs'
 import './Oficina.css'
 
 // La oficina en 3D se carga recién al abrir la pantalla (three.js es pesado). Si el equipo no puede mostrar 3D o la
@@ -295,7 +295,15 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
   const [fijo, setFijo] = useState(null)
   const sigue = x => !x?.pedido || solicitudes.some(s => s.id === x.pedido.id && s.estado === 'pendiente')
   const cuenta = contarEstados(agentes)
-  const abrir = (id, p = 'ahora') => { if (p === 'charla') { abrirChat(id); return } setElegidoId(id); setPestana(p) }
+  // Al tocar un agente se abre su panel con el chat primero (los que no conversan, en «Ahora»). abrir(id, 'charla') abre
+  // en cambio su ventana de chat (desde el pasillo, la puerta o Mensajes).
+  const abrir = (id, p = null) => {
+    if (p === 'charla') { abrirChat(id); return }
+    setElegidoId(id)
+    const conversa = !agentes.find(a => a.id === id)?.sinCharla
+    if (conversa && !charlas[id]) cargarConversacion(id)
+    setPestana(p ?? (conversa ? 'charla' : 'ahora'))
+  }
   const [tres] = useState(hayWebGL)
 
   // ---------- Reunión ----------
@@ -321,6 +329,14 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
     setLlegadas(null)
     setVisitas([])
     setReunion({ id: Date.now(), modo, estado: 'convocada', asistentes, inicio: Date.now(), turnos: {}, tema })
+  }
+  // Una reunión que pidió un agente y te vino a buscar: arranca enseguida, como pactada. Si entran en tu mesa, es en tu
+  // oficina (vas caminando a tu mesa de reuniones y ellos llegan); si son más, en la sala. Abre el que la pidió, con el tema.
+  const arrancarReunionPedida = r => {
+    const ids = r.asistentes.filter(id => agentes.some(a => a.id === id && a.estado !== 'pausado'))
+    if (!ids.length) return
+    if (r.solicitud) decidir(r.solicitud, 'hecha', 'Convocada.').catch(() => {})
+    convocar(ids, ids.length <= MAX_OFICINA ? 'oficina' : 'sala', { tema: r.tema, detalle: r.detalle, pidio: r.pidio })
   }
   // «Responder» un mensaje: abre la charla con ese agente, que arranca con lo que te pidió.
   const responder = x => {
@@ -557,7 +573,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
                   contestar={() => { setEntrada(null); abrir(avisoEntrada.agente, 'charla') }}
                   despues={() => { anotarEnConversacion(avisoEntrada.agente, 'Ahora no puedo, después hablamos.').catch(() => { /* igual se va */ }); setEntrada(null); sacarVisita(avisoEntrada.agente) }} />}
                 {superpuesto ?? (!avisoEntrada && visto && <Encuentro key={`${visto.clave}${visto === enPuerta ? '-puerta' : ''}`} encuentro={visto} agente={agentes.find(a => a.id === visto.id)} decidir={decidir}
-                  puerta={visto === enPuerta} responder={responder} convocar={reunion ? null : r => setConvocando(r)}
+                  puerta={visto === enPuerta} responder={responder} convocar={reunion ? null : arrancarReunionPedida}
                   contestar={r => { contestar(visto, r); if (visto === enPuerta && r !== 'hablemos') setGolpe(null) }}
                   hablar={id => { if (visto === enPuerta) { setGolpe(null); venir(id, true) } else setFijo(null); abrir(id, 'charla') }}
                   seguime={id => { if (visto === enPuerta) setGolpe(null); venir(id, visto === enPuerta); abrir(id, 'charla') }}
@@ -607,7 +623,7 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
         convocar(ids, modo, convocando.tema ? { tema: convocando.tema, detalle: convocando.detalle, pidio: convocando.pidio } : null)
       }} />}
     {elegido && <PanelAgente key={elegido.id} agente={elegido} pestana={pestana} setPestana={setPestana} ahora={ahora} cerrar={() => setElegidoId(null)}
-      venir={venir} deVisita={deVisita(elegido.id)} abrirChat={abrirChat}
+      venir={venir} deVisita={deVisita(elegido.id)} abrirChat={abrirChat} charla={charlas[elegido.id] ?? []} hablar={hablar} fuera={afuera}
       conVos={corazon.find(x => x.agente === elegido.id)?.estado ?? ''} cambiarConVos={estado => cambiarConVos(elegido.id, estado)}
       saben={corazon.find(x => x.agente === elegido.id)?.saben ?? []} cambiarSaben={saben => cambiarSaben(elegido.id, saben)} companeros={agentes.filter(x => x.id !== elegido.id)} pedidos={solicitudes.filter(x => x.agente === elegido.id && x.estado === 'pendiente')} decidir={decidir} anotar={anotarEnConversacion}
       setCharla={m => setCharlas(c => ({ ...c, [elegido.id]: typeof m === 'function' ? m(c[elegido.id] ?? []) : m }))} />}
@@ -714,6 +730,12 @@ function Mensajes({ solicitudes, agentes, decidir, responder, ahora }) {
     <p className="tenue">Lo que te piden los agentes, una hoja por agente. Nada se hace sin tu permiso.</p>
     {error && <p role="alert" className="feedback-error">{error}</p>}
     <div className="oficina-libro">
+      <div className="oficina-pestanas" role="tablist" aria-label="Hojas por agente">
+        {hojas.map(h => <button key={h.agente} type="button" role="tab" aria-selected={h.agente === actual.agente} className={h.agente === actual.agente ? 'activa' : ''}
+          onClick={() => { setHoja(h.agente); setAbierto(null) }}>
+          {nombre(h.agente)}{h.pendientes > 0 && <span className="oficina-pestana-num" aria-label={`${h.pendientes} esperan tu respuesta`}>{h.pendientes}</span>}
+        </button>)}
+      </div>
       <div className="oficina-hoja" role="tabpanel" aria-label={`Pedidos de ${nombre(actual.agente)}`}>
         <table className="oficina-planilla">
           <thead><tr><th className="col-fecha">Fecha</th><th>Pedido</th><th className="col-tipo">Tipo</th><th className="col-estado">Estado</th><th className="col-acc" aria-label="Acciones" /></tr></thead>
@@ -752,12 +774,6 @@ function Mensajes({ solicitudes, agentes, decidir, responder, ahora }) {
             </Fragment>
           })}</tbody>
         </table>
-      </div>
-      <div className="oficina-pestanas" role="tablist" aria-label="Hojas por agente">
-        {hojas.map(h => <button key={h.agente} type="button" role="tab" aria-selected={h.agente === actual.agente} className={h.agente === actual.agente ? 'activa' : ''}
-          onClick={() => { setHoja(h.agente); setAbierto(null) }}>
-          {nombre(h.agente)}{h.pendientes > 0 && <span className="oficina-pestana-num" aria-label={`${h.pendientes} esperan tu respuesta`}>{h.pendientes}</span>}
-        </button>)}
       </div>
     </div>
   </>
@@ -866,7 +882,7 @@ function Encuentro({ encuentro, agente, decidir, hablar, seguime, despues, conte
         <button type="button" className="btn btn-sm btn-primary" disabled={ocupado} onClick={() => decidirlo('aprobada')}>{TEXTO_APROBAR[x.accion?.tipo] ?? 'Dale, aprobado'}</button>
         <button type="button" className="btn btn-sm" disabled={ocupado} onClick={() => decidirlo('rechazada')}>No</button>
       </>}
-      {encuentro.reunion && convocar && <button type="button" className="btn btn-sm btn-primary" onClick={() => { contestar('reunion'); convocar(encuentro.reunion) }}>Vamos a la sala</button>}
+      {encuentro.reunion && convocar && <button type="button" className="btn btn-sm btn-primary" onClick={() => { contestar('reunion'); convocar(encuentro.reunion) }}>{encuentro.reunion.asistentes.length <= MAX_OFICINA ? 'Vamos a mi mesa' : 'Vamos a la sala'}</button>}
       {charla && <button type="button" className="btn btn-sm" onClick={() => { contestar('hablemos'); hablar(encuentro.id) }}>{puerta ? 'Pasá' : 'Hablemos'}</button>}
       {charla && !puerta && seguime && <button type="button" className="btn btn-sm" onClick={() => { contestar('seguime'); seguime(encuentro.id) }}>Seguime a mi oficina</button>}
       <button type="button" className="btn btn-sm" onClick={() => { contestar('ahora_no'); despues() }}>Ahora no</button>
@@ -881,12 +897,12 @@ function Encuentro({ encuentro, agente, decidir, hablar, seguime, despues, conte
 function LibroOficina({ hojas, hoja, setHoja }) {
   const actual = hojas.find(h => h.id === hoja) ?? hojas[0]
   return <div className="oficina-libro oficina-libro-principal">
-    <div className="oficina-hoja-principal" role="tabpanel" aria-label={actual.titulo}>{actual.contenido}</div>
     <div className="oficina-pestanas" role="tablist" aria-label="Hojas de la oficina">
       {hojas.map(h => <button key={h.id} type="button" role="tab" aria-selected={h.id === actual.id} className={h.id === actual.id ? 'activa' : ''} onClick={() => setHoja(h.id)}>
         {h.titulo}{h.num > 0 && <span className="oficina-pestana-num" aria-label={`${h.num} esperan tu respuesta`}>{h.num}</span>}
       </button>)}
     </div>
+    <div className="oficina-hoja-principal" role="tabpanel" aria-label={actual.titulo}>{actual.contenido}</div>
   </div>
 }
 
@@ -1332,9 +1348,9 @@ function Avatar({ agente }) {
 }
 
 // ---------- Panel del agente ----------
-const PESTANAS = [['ahora', 'Ahora'], ['que', 'Qué hace'], ['tareas', 'Tareas'], ['herramientas', 'Herramientas']]
+const PESTANAS = [['charla', 'Chat'], ['ahora', 'Ahora'], ['que', 'Qué hace'], ['tareas', 'Tareas'], ['herramientas', 'Herramientas'], ['opciones', 'Opciones']]
 
-function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, setCharla, venir, deVisita = false, abrirChat, anotar, conVos = '', cambiarConVos, saben = [], cambiarSaben, companeros = [] }) {
+function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, charla = [], setCharla, hablar, pedidos = [], decidir, fuera = false, venir, deVisita = false, abrirChat, anotar, conVos = '', cambiarConVos, saben = [], cambiarSaben, companeros = [] }) {
   const panel = useRef(null)
   // cerrar cambia en cada render: se guarda en una ref para que el efecto corra una sola vez (al abrir el panel)
   // y no le saque el foco al cuadro de la charla cada vez que llega una respuesta.
@@ -1358,14 +1374,17 @@ function PanelAgente({ agente: a, pestana, setPestana, ahora, cerrar, setCharla,
         <button type="button" className="close-x" onClick={cerrar} aria-label="Cerrar">✕</button>
       </header>
       <div className="oficina-pestanas" role="tablist">
-        {PESTANAS.map(([id, texto]) => <button key={id} type="button" role="tab" aria-selected={pestana === id} className={pestana === id ? 'is-activa' : ''} onClick={() => setPestana(id)}>{texto}</button>)}
+        {PESTANAS.filter(([id]) => !a.sinCharla || (id !== 'charla' && id !== 'opciones')).map(([id, texto]) => <button key={id} type="button" role="tab" aria-selected={pestana === id} className={pestana === id ? 'is-activa' : ''} onClick={() => setPestana(id)}>{texto}</button>)}
       </div>
       <div className="oficina-panel-cuerpo" role="tabpanel">
         {pestana === 'ahora' && <>
           <p><span className={`oficina-estado estado-${a.estado}`}>{ESTADOS[a.estado]}</span></p>
           <p className="oficina-ahora">{a.ahora}</p>
           {a.ultima && <p className="tenue">Última actividad: {haceCuanto(new Date(a.ultima).toISOString(), ahora)} ({horaAR(a.ultima)}).</p>}
-          {!a.sinCharla && <button type="button" className="btn btn-sm" onClick={() => { abrirChat?.(a.id); cerrar() }}>Chatear</button>}
+        </>}
+        {pestana === 'charla' && !a.sinCharla && <Charla agente={a} mensajes={charla} setMensajes={setCharla} hablar={hablar} venir={venir} deVisita={deVisita} pedidos={pedidos} decidir={decidir} anotar={anotar} fuera={fuera} />}
+        {pestana === 'opciones' && !a.sinCharla && <>
+          <button type="button" className="btn btn-sm" onClick={() => { abrirChat?.(a.id); cerrar() }}>Abrir el chat en una ventana</button>
           {!a.sinCharla && venir && <button type="button" className="btn btn-sm" disabled={deVisita} onClick={() => {
             venir(a.id)
             setCharla(m => [...m, { role: 'user', content: 'Vení a mi oficina.' }])
