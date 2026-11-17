@@ -7,11 +7,6 @@
 }
 
 .oficina-ayuda { margin: var(--esp-8) 0 0; font-size: var(--letra-12); color: var(--gray-500); }
-.oficina-leyenda { display: flex; flex-wrap: wrap; gap: var(--esp-8) var(--esp-16); list-style: none; margin: var(--esp-12) 0 0; padding: 0; font-size: var(--letra-12); color: var(--gray-700); }
-.oficina-leyenda li { display: flex; align-items: center; gap: var(--esp-4); }
-.oficina-leyenda-dibujo { flex-shrink: 0; width: 56px; height: 68px; border-radius: 8px; background: #f4f3ef; }
-.oficina-leyenda li > span { display: flex; flex-direction: column; gap: 2px; }
-.oficina-leyenda li strong { color: inherit; font-size: var(--letra-13); }
 
 /* El plantel: todos los agentes en una fila, como acceso rápido (y lo que se usa con teclado o lector de pantalla). */
 .oficina-plantel { display: flex; flex-wrap: wrap; gap: var(--esp-4); margin-top: var(--esp-12); padding-top: var(--esp-12); border-top: 1px solid var(--gray-200); }
@@ -19,7 +14,7 @@
 .oficina-ficha:hover, .oficina-ficha.is-elegido { border-color: var(--accent); }
 .oficina-ficha.estado-error { border-color: var(--red-borde); color: var(--oficina-error); }
 .oficina-ficha.estado-pausado, .oficina-ficha.estado-nuevo { color: var(--gray-500); }
-.oficina-avatar { flex-shrink: 0; border-radius: 50%; background: #f4f3ef; }
+.oficina-avatar { flex-shrink: 0; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #f4f3ef; color: #2b2b2b; font-size: 12px; font-weight: 700; line-height: 1; }
 .oficina-avatar.estado-pausado, .oficina-avatar.estado-nuevo { opacity: .55; }
 
 .oficina-estado { display: inline-block; padding: 1px var(--esp-8); border-radius: 999px; font-size: var(--letra-11); font-weight: 600; background: var(--gray-200); color: var(--gray-700); }
