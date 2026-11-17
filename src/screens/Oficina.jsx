@@ -9,9 +9,6 @@ import { PLAZO_REUNION_S, MAX_OFICINA } from '../oficina2d/reunion.mjs'
 import './Oficina.css'
 
 import Oficina2D from './Oficina2D.jsx'
-import { muestra } from '../oficina2d/escena.mjs'
-import { person } from '../oficina2d/dibujo.mjs'
-import { figuraDe } from '../oficina2d/elenco.mjs'
 
 // La Oficina: todos los agentes (Trabajadores, UP y PDG) en sus salas. Cada uno en su escritorio; la burbuja dice
 // cómo está (trabajando, con un problema, pausado). Tocás uno y ves qué hace, sus tareas, sus herramientas, y podés
@@ -457,10 +454,9 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
         <button type="button" className="btn btn-sm btn-primary" disabled={Boolean(reunion)} onClick={() => setConvocando(true)}>{reunion ? 'Reunión en curso' : 'Convocar reunión'}</button>
       </span>}>
         {cargando ? <p className="empty-state">Abriendo la oficina…</p> : <>
-          <Oficina2D agentes={agentes} elegidoId={elegidoId} abrir={abrir} reunion={reunion} hablando={hablando ?? hablaInterna}
+          <Oficina2D agentes={agentes} abrir={abrir} reunion={reunion} hablando={hablando ?? hablaInterna}
                 reunionInterna={interna} alTerminoInterna={alTerminoInterna} visita={visitaEscena} alLlegoVisita={alLlegoVisita}
-                alPlanificar={alPlanificar} alVolvieron={alVolvieron} pantallaCompleta={enCurso} conDani={!afuera}
-                visitantes={[...visitas.map(v => v.agente), ...(golpe ? [golpe.id] : [])]}>
+                alPlanificar={alPlanificar} alVolvieron={alVolvieron} pantallaCompleta={enCurso}>
                 {!superpuesto && cartel && <AvisoInterna interna={cartel} agentes={agentes} cerrar={() => { cerrados.current.add(cartel.id); setCartel(null) }} />}
                 {superpuesto ?? (visto && <Encuentro key={`${visto.clave}${visto === enPuerta ? '-puerta' : ''}`} encuentro={visto} agente={agentes.find(a => a.id === visto.id)} decidir={decidir}
                   puerta={visto === enPuerta} responder={responder} convocar={reunion ? null : arrancarReunionPedida}
@@ -470,10 +466,9 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
                   despues={() => { setDespues(d => new Map(d).set(visto.clave, Date.now() + POSPONER_ENCUENTRO_MS)); if (visto === enPuerta) setGolpe(null) }} />)}
               </Oficina2D>
           <div className="oficina-ayuda">
-            <span>Arrastrá para moverte · rueda, dos dedos o + y − para acercar · ⌂ vuelve al inicio · tocá un agente para ver qué está haciendo.</span>
+            <span>Tocá un agente para ver qué está haciendo o hablarle.</span>
             <SonidoOficina />
           </div>
-          <Leyenda />
           <nav className="oficina-plantel" aria-label="Todos los agentes">
             {agentes.map(a => <button key={a.id} type="button" className={`oficina-ficha estado-${a.estado}${a.id === elegidoId ? ' is-elegido' : ''}`} onClick={() => abrir(a.id)}
               aria-label={`${a.nombre}: ${ESTADOS[a.estado]}`}>
@@ -939,25 +934,6 @@ function Archivo({ actas, tareas, agentes, escribiendo, cambiarTarea, ahora }) {
   </>
 }
 
-// La leyenda: cada estado con su dibujo (el mismo de la escena) y dónde está ese agente.
-const LEYENDA = [
-  ['work', 'Trabajando', 'en su escritorio, pantalla en verde'],
-  ['problem', 'Con un problema', 'manos en la cabeza, pantalla en rojo'],
-  ['break', 'En descanso', 'de pie en el café, con una taza'],
-  ['sleep', 'Pausado', 'en el sillón de descanso'],
-]
-function Leyenda() {
-  return <ul className="oficina-leyenda" aria-label="Qué significa lo que se ve">
-    {LEYENDA.map(([pose, titulo, texto]) => {
-      const m = muestra(pose)
-      return <li key={pose}>
-        <svg className="oficina-leyenda-dibujo" viewBox={m.vista} aria-hidden="true" dangerouslySetInnerHTML={{ __html: m.svg }} />
-        <span><strong>{titulo}</strong><span className="tenue">{texto}</span></span>
-      </li>
-    })}
-  </ul>
-}
-
 function ActividadAhora({ agentes, abrir }) {
   const activos = agentes.filter(a => a.estado === 'trabajando' || a.estado === 'error')
   if (!activos.length) return <p className="tenue">Nadie está trabajando en este momento; todos esperan su próximo turno.</p>
@@ -970,11 +946,9 @@ function ActividadAhora({ agentes, abrir }) {
 }
 
 
-// La carita del agente: la cabeza y los hombros de su personaje de la escena (la misma persona en toda la pantalla).
+// La marca del agente: la inicial de su nombre en un círculo.
 function Avatar({ agente }) {
-  const svg = useMemo(() => person(figuraDe(agente.id), 'stand'), [agente.id])
-  return <svg className={`oficina-avatar estado-${agente.estado}`} viewBox="-32 -206 64 64" width="24" height="24" aria-hidden="true"
-    dangerouslySetInnerHTML={{ __html: svg }} />
+  return <span className={`oficina-avatar estado-${agente.estado}`} aria-hidden="true">{nombreCorto(agente.nombre).charAt(0).toUpperCase()}</span>
 }
 
 // ---------- Panel del agente ----------
