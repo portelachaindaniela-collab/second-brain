@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { aplicarCorrida, haceCuanto, horaAR } from '../trabajadores.mjs'
 import { comunicados, TIPOS_COMUNICADO, armarOficina, contarEstados, hoyAR, tocanPropuestas, eventosOficina, mesOficina, mesVecino, hojasDePedidos, primerEncuentro, puedenPararte, TEXTO_MOMENTO, pospuestos, POSPONER_ENCUENTRO_MS, vieneATuOficina, lePedisQueVenga, sumarVisita, escenaDeVisitas, quienGolpea, PRIMER_GOLPE_MS, internaQueToca, resumenReunion, recomendacion, riesgoDe, EQUIPOS, ESTADOS } from '../oficina.mjs'
@@ -9,6 +9,8 @@ import { PLAZO_REUNION_S, MAX_OFICINA } from '../oficina2d/reunion.mjs'
 import './Oficina.css'
 
 import Oficina2D from './Oficina2D.jsx'
+// La oficina dibujada (3D) se carga aparte: three.js y los modelos no hacen falta para el resto de la pantalla.
+const OficinaEscena = lazy(() => import('./OficinaEscena.jsx'))
 
 // La Oficina: todos los agentes (Trabajadores, UP y PDG) en sus salas. Cada uno en su escritorio; la burbuja dice
 // cómo está (trabajando, con un problema, pausado). Tocás uno y ves qué hace, sus tareas, sus herramientas, y podés
@@ -454,6 +456,9 @@ export function OficinaVista({ cargando, agentes, pendientes, errores = [], ahor
         <button type="button" className="btn btn-sm btn-primary" disabled={Boolean(reunion)} onClick={() => setConvocando(true)}>{reunion ? 'Reunión en curso' : 'Convocar reunión'}</button>
       </span>}>
         {cargando ? <p className="empty-state">Abriendo la oficina…</p> : <>
+          {!enCurso && <Suspense fallback={<div className="oficina-escena" />}>
+            <OficinaEscena agentes={agentes} elegidoId={elegidoId} abrir={abrir} />
+          </Suspense>}
           <Oficina2D agentes={agentes} abrir={abrir} reunion={reunion} hablando={hablando ?? hablaInterna}
                 reunionInterna={interna} alTerminoInterna={alTerminoInterna} visita={visitaEscena} alLlegoVisita={alLlegoVisita}
                 alPlanificar={alPlanificar} alVolvieron={alVolvieron} pantallaCompleta={enCurso}>
