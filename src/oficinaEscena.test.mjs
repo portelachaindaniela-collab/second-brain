@@ -1,9 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { planoOficina, poseDe, DESCANSO } from './oficinaEscena.mjs'
+import { planoOficina, poseDe, DESCANSO, MARIA, FONDO_SALA } from './oficinaEscena.mjs'
 
 const agentes = [
-  ...Array.from({ length: 9 }, (_, i) => ({ id: `trabajadores:${i}`, equipo: 'trabajadores' })),
+  { id: MARIA, equipo: 'trabajadores' },
+  ...Array.from({ length: 8 }, (_, i) => ({ id: `trabajadores:${i}`, equipo: 'trabajadores' })),
   ...Array.from({ length: 7 }, (_, i) => ({ id: `up:${i}`, equipo: 'up' })),
   ...Array.from({ length: 6 }, (_, i) => ({ id: `pdg:${i}`, equipo: 'pdg' })),
   ...Array.from({ length: 5 }, (_, i) => ({ id: `admin:${i}`, equipo: 'admin' })),
@@ -17,7 +18,7 @@ test('cada agente tiene un puesto propio dentro de la zona de su equipo', () => 
   assert.equal(p.puestos.length, agentes.length)
   assert.equal(new Set(p.puestos.map(x => `${x.x},${x.z}`)).size, agentes.length)
   for (const pu of p.puestos) {
-    const z = p.zonas.find(z => z.equipo === pu.equipo)
+    const z = p.zonas.find(z => z.equipo === pu.zona)
     assert.ok(pu.x > z.x && pu.x < z.x + z.ancho && pu.z > z.z && pu.z < z.z + z.fondo, pu.id)
   }
 })
@@ -41,7 +42,7 @@ test('dos filas enfrentadas: la de atrás mira adelante y la de adelante mira at
 
 test('un equipo de uno solo queda en una fila; los equipos desconocidos van al final', () => {
   const p = planoOficina([{ id: 'x:1', equipo: 'otro' }, { id: 'up:1', equipo: 'up' }])
-  assert.deepEqual(p.zonas.map(z => z.equipo), ['up', 'otro', 'descanso'])
+  assert.deepEqual(p.zonas.map(z => z.equipo), ['up', 'otro', 'descanso', 'oficina-daniela'])
   assert.equal(p.puestos.find(x => x.id === 'up:1').mira, 0)
 })
 
@@ -49,9 +50,9 @@ test('es siempre igual para los mismos agentes', () => {
   assert.deepEqual(planoOficina(agentes), planoOficina(agentes))
 })
 
-test('sin agentes queda solo el descanso', () => {
+test('sin agentes quedan el descanso y tu oficina', () => {
   const p = planoOficina([])
-  assert.deepEqual(p.zonas.map(z => z.equipo), ['descanso'])
+  assert.deepEqual(p.zonas.map(z => z.equipo), ['descanso', 'oficina-daniela'])
   assert.equal(p.puestos.length, 0)
 })
 
@@ -68,4 +69,29 @@ test('varianteDe: María es mujer, siempre el mismo muñequito', async () => {
   const { varianteDe } = await import('./oficinaEscena.mjs')
   assert.ok([1, 2].includes(varianteDe('trabajadores:maria').pelo))
   assert.deepEqual(varianteDe('up:redactor'), varianteDe('up:redactor'))
+})
+
+test('María en su oficina, vos en la tuya, a la derecha de las islas', () => {
+  const p = planoOficina(agentes)
+  const maria = p.puestos.find(x => x.id === MARIA)
+  assert.equal(maria.zona, 'oficina-maria')
+  assert.ok(maria.oficina)
+  assert.equal(p.puestos.filter(x => x.zona === 'trabajadores').length, 8)
+  const tuya = p.zonas.find(z => z.equipo === 'oficina-daniela')
+  const islas = p.zonas.filter(z => !z.equipo.startsWith('oficina'))
+  assert.ok(islas.every(z => z.x + z.ancho <= tuya.x))
+  assert.ok(p.daniela.x > tuya.x && p.daniela.x < tuya.x + tuya.ancho && p.daniela.z > tuya.z && p.daniela.z < tuya.z + tuya.fondo)
+})
+
+test('sin María no hay oficina de María', () => {
+  const p = planoOficina([{ id: 'up:1', equipo: 'up' }])
+  assert.ok(!p.zonas.some(z => z.equipo === 'oficina-maria'))
+})
+
+test('la sala de Sistemas deja lugar atrás para los servidores', () => {
+  const p = planoOficina(agentes)
+  const sala = p.zonas.find(z => z.equipo === 'sistemas')
+  assert.ok(sala.sala)
+  const primero = p.puestos.find(x => x.zona === 'sistemas')
+  assert.ok(primero.z - sala.z >= FONDO_SALA + 1)
 })

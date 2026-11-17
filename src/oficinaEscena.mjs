@@ -1,33 +1,42 @@
-// El plano de la oficina dibujada: un salón con una isla de escritorios por equipo (dos filas enfrentadas) y un
-// rincón de descanso con el café y los sillones. Lógica pura: la escena (OficinaEscena.jsx) solo lo dibuja.
+// El plano de la oficina dibujada: un salón con una isla de escritorios por equipo (dos filas enfrentadas), la sala
+// de Sistemas (con los servidores atrás), un rincón de descanso y, a la derecha, dos oficinas vidriadas: la tuya y la
+// de María. Lógica pura: la escena (OficinaEscena.jsx) solo lo dibuja.
 // Medidas en metros de la escena (un escritorio mide 1.26 × 0.98). x crece a la derecha, z hacia la cámara.
 // mira: hacia dónde mira la persona sentada (0 = hacia +z, π = hacia -z).
 import { generoDe } from '../supabase/functions/_shared/oficina.mjs'
 
 export const ORDEN_EQUIPOS = ['trabajadores', 'up', 'pdg', 'admin', 'sistemas']
 export const PUESTO = { ancho: 1.4, escritorio: 0.75, fila: 2.5 } // entre columnas, de la silla al centro de la mesa, entre filas
+export const MARIA = 'trabajadores:maria'
+export const OFICINA = { ancho: 5, fondo: 5.2 }
+export const FONDO_SALA = 1.3 // lo que se agranda la sala de Sistemas hacia atrás para los servidores
 const MARGEN_X = 1.3
 const MARGEN_FRENTE = 1.6 // adelante de la isla queda lugar para el cartel del equipo
 const MARGEN_FONDO = 1.1
 const SEPARACION = 0.8
-const ANCHO_MAX = 25
+const ANCHO_MAX = 24
 export const DESCANSO = { ancho: 5.2, fondo: 5.2 }
 
 const columnas = n => Math.max(1, Math.ceil(n / 2))
 
-// agentes: [{ id, equipo }]. Devuelve { zonas, puestos, ancho, fondo }.
-// zonas: [{ equipo, x, z, ancho, fondo }] (x, z: la esquina de atrás a la izquierda); el descanso tiene equipo 'descanso'.
-// puestos: [{ id, equipo, x, z, mira }] (x, z: donde se sienta).
+// agentes: [{ id, equipo }]. Devuelve { zonas, puestos, daniela, ancho, fondo }.
+// zonas: [{ equipo, x, z, ancho, fondo, sala? }] (x, z: la esquina de atrás a la izquierda). Además de los equipos
+//   están 'descanso', 'oficina-daniela' y 'oficina-maria' (esta última, si María está).
+// puestos: [{ id, equipo, zona, x, z, mira, oficina? }] (x, z: donde se sienta; zona: el equipo de la zona donde está).
+// daniela: { x, z, mira }, tu silla en tu oficina.
 export function planoOficina(agentes) {
+  const maria = agentes.find(a => a.id === MARIA)
   const porEquipo = new Map()
   for (const a of agentes) {
+    if (a.id === MARIA) continue
     if (!porEquipo.has(a.equipo)) porEquipo.set(a.equipo, [])
     porEquipo.get(a.equipo).push(a)
   }
   const equipos = [...porEquipo.keys()].sort((a, b) => rango(a) - rango(b))
   const cajas = equipos.map(e => {
     const n = porEquipo.get(e).length
-    return { equipo: e, ancho: columnas(n) * PUESTO.ancho + MARGEN_X * 2, fondo: MARGEN_FONDO + (n > 1 ? PUESTO.fila : 0) + MARGEN_FRENTE }
+    const sala = e === 'sistemas'
+    return { equipo: e, sala, ancho: columnas(n) * PUESTO.ancho + MARGEN_X * 2, fondo: MARGEN_FONDO + (sala ? FONDO_SALA : 0) + (n > 1 ? PUESTO.fila : 0) + MARGEN_FRENTE }
   })
   cajas.push({ equipo: 'descanso', ...DESCANSO })
 
@@ -47,25 +56,38 @@ export function planoOficina(agentes) {
     for (const zona of f.zonas) zonas.push({ ...zona, z })
     z += f.alto + SEPARACION
   }
-  const ancho = Math.max(0, ...filas.map(f => f.ancho))
-  const fondo = filas.length ? z - SEPARACION : 0
+  const anchoIslas = Math.max(0, ...filas.map(f => f.ancho))
+  const fondoIslas = filas.length ? z - SEPARACION : 0
 
+  // Las oficinas, en una columna a la derecha: la tuya atrás y la de María adelante.
+  const xo = anchoIslas + SEPARACION
+  const tuya = { equipo: 'oficina-daniela', x: xo, z: 0, ...OFICINA }
+  zonas.push(tuya)
+  const enOficina = zona => ({ x: zona.x + zona.ancho / 2, z: zona.z + 1.5, mira: 0 })
+  const daniela = enOficina(tuya)
+  let fondoOficinas = OFICINA.fondo
   const puestos = []
+  if (maria) {
+    const suya = { equipo: 'oficina-maria', x: xo, z: OFICINA.fondo + SEPARACION, ...OFICINA }
+    zonas.push(suya)
+    fondoOficinas = suya.z + suya.fondo
+    puestos.push({ id: maria.id, equipo: maria.equipo, zona: suya.equipo, ...enOficina(suya), oficina: true })
+  }
+
   for (const zona of zonas) {
     const del = porEquipo.get(zona.equipo)
     if (!del) continue
-    const cols = columnas(del.length)
     const x0 = zona.x + MARGEN_X + PUESTO.ancho / 2
     // Fila de atrás mirando hacia adelante (+z); fila de adelante mirando hacia atrás, con las mesas pegadas.
-    const zAtras = zona.z + MARGEN_FONDO
+    const zAtras = zona.z + MARGEN_FONDO + (zona.sala ? FONDO_SALA : 0)
     del.forEach((a, i) => {
       const fila = del.length > 1 ? i % 2 : 0
       const col = del.length > 1 ? Math.floor(i / 2) : 0
-      puestos.push({ id: a.id, equipo: a.equipo, x: x0 + col * PUESTO.ancho, z: zAtras + fila * PUESTO.fila, mira: fila ? Math.PI : 0 })
+      puestos.push({ id: a.id, equipo: a.equipo, zona: zona.equipo, x: x0 + col * PUESTO.ancho, z: zAtras + fila * PUESTO.fila, mira: fila ? Math.PI : 0 })
     })
-    zona.columnas = cols
+    zona.columnas = columnas(del.length)
   }
-  return { zonas, puestos, ancho, fondo }
+  return { zonas, puestos, daniela, ancho: xo + OFICINA.ancho, fondo: Math.max(fondoIslas, fondoOficinas) }
 }
 
 function rango(equipo) {

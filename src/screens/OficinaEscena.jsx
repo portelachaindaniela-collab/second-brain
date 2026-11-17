@@ -107,21 +107,54 @@ export default function OficinaEscena({ agentes, elegidoId = null, abrir }) {
     const clicables = []
     const pantallas = []
 
-    // Cada zona: una alfombra del color del equipo, su cartel y plantas en las esquinas de atrás.
+    // Cada zona: una alfombra del color del equipo (o el piso de la oficina o de la sala), su cartel y plantas en las
+    // esquinas de atrás. Las oficinas y la sala de Sistemas tienen paredes de vidrio.
+    const vidrio = new THREE.MeshStandardMaterial({ color: '#d4ecf7', transparent: true, opacity: 0.2, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide })
+    const marco = new THREE.MeshStandardMaterial({ color: '#e9e4da', roughness: 0.6 })
+    const vidriar = zona => {
+      const ALTO = 2.1, x1 = zona.x + 0.1, x2 = zona.x + zona.ancho - 0.1, z1 = zona.z + 0.1, z2 = zona.z + zona.fondo - 0.1
+      const PUERTA = 1.3, mx = (x1 + x2) / 2
+      // Tramos: atrás, izquierda, derecha y adelante (con la puerta en el medio, abierta).
+      const tramos = [[x1, z1, x2, z1], [x1, z1, x1, z2], [x2, z1, x2, z2], [x1, z2, mx - PUERTA / 2, z2], [mx + PUERTA / 2, z2, x2, z2]]
+      for (const [ax, az, bx, bz] of tramos) {
+        const largo = Math.hypot(bx - ax, bz - az)
+        const g = new THREE.Group()
+        g.position.set((ax + bx) / 2, 0, (az + bz) / 2)
+        g.rotation.y = ax === bx ? Math.PI / 2 : 0
+        const panel = new THREE.Mesh(new THREE.PlaneGeometry(largo, ALTO), vidrio)
+        panel.position.y = ALTO / 2
+        panel.renderOrder = 2
+        const arriba = new THREE.Mesh(new THREE.BoxGeometry(largo, 0.04, 0.04), marco)
+        arriba.position.y = ALTO
+        const abajo = new THREE.Mesh(new THREE.BoxGeometry(largo, 0.08, 0.06), marco)
+        abajo.position.y = 0.04
+        g.add(panel, arriba, abajo)
+        for (const lado of [-1, 1]) {
+          const poste = new THREE.Mesh(new THREE.BoxGeometry(0.04, ALTO, 0.04), marco)
+          poste.position.set(lado * largo / 2, ALTO / 2, 0)
+          poste.castShadow = true
+          g.add(poste)
+        }
+        escena.add(g)
+      }
+    }
+    const PISOS = { 'oficina-daniela': '#c99a66', 'oficina-maria': '#c99a66', sistemas: '#dde2ea' }
+    const TITULOS = { descanso: '☕ Descanso', 'oficina-daniela': '★ Tu oficina', 'oficina-maria': '♛ Oficina de María' }
     for (const zona of plano.zonas) {
-      const color = COLOR_EQUIPO[zona.equipo] ?? '#c9b79c'
+      const color = COLOR_EQUIPO[zona.equipo] ?? (zona.equipo === 'oficina-daniela' ? '#e2b552' : zona.equipo === 'oficina-maria' ? '#c8323f' : '#c9b79c')
       const alfombra = new THREE.Mesh(new THREE.BoxGeometry(zona.ancho - 0.3, 0.02, zona.fondo - 0.3),
-        new THREE.MeshStandardMaterial({ color: new THREE.Color(color).lerp(new THREE.Color('#ffffff'), 0.62), roughness: 1 }))
+        new THREE.MeshStandardMaterial({ color: PISOS[zona.equipo] ?? new THREE.Color(color).lerp(new THREE.Color('#ffffff'), 0.62), roughness: 1 }))
       alfombra.position.set(zona.x + zona.ancho / 2, 0.01, zona.z + zona.fondo / 2)
       alfombra.receiveShadow = true
       escena.add(alfombra)
-      const n = inicial.filter(a => a.equipo === zona.equipo).length
-      const titulo = zona.equipo === 'descanso' ? '☕ Descanso' : `${EQUIPOS[zona.equipo]?.nombre ?? zona.equipo} · ${n}`
+      if (zona.sala || zona.equipo.startsWith('oficina')) vidriar(zona)
+      const n = plano.puestos.filter(p => p.zona === zona.equipo).length
+      const titulo = TITULOS[zona.equipo] ?? `${zona.sala ? '🖥 Sala de ' : ''}${EQUIPOS[zona.equipo]?.nombre ?? zona.equipo} · ${n}`
       const cartel = etiqueta('oe-equipo', titulo)
       cartel.userData.el.style.setProperty('--equipo', color)
       cartel.position.set(zona.x + zona.ancho / 2, 0.05, zona.z + zona.fondo - 0.45)
       escena.add(cartel)
-      if (zona.equipo === 'descanso') continue
+      if (zona.equipo === 'descanso' || zona.equipo.startsWith('oficina')) continue
       poner(escena, mueble('pottedPlant'), zona.x + 0.45, zona.z + 0.45)
       poner(escena, mueble('plantSmall1'), zona.x + zona.ancho - 0.45, zona.z + 0.45)
     }
@@ -146,29 +179,50 @@ export default function OficinaEscena({ agentes, elegidoId = null, abrir }) {
       poner(escena, mueble('plantSmall2'), x + ancho - 0.45, z + fondo - 1.1)
     }
 
-    // Los puestos: silla, escritorio, monitor (con la pantalla prendida según el estado), teclado y el agente.
-    inicial.forEach((a, i) => {
-      const pu = plano.puestos.find(p => p.id === a.id)
-      if (!pu) return
+    // Un puesto: silla, escritorio, monitor (con la pantalla prendida según el estado) y teclado. El de una jefa
+    // (vos y María) tiene dos monitores, una mesita con lámpara, bibliotecas atrás y dos sillas para las visitas.
+    const armarPuesto = (pu, { jefa = false, planta = false, alfombra = '#e8d5b0' } = {}) => {
       const puesto = new THREE.Group()
       puesto.position.set(pu.x, 0, pu.z)
       puesto.rotation.y = pu.mira
       escena.add(puesto)
       poner(puesto, mueble('chairDesk'), 0, -0.08)
-      poner(puesto, mueble('desk'), 0, PUESTO.escritorio, Math.PI)
+      poner(puesto, mueble('desk', jefa ? { escala: 1.15 } : {}), 0, PUESTO.escritorio, Math.PI)
       const brillo = new THREE.MeshStandardMaterial({ color: '#1d2230', emissive: '#000000', roughness: 0.4 })
       pantallas.push(brillo)
-      const monitor = mueble('computerScreen', {
-        alCargar: (interno, tam) => {
-          const panel = new THREE.Mesh(new THREE.PlaneGeometry(tam.x * 0.88, tam.y * 0.6), brillo)
-          panel.position.set(0, tam.y * 0.6, tam.z / 2 + 0.006)
-          monitor.add(panel)
-        },
-      })
-      poner(puesto, monitor, 0, PUESTO.escritorio + 0.22, Math.PI, ALTO_MESA)
-      poner(puesto, mueble('computerKeyboard'), 0, PUESTO.escritorio - 0.2, Math.PI, ALTO_MESA)
-      if (i % 3 === 0) poner(puesto, mueble('plantSmall2', { escala: 0.6 }), 0.5, PUESTO.escritorio + 0.25, 0, ALTO_MESA)
+      const alto = jefa ? ALTO_MESA * 1.15 : ALTO_MESA
+      const monitores = jefa ? [[-0.34, 0.25], [0.34, -0.25]] : [[0, 0]]
+      for (const [mx, giro] of monitores) {
+        const monitor = mueble('computerScreen', {
+          alCargar: (interno, tam) => {
+            const panel = new THREE.Mesh(new THREE.PlaneGeometry(tam.x * 0.88, tam.y * 0.6), brillo)
+            panel.position.set(0, tam.y * 0.6, tam.z / 2 + 0.006)
+            monitor.add(panel)
+          },
+        })
+        poner(puesto, monitor, mx, PUESTO.escritorio + 0.22, Math.PI + giro, alto)
+      }
+      poner(puesto, mueble('computerKeyboard'), 0, PUESTO.escritorio - 0.2, Math.PI, alto)
+      if (planta) poner(puesto, mueble('plantSmall2', { escala: 0.6 }), 0.5, PUESTO.escritorio + 0.25, 0, alto)
+      if (jefa) {
+        poner(puesto, mueble('rugRound', { escala: 2.2, sombra: false, color: alfombra }), 0, 0.9)
+        poner(puesto, mueble('sideTable'), 1.25, 0.2)
+        poner(puesto, mueble('lampSquareTable'), 1.25, 0.2, 0, 0.665)
+        poner(puesto, mueble('bookcaseClosedWide'), -0.9, -1.05)
+        poner(puesto, mueble('bookcaseClosedDoors'), 0.6, -1.05)
+        poner(puesto, mueble('loungeDesignChair'), -0.55, 2.0, Math.PI)
+        poner(puesto, mueble('loungeDesignChair'), 0.55, 2.0, Math.PI)
+        poner(puesto, mueble('pottedPlant'), -2.0, -1.0)
+        poner(puesto, mueble('plantSmall1'), 2.0, 2.9)
+      }
+      return { puesto, brillo }
+    }
 
+    // Los agentes, cada uno en su puesto.
+    inicial.forEach((a, i) => {
+      const pu = plano.puestos.find(p => p.id === a.id)
+      if (!pu) return
+      const { puesto, brillo } = armarPuesto(pu, { jefa: Boolean(pu.oficina), planta: !pu.oficina && i % 3 === 0, alfombra: '#e9a7a0' })
       const p = crearPersonaje({ ropa: colorAgente(a), v: varianteDe(a.id), accesorio: ACCESORIOS[a.id] ?? null })
       puesto.add(p.grupo)
       puesto.traverse(o => { o.userData.agenteId = a.id })
@@ -179,6 +233,41 @@ export default function OficinaEscena({ agentes, elegidoId = null, abrir }) {
       p.cabeza.add(chip)
       actores.set(a.id, { p, chip, brillo, puesto, fase: (i * 1.37) % 5 })
     })
+
+    // Vos, en tu oficina, trabajando.
+    const tuPuesto = armarPuesto(plano.daniela, { jefa: true, alfombra: '#f0d48a' })
+    const yo = crearPersonaje({ ropa: COLOR_EQUIPO.trabajadores, v: { pelo: 2, colorPelo: 0, piel: 0 }, accesorio: 'estrella', modelo: 'female-f' })
+    tuPuesto.puesto.add(yo.grupo)
+    const chipYo = etiqueta('oe-agente oe-vos', '★ Vos')
+    chipYo.position.set(0, 0.62, 0)
+    yo.cabeza.add(chipYo)
+
+    // La sala de Sistemas: una fila de racks de servidores contra el vidrio de atrás, con lucecitas que titilan.
+    const leds = []
+    const sala = plano.zonas.find(z => z.sala)
+    if (sala) {
+      const COLORES_LED = ['#3fb878', '#6ea8ff', '#3fb878', '#f0a63c']
+      const n = Math.max(1, Math.floor((sala.ancho - 0.6) / 1.05))
+      const x0 = sala.x + sala.ancho / 2 - ((n - 1) * 1.05) / 2
+      for (let k = 0; k < n; k++) {
+        const rack = mueble('bookcaseClosedDoors', {
+          color: '#2c313b',
+          mezcla: 0.95,
+          alCargar: (interno, tam) => {
+            for (let fila = 0; fila < 7; fila++) {
+              for (let col = 0; col < 4; col++) {
+                const m = new THREE.MeshStandardMaterial({ color: '#111111', emissive: COLORES_LED[(fila + col + k) % 4], emissiveIntensity: 1.5 })
+                const led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.025, 0.01), m)
+                led.position.set(-tam.x * 0.3 + col * tam.x * 0.2, tam.y * 0.15 + fila * tam.y * 0.11, tam.z / 2 + 0.01)
+                rack.add(led)
+                leds.push({ m, fase: (k * 7 + fila * 3 + col * 5) % 11 })
+              }
+            }
+          },
+        })
+        poner(escena, rack, x0 + k * 1.05, sala.z + 0.45)
+      }
+    }
 
     // El aro bajo el agente elegido.
     const aro = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.64, 40), new THREE.MeshBasicMaterial({ color: '#f0a63c', transparent: true, opacity: 0.9, side: THREE.DoubleSide }))
@@ -307,6 +396,10 @@ export default function OficinaEscena({ agentes, elegidoId = null, abrir }) {
         if (el.textContent !== texto) el.textContent = texto
         el.title = `${a.nombre}: ${ESTADOS[a.estado] ?? a.estado}${a.ahora ? `. ${a.ahora}` : ''}`
       }
+      posar(yo, { pose: 'sentado', estado: 'trabajando', t: sinMovimiento ? 0 : t, fase: 2.2 })
+      tuPuesto.brillo.emissive.set('#6ea8ff')
+      tuPuesto.brillo.emissiveIntensity = 0.6
+      for (const l of leds) l.m.emissiveIntensity = sinMovimiento ? 1.2 : Math.sin(t * (2 + l.fase * 0.7) + l.fase) > -0.3 ? 1.6 : 0.15
       const elegido = actores.get(D.elegidoId)
       aro.visible = Boolean(elegido)
       if (elegido) aro.position.set(elegido.puesto.position.x, 0.03, elegido.puesto.position.z)

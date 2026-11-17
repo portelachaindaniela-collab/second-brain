@@ -19,8 +19,8 @@ function cargar(nombre) {
   return cache.get(nombre)
 }
 
-// opciones: escala (además de la general), color (tiñe todos los materiales; para las alfombras), sombra.
-export function mueble(nombre, { escala = 1, color = null, sombra = true, alCargar = null } = {}) {
+// opciones: escala (además de la general), color (tiñe todos los materiales; mezcla: cuánto, de 0 a 1), sombra.
+export function mueble(nombre, { escala = 1, color = null, mezcla = 0.75, sombra = true, alCargar = null } = {}) {
   const grupo = new THREE.Group()
   cargar(nombre).then(({ escena, desplazar, tam }) => {
     const m = escena.clone(true)
@@ -31,7 +31,7 @@ export function mueble(nombre, { escala = 1, color = null, sombra = true, alCarg
       o.receiveShadow = true
       if (color) {
         o.material = o.material.clone()
-        o.material.color.lerp(new THREE.Color(color), 0.75)
+        o.material.color.lerp(new THREE.Color(color), mezcla)
       }
     })
     const interno = new THREE.Group()

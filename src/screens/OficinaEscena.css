@@ -32,8 +32,10 @@
 .oe-agente.estado-error::before { background: #e85d6a; }
 .oe-agente.estado-pausado { color: #77706a; }
 .oe-agente.is-elegido { outline: 2px solid #f0a63c; }
+.oe-agente.oe-vos { background: #fbe7b5; color: #6b4a10; cursor: default; }
+.oe-agente.oe-vos::before { display: none; }
 /* De lejos: solo el puntito (el nombre aparece al pasar por encima); los que tienen un problema y el elegido, completos. */
-.oe-lejos .oe-agente:not(.estado-error):not(.is-elegido):not(:hover) { font-size: 0; gap: 0; padding: 3px; }
+.oe-lejos .oe-agente:not(.estado-error):not(.is-elegido):not(.oe-vos):not(:hover) { font-size: 0; gap: 0; padding: 3px; }
 @keyframes oe-late { 50% { box-shadow: 0 0 0 5px rgb(63 184 120 / 0.1); } }
 @media (prefers-reduced-motion: reduce) { .oe-agente.estado-trabajando::before { animation: none; } }
 
